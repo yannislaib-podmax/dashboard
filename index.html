@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0B0714">
+<title>Pilotage PodMax</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
+     savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
+<link rel="stylesheet" href="/assets/style.css?v=1">
+</head>
+<body>
+
+<aside class="rail">
+  <div class="rail-marque">
+    <img src="/assets/podmax-logo-blanc.png" alt="PodMax">
+  </div>
+
+  <nav class="rail-nav">
+    <div class="groupe ouvert" data-groupe="acquisition">
+      <button type="button">Acquisition <span class="chevron">▶</span></button>
+      <div class="sous"><div class="sous-interieur">
+        <a href="#ensemble"  data-vue="ensemble"  class="actif">Vue d'ensemble</a>
+        <a href="#jour"      data-vue="jour">Détail par jour</a>
+        <a href="#canal"     data-vue="canal">Par canal</a>
+        <a href="#depenses"  data-vue="depenses">Dépenses média</a>
+      </div></div>
+    </div>
+
+    <div class="groupe" data-groupe="finance">
+      <button type="button" class="inactif">Finance</button>
+    </div>
+
+    <div class="groupe" data-groupe="delivery">
+      <button type="button" class="inactif">Delivery</button>
+    </div>
+
+    <div class="groupe" data-groupe="equipe">
+      <button type="button" class="inactif">Équipe</button>
+    </div>
+  </nav>
+
+  <div class="rail-pied" id="etat">Chargement…</div>
+</aside>
+
+<main>
+
+  <!-- ---------- Filtre, commun aux quatre vues ---------- -->
+  <div class="filtre" id="filtre" hidden>
+    <select class="choix" id="periode" aria-label="Période">
+      <option value="tout">Toute la période</option>
+      <option value="7">7 derniers jours</option>
+      <option value="30">30 derniers jours</option>
+      <option value="trimestre">Trimestre en cours</option>
+      <option value="annee">Année en cours</option>
+      <option value="perso">Dates au choix…</option>
+    </select>
+
+    <div class="dates" id="dates" hidden>
+      <input type="date" id="debut" aria-label="Début">
+      <span>→</span>
+      <input type="date" id="fin" aria-label="Fin">
+    </div>
+
+    <select class="choix" id="comparaison" aria-label="Période de comparaison">
+      <option value="precedente">vs période précédente</option>
+      <option value="annee">vs l'an dernier</option>
+      <option value="aucune">Sans comparaison</option>
+    </select>
+
+    <select class="choix" id="canal" aria-label="Filtrer par canal"></select>
+    <select class="choix" id="produit" aria-label="Filtrer par produit"></select>
+
+    <span class="filtre-note" id="filtre-note"></span>
+  </div>
+
+  <!-- ---------- Vue d'ensemble ---------- -->
+  <section class="vue active" id="vue-ensemble">
+    <div class="titre-vue">
+      <h1>Vue d'ensemble</h1>
+      <p class="sous-titre">Ce que l'acquisition a produit, toutes journées confondues.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Chaque événement compte le jour où il s'est produit.</strong>
+      Un lead capté le 12 et la vente qu'il a fini par produire le 15 ne sont
+      pas sur la même ligne, même s'il s'agit du même prospect. Les colonnes se
+      lisent comme des <strong>volumes quotidiens</strong> : les taux plus bas
+      se lisent en tendance sur une semaine ou un mois, jamais au jour le jour.
+    </p>
+
+    <h2 class="section">Performance</h2>
+    <p class="sous-titre rv">Ce que l'argent dépensé a rapporté, et ce que coûte chaque étape.</p>
+    <div id="perf" class="cartes"></div>
+    <div id="perf-couts" class="cartes cartes-cout"></div>
+
+    <h3 class="sous-section">Dépense et chiffre d'affaires</h3>
+    <p class="sous-titre rv">Par tranche de 7 jours, de la plus ancienne à la plus récente.</p>
+    <div class="glass histo rv" id="graph-ca"></div>
+
+    <h3 class="sous-section">Répartition par canal</h3>
+    <p class="sous-titre rv">Où part l'argent, ce qu'il produit. L'écart entre le premier et le second disque est le signal à surveiller.</p>
+    <div class="camemberts" id="camemberts"></div>
+
+    <h2 class="section">Conversion</h2>
+    <p class="sous-titre rv">Du lead à la vente, étape par étape.</p>
+    <div id="conv" class="cartes"></div>
+    <div class="cartes cartes-etroit" id="qualite"></div>
+
+    <h3 class="sous-section">Entonnoir</h3>
+    <p class="sous-titre rv">Chaque étage rapporté au précédent, et la chaîne complète en bas.</p>
+
+    <div class="glass entonnoir rv" id="entonnoir"></div>
+
+    <h3 class="sous-section">Où ça se perd</h3>
+    <p class="sous-titre rv">Tout ce qui n'est pas vert est une déperdition. La taille du quartier dit <em>combien</em> de monde s'y perd ; le taux sous chaque intitulé dit <em>quelle proportion</em>.</p>
+
+    <div class="camemberts" id="camemberts-conv"></div>
+
+    <h2 class="section">Simulateur</h2>
+    <p class="sous-titre rv">Tu donnes un objectif, il remonte la chaîne à l'envers et dit ce qu'il faut produire à chaque étape — et combien dépenser pour l'obtenir.</p>
+
+    <p class="convention rv">
+      <strong>Les hypothèses viennent de la période et des filtres actifs.</strong>
+      Changer le canal, le produit ou les dates change le moteur du simulateur.
+      Chaque hypothèse est modifiable : remplace-la pour tester un scénario
+      — « et si je monte mon closing à 40 % » — et remets le champ à vide pour
+      revenir au mesuré.
+    </p>
+
+    <div class="glass simu rv" id="simu"></div>
+
+  </section>
+
+  <!-- ---------- Détail par jour ---------- -->
+  <section class="vue" id="vue-jour">
+    <div class="titre-vue">
+      <h1>Détail par jour</h1>
+      <p class="sous-titre">Chaque journée d'acquisition, canal par canal, du lead à la vente.</p>
+    </div>
+    <div class="glass cadre-table rv" id="table-jour"></div>
+  </section>
+
+  <!-- ---------- Par canal ---------- -->
+  <section class="vue" id="vue-canal">
+    <div class="titre-vue">
+      <h1>Par canal</h1>
+      <p class="sous-titre">Toutes journées cumulées. Pour arbitrer où mettre le budget.</p>
+    </div>
+    <div class="glass cadre-table rv" id="table-canal"></div>
+  </section>
+
+  <!-- ---------- Dépenses média ---------- -->
+  <section class="vue" id="vue-depenses">
+    <div class="titre-vue">
+      <h1>Dépenses média</h1>
+      <p class="sous-titre">Ce qui est saisi, et ce qui manque.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Une journée sans montant n'est pas une journée sans dépense.</strong>
+      Tant que la saisie n'est pas faite, le coût par lead et le ROAS restent
+      incalculables. Les lignes en ambre ont de l'activité mais aucun montant
+      renseigné.
+    </p>
+
+    <div class="glass cadre-table rv" id="table-depenses"></div>
+  </section>
+
+  <div id="erreur"></div>
+</main>
+
+<script src="/assets/app.js?v=1"></script>
+</body>
+</html>
