@@ -1054,22 +1054,6 @@ function afficherVue(nom) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function brancherActions() {
-  const btnPartage = document.getElementById("btn-partage");
-  if (btnPartage) {
-    btnPartage.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(location.href);
-        const titre = btnPartage.title;
-        btnPartage.title = "Lien copié !";
-        setTimeout(() => (btnPartage.title = titre), 1600);
-      } catch (e) {
-        /* silencieux : le clic reste visible même si le presse-papiers est indisponible */
-      }
-    });
-  }
-}
-
 function brancherNavigation() {
   document.querySelectorAll(".groupe > button").forEach((b) => {
     if (b.classList.contains("inactif")) return;
@@ -1235,7 +1219,6 @@ async function charger() {
     document.getElementById("etat").textContent = `${donnees.nbLignes} lignes · ${heure}`;
 
     brancherNavigation();
-    brancherActions();
     afficherVue((location.hash || "#ensemble").slice(1));
   } catch (erreur) {
     document.getElementById("etat").textContent = "Erreur";
