@@ -180,6 +180,7 @@ const INDICATEURS = {
 
   leads: (l) => somme(l, "leads"),
   rendezVous: (l) => somme(l, "rendezVous"),
+  rendezVousConclus: (l) => somme(l, "rendezVousConclus"),
   honores: (l) => somme(l, "honores"),
   ventes: (l) => somme(l, "ventes"),
 
@@ -247,7 +248,17 @@ function vueConversion(lignes, precedentes) {
       );
   }
 
-  const bases = (jeu, vals) => ETAPES.map((e, i) => (i === 0 ? null : vals[i - 1]));
+  // Base de la marche "Rendez-vous honorés" : les rendez-vous CONCLUS (Honoré
+  // ou No-show), pas tous les rendez-vous pris. Un RDV encore "Confirmé" (à
+  // venir) n'a pas encore d'issue et ne doit pas compter dans le dénominateur
+  // — sinon le taux affiché chute artificiellement tant qu'il reste des RDV
+  // à venir sur la période (même bug que le taux de présence).
+  const bases = (jeu, vals) =>
+    ETAPES.map((e, i) => {
+      if (i === 0) return null;
+      if (e.cle === "honores") return INDICATEURS.rendezVousConclus(jeu);
+      return vals[i - 1];
+    });
 
   entonnoir(ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null);
   camembertsConversion(lignes);
@@ -343,9 +354,13 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
       const avantP = basesPrec ? basesPrec[i] : null;
       const ecart = valeursPrec && avantP ? ecartPoints(valeurs[i] / avant, valeursPrec[i] / avantP) : null;
 
+      // Pour la marche honorés, la base réelle est les RDV conclus, pas les
+      // RDV pris (voir bases() ci-dessus) : le libellé doit le refléter.
+      const libelleBase = e.cle === "honores" ? "rendez-vous conclus" : ETAPES[i - 1].nom.toLowerCase();
+
       const bulle = `<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong>
         <span>Taux<b>${t} %</b></span>
-        <span>Base<b>${nombre(avant)} ${ETAPES[i - 1].nom.toLowerCase()}</b></span>
+        <span>Base<b>${nombre(avant)} ${libelleBase}</b></span>
         <span>Arrivés<b>${nombre(valeurs[i])}</b></span>`;
 
       return `<div class="taux${anomalie ? " anomalie" : ""}" style="left:${milieu}%"${info(bulle)}>
