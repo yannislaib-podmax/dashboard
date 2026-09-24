@@ -183,10 +183,12 @@ const INDICATEURS = {
   honores: (l) => somme(l, "honores"),
   ventes: (l) => somme(l, "ventes"),
 
-  // Taux de présence : honorés rapportés aux rendez-vous pris. Sans détail
-  // no-show/annulé/reporté au niveau agrégé, c'est un ratio simple — pas un
-  // taux « épuré » comme sur un funnel qui suit chaque rendez-vous individuel.
-  tauxPresence: (l) => ratio(somme(l, "honores"), somme(l, "rendezVous")),
+  // Taux de présence : honorés rapportés aux rendez-vous CONCLUS (Honoré ou
+  // No-show), pas à tous les rendez-vous pris. Un rendez-vous encore
+  // "Confirmé" (pas encore passé) ne doit pas compter comme une absence :
+  // le compter aurait fait chuter artificiellement le taux tant que la
+  // période contient des RDV à venir.
+  tauxPresence: (l) => ratio(somme(l, "honores"), somme(l, "rendezVousConclus")),
 
   // Taux de closing : ventes rapportées aux appels réellement honorés.
   tauxClosing: (l) => ratio(somme(l, "ventes"), somme(l, "honores")),
@@ -220,7 +222,7 @@ function vueConversion(lignes, precedentes) {
 
   const presence = INDICATEURS.tauxPresence(lignes);
   const presencePrec = precedentes ? INDICATEURS.tauxPresence(precedentes) : null;
-  const rdvPris = somme(lignes, "rendezVous");
+  const rdvConclus = somme(lignes, "rendezVousConclus");
 
   const closing = INDICATEURS.tauxClosing(lignes);
   const closingPrec = precedentes ? INDICATEURS.tauxClosing(precedentes) : null;
@@ -234,7 +236,7 @@ function vueConversion(lignes, precedentes) {
       carte(
         "Taux de présence",
         pourcent(presence),
-        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris${fragile(rdvPris)}`,
+        rdvConclus === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclus)} rendez-vous conclu${rdvConclus > 1 ? "s" : ""} (hors RDV encore à venir)${fragile(rdvConclus)}`,
         presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null
       ) +
       carte(
@@ -584,6 +586,10 @@ function camembertsConversion(lignes) {
   const v = {
     leads: somme(lignes, "leads"),
     rdv: somme(lignes, "rendezVous"),
+    // Base des "non honorés" : seulement les RDV dont l'issue est connue
+    // (Honoré/No-show). Un RDV encore "Confirmé" (à venir) n'est pas une
+    // absence — l'ignorer ici évite de gonfler artificiellement cette perte.
+    rdvConclus: somme(lignes, "rendezVousConclus"),
     honores: somme(lignes, "honores"),
     ventes: somme(lignes, "ventes"),
   };
@@ -593,7 +599,7 @@ function camembertsConversion(lignes) {
 
   const pertes = [
     ["Leads sans rendez-vous", perte(v.leads, v.rdv), TEINTES_PERTE.sansRdv, tauxPerte(perte(v.leads, v.rdv), v.leads)],
-    ["Rendez-vous non honorés", perte(v.rdv, v.honores), TEINTES_PERTE.nonHonores, tauxPerte(perte(v.rdv, v.honores), v.rdv)],
+    ["Rendez-vous non honorés", perte(v.rdvConclus, v.honores), TEINTES_PERTE.nonHonores, tauxPerte(perte(v.rdvConclus, v.honores), v.rdvConclus)],
     ["Appels sans vente", perte(v.honores, v.ventes), TEINTES_PERTE.sansVente, tauxPerte(perte(v.honores, v.ventes), v.honores)],
     ["Ventes", v.ventes, TEINTES_PERTE.vente, null],
   ].filter(([, valeur]) => valeur > 0);

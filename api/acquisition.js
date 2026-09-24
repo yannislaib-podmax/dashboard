@@ -24,6 +24,7 @@ const CHAMPS = {
   fldcaSJjaqKNqvGlV: "clics",
   fldU8PNMP8Qo3lJgs: "leads",
   fldU60JOee3IjwdLz: "rendezVous",
+  fldxfGAgdfydHcSbB: "rendezVousConclus",
   fldaDyIgZYVpE7aLb: "honores",
   fldr1manDq32B8IFv: "ventes",
   fldIacFZj53jCcMzM: "contracte",
@@ -69,7 +70,7 @@ async function lireToutesLesLignes(token) {
         ligne[nom] = valeur(enr.fields[id]);
       }
       for (const compteur of [
-        "depense", "impressions", "clics", "leads", "rendezVous", "honores", "ventes", "contracte",
+        "depense", "impressions", "clics", "leads", "rendezVous", "rendezVousConclus", "honores", "ventes", "contracte",
       ]) {
         ligne[compteur] = ligne[compteur] ?? 0;
       }
