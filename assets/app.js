@@ -107,13 +107,13 @@ const lignesFiltrees = () => parCanalEtProduit(TOUTES.filter(dansPeriode));
 
 let COMPARAISON = "precedente";
 
-const BAISSE_EST_BONNE = new Set(["coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc"]);
+const BAISSE_EST_BONNE = new Set(["coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc", "dirResiliations"]);
 const SANS_JUGEMENT = new Set(["depense"]);
 
 const SEUIL_STABLE_PCT = 5;
 const SEUIL_STABLE_PTS = 2;
 
-function lignesPrecedentes() {
+function plagePrecedente() {
   if (COMPARAISON === "aucune" || !DEBUT || !FIN) return null;
 
   let a, b;
@@ -132,6 +132,14 @@ function lignesPrecedentes() {
     a = enIso(new Date(finPrec - (duree - 1) * JOUR_MS));
     b = enIso(finPrec);
   }
+
+  return [a, b];
+}
+
+function lignesPrecedentes() {
+  const plage = plagePrecedente();
+  if (!plage) return null;
+  const [a, b] = plage;
 
   return parCanalEtProduit(TOUTES.filter((l) => l.jour && l.jour >= a && l.jour <= b));
 }
@@ -1074,6 +1082,55 @@ function paiementsDirectionFiltres() {
   });
 }
 
+function contratsDirectionDansPlage(a, b) {
+  return DIRECTION_CONTRATS.filter((c) => {
+    if (!c.dateSignature || c.dateSignature < a || c.dateSignature > b) return false;
+    if (CANAL !== "tout" && c.canal !== CANAL) return false;
+    if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    return true;
+  }).filter((c) => c.statut !== "Annulé");
+}
+
+function paiementsDirectionDansPlage(a, b) {
+  const parContrat = Object.fromEntries(DIRECTION_CONTRATS.map((c) => [c.id, c]));
+
+  return DIRECTION_PAIEMENTS.filter((p) => {
+    if (!p.datePaiement || p.datePaiement < a || p.datePaiement > b) return false;
+    if (CANAL !== "tout" || PRODUIT !== "tout") {
+      const c = parContrat[idLie(p.contrat)];
+      if (CANAL !== "tout" && (!c || c.canal !== CANAL)) return false;
+      if (PRODUIT !== "tout" && (!c || c.produit !== PRODUIT)) return false;
+    }
+    return true;
+  });
+}
+
+function resiliationsDansPlage(a, b) {
+  return DIRECTION_CONTRATS.filter((c) => {
+    if (!c.dateResiliation || c.dateResiliation < a || c.dateResiliation > b) return false;
+    if (CANAL !== "tout" && c.canal !== CANAL) return false;
+    if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    return true;
+  }).length;
+}
+
+function mesuresDirection(contrats, paiements, resiliations) {
+  const caContracte = somme(contrats, "montantTotal");
+  const caEncaisse = somme(paiements, "montantRecu");
+  const montantPrevu = somme(paiements, "montantPrevu");
+  const nbClients = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean)).size;
+
+  return {
+    caContracte,
+    caEncaisse,
+    nbClients,
+    panierMoyen: contrats.length ? caContracte / contrats.length : null,
+    tauxRecouvrement: montantPrevu > 0 ? caEncaisse / montantPrevu : null,
+    ltvMoyenne: nbClients ? somme(contrats, "montantLtv") / nbClients : null,
+    resiliations,
+  };
+}
+
 function tranches7Direction(contrats, paiements) {
   const jours = [
     ...contrats.map((c) => c.dateSignature),
@@ -1192,42 +1249,33 @@ function vueDirection() {
 
   const contrats = contratsDirectionFiltres().filter((c) => c.statut !== "Annulé");
   const paiements = paiementsDirectionFiltres();
+  const resiliations = resiliationsDansPlage(DEBUT || "", FIN || "9999-99-99");
+  const m = mesuresDirection(contrats, paiements, resiliations);
 
-  const caContracte = somme(contrats, "montantTotal");
-  const caEncaisse = somme(paiements, "montantRecu");
-  const montantPrevu = somme(paiements, "montantPrevu");
+  const plage = plagePrecedente();
+  const mPrec = plage
+    ? mesuresDirection(
+        contratsDirectionDansPlage(plage[0], plage[1]),
+        paiementsDirectionDansPlage(plage[0], plage[1]),
+        resiliationsDansPlage(plage[0], plage[1])
+      )
+    : null;
 
-  const clientsSignes = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean));
-  const nbClients = clientsSignes.size;
-
-  const panierMoyen = contrats.length ? caContracte / contrats.length : null;
-  const tauxRecouvrement = montantPrevu > 0 ? caEncaisse / montantPrevu : null;
-
-  const ltvTotale = somme(contrats, "montantLtv");
-  const ltvMoyenne = nbClients ? ltvTotale / nbClients : null;
-
-  const resiliations = DIRECTION_CONTRATS.filter((c) => {
-    if (!c.dateResiliation) return false;
-    if (DEBUT && c.dateResiliation < DEBUT) return false;
-    if (FIN && c.dateResiliation > FIN) return false;
-    if (CANAL !== "tout" && c.canal !== CANAL) return false;
-    if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
-    return true;
-  }).length;
+  const ecart = (cleObjet, cleSens) => (mPrec ? ecartDe(m[cleObjet], mPrec[cleObjet], cleSens || cleObjet) : null);
 
   cible.innerHTML = [
-    carte("CA contracté", euros(caContracte), contrats.length ? null : "aucun contrat signé sur la période"),
-    carte("CA encaissé", euros(caEncaisse), null),
-    carte("Clients signés", nombre(nbClients), null),
-    carte("Panier moyen", panierMoyen === null ? "—" : euros(panierMoyen), contrats.length ? null : "aucun contrat sur la période"),
+    carte("CA contracté", euros(m.caContracte), contrats.length ? null : "aucun contrat signé sur la période", ecart("caContracte")),
+    carte("CA encaissé", euros(m.caEncaisse), null, ecart("caEncaisse")),
+    carte("Clients signés", nombre(m.nbClients), null, ecart("nbClients")),
+    carte("Panier moyen", m.panierMoyen === null ? "—" : euros(m.panierMoyen), contrats.length ? null : "aucun contrat sur la période", ecart("panierMoyen")),
   ].join("");
 
   const bloc = document.getElementById("direction-sante");
   if (bloc) {
     bloc.innerHTML = [
-      carte("Taux de recouvrement", tauxRecouvrement === null ? "—" : pourcent(tauxRecouvrement), montantPrevu ? null : "aucune échéance sur la période"),
-      carte("LTV moyenne", ltvMoyenne === null ? "—" : euros(ltvMoyenne), nbClients ? null : "aucun client signé sur la période"),
-      carte("Résiliations", nombre(resiliations), null),
+      carte("Taux de recouvrement", m.tauxRecouvrement === null ? "—" : pourcent(m.tauxRecouvrement), m.tauxRecouvrement === null ? "aucune échéance sur la période" : null, ecart("tauxRecouvrement")),
+      carte("LTV moyenne", m.ltvMoyenne === null ? "—" : euros(m.ltvMoyenne), m.nbClients ? null : "aucun client signé sur la période", ecart("ltvMoyenne")),
+      carte("Résiliations", nombre(m.resiliations), null, ecart("resiliations", "dirResiliations")),
     ].join("");
   }
 
