@@ -107,7 +107,7 @@ const lignesFiltrees = () => parCanalEtProduit(TOUTES.filter(dansPeriode));
 
 let COMPARAISON = "precedente";
 
-const BAISSE_EST_BONNE = new Set(["coutVente", "coutAppel", "coutLead", "cpm", "cpc"]);
+const BAISSE_EST_BONNE = new Set(["coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc"]);
 const SANS_JUGEMENT = new Set(["depense"]);
 
 const SEUIL_STABLE_PCT = 5;
@@ -169,6 +169,9 @@ const INDICATEURS = {
   roas: (l) => ratio(somme(l, "contracte"), somme(l, "depense")),
   coutVente: (l) => ratio(somme(l, "depense"), somme(l, "ventes")),
   coutAppel: (l) => ratio(somme(l, "depense"), somme(l, "honores")),
+  // Coût par call booké : dépense rapportée aux RDV pris (call confirmé),
+  // tous statuts confondus — avant même de savoir s'ils seront honorés.
+  coutRdv: (l) => ratio(somme(l, "depense"), somme(l, "rendezVous")),
   coutLead: (l) => ratio(somme(l, "depense"), somme(l, "leads")),
 
   cpm: (l) => {
@@ -686,6 +689,7 @@ function vueEnsemble(lignes, precedentes) {
   document.getElementById("perf-couts").innerHTML = [
     carte("Coût par vente", enEuros(val("coutVente")), depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense, ecart("coutVente")),
     carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense, ecart("coutAppel")),
+    carte("Coût par call booké", enEuros(val("coutRdv")), sansDepense, ecart("coutRdv")),
     carte("Coût par lead", enEuros(val("coutLead")), sansDepense, ecart("coutLead")),
     carte("CPM", enEuros(val("cpm")), impressions === 0 ? "impressions non saisies" : `sur ${nombre(impressions)} impressions`, ecart("cpm")),
     carte("CPC", enEuros(val("cpc")), clics === 0 ? "clics non saisis" : `sur ${nombre(clics)} clics`, ecart("cpc")),
