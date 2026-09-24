@@ -92,19 +92,20 @@ aside.rail {
 
 .rail-marque {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 20px 20px 22px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 20px 20px;
   border-bottom: 1px solid var(--bord);
 }
-.rail-marque img { height: 64px; width: auto; display: block; }
+.rail-marque img { width: 100%; max-width: 220px; height: auto; display: block; }
 
 .rail-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+  align-self: flex-end;
 }
 
 .icone-app {
