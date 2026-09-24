@@ -844,8 +844,8 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 
 .disque-enveloppe {
   position: relative;
-  width: 186px;
-  height: 186px;
+  width: 224px;
+  height: 224px;
   margin: 0 auto 22px;
 }
 
@@ -875,7 +875,7 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   pointer-events: none;
 }
 .c-valeur {
-  font-size: 27px;
+  font-size: 30px;
   font-weight: 900;
   letter-spacing: -0.025em;
   color: var(--blanc);
@@ -1098,7 +1098,7 @@ tr.total td {
   .cartes-etroit { grid-template-columns: 1fr; }
 
   .camembert { padding: 20px 16px 18px; }
-  .disque-enveloppe { width: 150px; height: 150px; }
+  .disque-enveloppe { width: 176px; height: 176px; }
 
   .entonnoir { padding: 22px 14px 20px; }
   .simu { padding: 20px 16px 20px; }
