@@ -88,6 +88,7 @@ let FIN = null;
 const JOUR_MS = 86400000;
 const enIso = (d) => d.toISOString().slice(0, 10);
 const enDate = (iso) => new Date(iso + "T12:00:00");
+const AUJOURDHUI = enIso(new Date());
 
 const dansPeriode = (l) => {
   if (!DEBUT && !FIN) return true;
@@ -1117,15 +1118,22 @@ function resiliationsDansPlage(a, b) {
 function mesuresDirection(contrats, paiements, resiliations) {
   const caContracte = somme(contrats, "montantTotal");
   const caEncaisse = somme(paiements, "montantRecu");
-  const montantPrevu = somme(paiements, "montantPrevu");
   const nbClients = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean)).size;
+
+  // Le taux de recouvrement ne doit compter que les échéances déjà ÉCHUES
+  // (date passée). Une échéance à venir n'a simplement pas encore son tour —
+  // la compter comme "prévue mais pas reçue" ferait chuter artificiellement
+  // le taux alors qu'il n'y a rien d'anormal.
+  const paiementsEchus = paiements.filter((p) => p.datePaiement && p.datePaiement <= AUJOURDHUI);
+  const montantPrevuEchu = somme(paiementsEchus, "montantPrevu");
+  const montantRecuEchu = somme(paiementsEchus, "montantRecu");
 
   return {
     caContracte,
     caEncaisse,
     nbClients,
     panierMoyen: contrats.length ? caContracte / contrats.length : null,
-    tauxRecouvrement: montantPrevu > 0 ? caEncaisse / montantPrevu : null,
+    tauxRecouvrement: montantPrevuEchu > 0 ? montantRecuEchu / montantPrevuEchu : null,
     ltvMoyenne: nbClients ? somme(contrats, "montantLtv") / nbClients : null,
     resiliations,
   };
@@ -1273,7 +1281,7 @@ function vueDirection() {
   const bloc = document.getElementById("direction-sante");
   if (bloc) {
     bloc.innerHTML = [
-      carte("Taux de recouvrement", m.tauxRecouvrement === null ? "—" : pourcent(m.tauxRecouvrement), m.tauxRecouvrement === null ? "aucune échéance sur la période" : null, ecart("tauxRecouvrement")),
+      carte("Taux de recouvrement", m.tauxRecouvrement === null ? "—" : pourcent(m.tauxRecouvrement), m.tauxRecouvrement === null ? "aucune échéance échue sur la période" : "sur les échéances déjà passées, hors à venir", ecart("tauxRecouvrement")),
       carte("LTV moyenne", m.ltvMoyenne === null ? "—" : euros(m.ltvMoyenne), m.nbClients ? null : "aucun client signé sur la période", ecart("ltvMoyenne")),
       carte("Résiliations", nombre(m.resiliations), null, ecart("resiliations", "dirResiliations")),
     ].join("");
