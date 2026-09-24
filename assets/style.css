@@ -18,8 +18,8 @@
   --txt3: rgba(255, 255, 255, 0.40);
   --r: 22px;
   --r-petit: 14px;
-  --sans: "Lato", system-ui, sans-serif;
-  --serif: "Libre Baskerville", Georgia, serif;
+  --sans: "Poppins", system-ui, sans-serif;
+  --serif: "Poppins", system-ui, sans-serif;
 
   /* Signaux propres au pilotage. */
   --vert: #6FD3A3;
@@ -93,10 +93,42 @@ aside.rail {
 .rail-marque {
   display: flex;
   align-items: center;
-  padding: 22px 24px 20px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 22px;
   border-bottom: 1px solid var(--bord);
 }
-.rail-marque img { height: 34px; width: auto; display: block; }
+.rail-marque img { height: 64px; width: auto; display: block; }
+
+.rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.icone-app {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+  border: 1px solid var(--bord);
+  color: var(--blanc);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  transition: transform .18s, background .18s, box-shadow .18s;
+}
+.icone-app svg { width: 18px; height: 18px; }
+.icone-app:hover {
+  background: linear-gradient(145deg, rgba(230,25,176,0.35), rgba(123,47,247,0.35));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+}
+.icone-app:active { transform: translateY(0); }
 
 .rail-nav { flex: 1; overflow-y: auto; padding: 18px 14px; }
 
@@ -274,7 +306,7 @@ main {
 h1 {
   font-family: var(--serif);
   font-size: 34px;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.015em;
   margin: 0 0 8px;
   color: var(--blanc);
@@ -284,7 +316,7 @@ h1 {
 h2 {
   font-family: var(--serif);
   font-size: 19px;
-  font-weight: 400;
+  font-weight: 600;
   margin: 52px 0 18px;
   color: var(--blanc);
 }
@@ -301,7 +333,7 @@ h2.section + .sous-titre { margin: 0 0 22px; font-size: 14px; color: var(--txt3)
 h3.sous-section {
   font-family: var(--serif);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--txt);
   margin: 42px 0 3px;
 }
@@ -369,16 +401,18 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 
 /* ---------- Histogramme simple ---------- */
 
-.histo { padding: 28px 30px 22px; }
+.histo { padding: 28px 30px 22px; overflow-x: auto; }
 .histo-barres {
   display: flex;
   align-items: flex-end;
   gap: 12px;
   height: 220px;
   margin-bottom: 14px;
+  min-width: min-content;
 }
 .barre-col {
-  flex: 1;
+  flex: 1 0 44px;
+  min-width: 44px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

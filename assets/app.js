@@ -406,10 +406,15 @@ function tranches7(lignes) {
     fin = new Date(debut - JOUR_MS);
   }
 
-  return blocs.map((b) => {
-    const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
-    return { ...b, depense: somme(dedans, "depense"), contracte: somme(dedans, "contracte") };
-  });
+  return blocs
+    .map((b) => {
+      const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
+      return { ...b, depense: somme(dedans, "depense"), contracte: somme(dedans, "contracte") };
+    })
+    // On n'affiche une tranche que si elle a une dépense ou un CA à montrer :
+    // des colonnes vides à hauteur minimale poussaient le graphique hors de
+    // son cadre quand la période couvrait beaucoup de semaines inactives.
+    .filter((b) => b.depense > 0 || b.contracte > 0);
 }
 
 function graphiqueCa(lignes) {
@@ -1049,6 +1054,22 @@ function afficherVue(nom) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function brancherActions() {
+  const btnPartage = document.getElementById("btn-partage");
+  if (btnPartage) {
+    btnPartage.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(location.href);
+        const titre = btnPartage.title;
+        btnPartage.title = "Lien copié !";
+        setTimeout(() => (btnPartage.title = titre), 1600);
+      } catch (e) {
+        /* silencieux : le clic reste visible même si le presse-papiers est indisponible */
+      }
+    });
+  }
+}
+
 function brancherNavigation() {
   document.querySelectorAll(".groupe > button").forEach((b) => {
     if (b.classList.contains("inactif")) return;
@@ -1214,6 +1235,7 @@ async function charger() {
     document.getElementById("etat").textContent = `${donnees.nbLignes} lignes · ${heure}`;
 
     brancherNavigation();
+    brancherActions();
     afficherVue((location.hash || "#ensemble").slice(1));
   } catch (erreur) {
     document.getElementById("etat").textContent = "Erreur";
