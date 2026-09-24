@@ -93,10 +93,12 @@ aside.rail {
 .rail-marque {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 24px 20px;
   border-bottom: 1px solid var(--bord);
 }
-.rail-marque img { width: 100%; max-width: 220px; height: auto; display: block; }
+.rail-marque img { width: 100%; max-width: 220px; height: auto; display: block; flex: 1 1 auto; min-width: 0; }
 
 .rail-nav { flex: 1; overflow-y: auto; padding: 18px 14px; }
 
@@ -936,19 +938,135 @@ tr.total td {
 }
 .message.erreur { border-color: rgba(240, 133, 133, 0.45); color: var(--rouge); }
 
-/* ---------- Mobile ---------- */
+/* ---------- Barre mobile + menu burger ---------- */
+
+.topbar-mobile {
+  display: none;
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 40;
+  align-items: center;
+  gap: 14px;
+  height: 60px;
+  padding: 0 16px;
+  background: rgba(23, 15, 40, 0.82);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--bord);
+}
+.topbar-logo { height: 26px; width: auto; display: block; }
+
+.burger {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: var(--verre);
+  border: 1px solid var(--bord);
+  border-radius: var(--r-petit);
+  padding: 0;
+  cursor: pointer;
+}
+.burger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--blanc);
+  transition: transform .25s cubic-bezier(.22,.61,.36,1), opacity .2s;
+}
+.burger[aria-expanded="true"] span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.burger[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.burger[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.rail-fermer {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--txt2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.rail-fond {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 3, 12, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 25;
+  opacity: 0;
+  transition: opacity .3s ease;
+}
 
 @media (max-width: 900px) {
-  :root { --rail: 0px; }
-  aside.rail {
-    position: static;
-    width: auto;
-    flex-direction: column;
-    border-right: none;
-    border-bottom: 1px solid var(--bord);
-  }
-  .rail-nav { max-height: 300px; }
-  main { margin-left: 0; padding: 30px 20px 80px; }
+  :root { --rail: 272px; }
+
+  .topbar-mobile { display: flex; }
+
+  main { margin-left: 0; padding: 90px 18px 90px; }
   body::before { inset: 0 0 auto 0; }
-  .filtre .choix { flex: 1 1 100%; }
+
+  aside.rail {
+    transform: translateX(-100%);
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+    transition: transform .32s cubic-bezier(.22,.61,.36,1);
+  }
+  aside.rail.ouvert-mobile { transform: none; }
+
+  .rail-marque { padding: 20px 16px; }
+  .rail-fermer { display: block; }
+
+  body.menu-ouvert .rail-fond {
+    display: block;
+    opacity: 1;
+  }
+  body.menu-ouvert { overflow: hidden; }
+
+  .rail-nav { max-height: none; }
+
+  .filtre { position: relative; z-index: 1; }
+  .filtre .choix,
+  .filtre .dates { flex: 1 1 100%; }
+  .filtre select.choix { width: 100%; }
+
+  h1 { font-size: 26px; }
+  .sous-titre { font-size: 13.5px; }
+  h2.section { font-size: 18px; margin-top: 44px; }
+  h3.sous-section { font-size: 15px; }
+
+  .carte { padding: 18px 18px; }
+  .carte .chiffre { font-size: 28px; }
+
+  .cartes,
+  .camemberts { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cartes-etroit { grid-template-columns: 1fr; }
+
+  .camembert { padding: 20px 16px 18px; }
+  .disque-enveloppe { width: 150px; height: 150px; }
+
+  .entonnoir { padding: 22px 14px 20px; }
+  .simu { padding: 20px 16px 20px; }
+  .simu-objectif { gap: 16px; }
+  .synchro { margin-left: 0; }
+
+  .hypotheses { grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+
+  table { font-size: 13px; }
+  th, td { padding: 12px 12px; }
+}
+
+@media (max-width: 520px) {
+  main { padding: 84px 14px 80px; }
+  .cartes,
+  .camemberts,
+  .hypotheses { grid-template-columns: 1fr; }
+  .carte .chiffre { font-size: 26px; }
+  h1 { font-size: 23px; }
 }

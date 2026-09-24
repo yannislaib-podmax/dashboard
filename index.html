@@ -17,13 +17,23 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=4">
+<link rel="stylesheet" href="/assets/style.css?v=5">
 </head>
 <body>
 
-<aside class="rail">
+<header class="topbar-mobile">
+  <button type="button" class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="rail">
+    <span></span><span></span><span></span>
+  </button>
+  <img class="topbar-logo" src="/assets/podmax-logo-blanc.png" alt="PodMax">
+</header>
+
+<div class="rail-fond" id="railFond"></div>
+
+<aside class="rail" id="rail">
   <div class="rail-marque">
     <img src="/assets/podmax-logo-blanc.png" alt="PodMax">
+    <button type="button" class="rail-fermer" id="railFermer" aria-label="Fermer le menu">✕</button>
   </div>
 
   <nav class="rail-nav">
@@ -178,6 +188,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=9"></script>
+<script src="/assets/app.js?v=10"></script>
 </body>
 </html>

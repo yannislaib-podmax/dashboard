@@ -1099,7 +1099,42 @@ function brancherNavigation() {
       const vue = a.dataset.vue;
       history.replaceState(null, "", "#" + vue);
       afficherVue(vue);
+      fermerMenuMobile();
     });
+  });
+
+  brancherMenuMobile();
+}
+
+/* ---------- Menu burger (mobile) ---------- */
+
+function ouvrirMenuMobile() {
+  document.getElementById("rail").classList.add("ouvert-mobile");
+  document.getElementById("burger").setAttribute("aria-expanded", "true");
+  document.body.classList.add("menu-ouvert");
+}
+
+function fermerMenuMobile() {
+  document.getElementById("rail").classList.remove("ouvert-mobile");
+  document.getElementById("burger").setAttribute("aria-expanded", "false");
+  document.body.classList.remove("menu-ouvert");
+}
+
+function brancherMenuMobile() {
+  const burger = document.getElementById("burger");
+  const fermer = document.getElementById("railFermer");
+  const fond = document.getElementById("railFond");
+  if (!burger) return;
+
+  burger.addEventListener("click", () => {
+    const ouvert = document.getElementById("rail").classList.contains("ouvert-mobile");
+    ouvert ? fermerMenuMobile() : ouvrirMenuMobile();
+  });
+  fermer.addEventListener("click", fermerMenuMobile);
+  fond.addEventListener("click", fermerMenuMobile);
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 900) fermerMenuMobile();
   });
 }
 
