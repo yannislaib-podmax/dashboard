@@ -1035,6 +1035,207 @@ function resultatSimulation(m) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Direction — Tableau de bord                                        */
+/* ------------------------------------------------------------------ */
+
+let DIRECTION_CONTRATS = [];
+let DIRECTION_PAIEMENTS = [];
+
+const idLie = (v) => (Array.isArray(v) ? v[0] : null);
+
+function contratsDirectionFiltres() {
+  return DIRECTION_CONTRATS.filter((c) => {
+    if (DEBUT || FIN) {
+      if (!c.dateSignature) return false;
+      if (DEBUT && c.dateSignature < DEBUT) return false;
+      if (FIN && c.dateSignature > FIN) return false;
+    }
+    if (CANAL !== "tout" && c.canal !== CANAL) return false;
+    if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    return true;
+  });
+}
+
+function paiementsDirectionFiltres() {
+  const parContrat = Object.fromEntries(DIRECTION_CONTRATS.map((c) => [c.id, c]));
+
+  return DIRECTION_PAIEMENTS.filter((p) => {
+    if (DEBUT || FIN) {
+      if (!p.datePaiement) return false;
+      if (DEBUT && p.datePaiement < DEBUT) return false;
+      if (FIN && p.datePaiement > FIN) return false;
+    }
+    if (CANAL !== "tout" || PRODUIT !== "tout") {
+      const c = parContrat[idLie(p.contrat)];
+      if (CANAL !== "tout" && (!c || c.canal !== CANAL)) return false;
+      if (PRODUIT !== "tout" && (!c || c.produit !== PRODUIT)) return false;
+    }
+    return true;
+  });
+}
+
+function tranches7Direction(contrats, paiements) {
+  const jours = [
+    ...contrats.map((c) => c.dateSignature),
+    ...paiements.map((p) => p.datePaiement),
+  ]
+    .filter(Boolean)
+    .sort();
+  if (!jours.length) return [];
+
+  const premier = jours[0];
+  const dernier = jours[jours.length - 1];
+  const blocs = [];
+  let fin = enDate(dernier);
+
+  for (let garde = 0; garde < 60; garde++) {
+    const debut = new Date(fin - 6 * JOUR_MS);
+    blocs.unshift({ debut: enIso(debut), fin: enIso(fin) });
+    if (enIso(debut) <= premier) break;
+    fin = new Date(debut - JOUR_MS);
+  }
+
+  return blocs
+    .map((b) => ({
+      ...b,
+      contracte: contrats
+        .filter((c) => c.dateSignature >= b.debut && c.dateSignature <= b.fin)
+        .reduce((s, c) => s + (c.montantTotal || 0), 0),
+      encaisse: paiements
+        .filter((p) => p.datePaiement >= b.debut && p.datePaiement <= b.fin)
+        .reduce((s, p) => s + (p.montantRecu || 0), 0),
+    }))
+    .filter((b) => b.contracte > 0 || b.encaisse > 0);
+}
+
+function grapheDirection(contrats, paiements) {
+  const cible = document.getElementById("direction-graph");
+  if (!cible) return;
+
+  const blocs = tranches7Direction(contrats, paiements);
+
+  if (!blocs.length) {
+    cible.innerHTML = `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    return;
+  }
+
+  const max = Math.max(1, ...blocs.flatMap((b) => [b.contracte, b.encaisse]));
+  const h = (v) => Math.round((v / max) * 100);
+
+  const jourMois = (iso) => {
+    const d = enDate(iso);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const legende = `
+    <div class="legende-graph">
+      <span><i class="b-dir-contracte"></i>CA contracté</span>
+      <span><i class="b-dir-encaisse"></i>CA encaissé</span>
+    </div>`;
+
+  const colonnes = blocs
+    .map((b) => {
+      const bulle = `<strong>${jourMois(b.debut)} – ${jourMois(b.fin)}</strong>
+        <span><i class="p-dir-contracte"></i>CA contracté<b>${euros(b.contracte)}</b></span>
+        <span><i class="p-dir-encaisse"></i>CA encaissé<b>${euros(b.encaisse)}</b></span>`;
+      return `<div class="barre-col"${info(bulle)}>
+        <div class="zone">
+          <div class="groupe-barres">
+            <div class="barre b-dir-contracte" data-hauteur="${h(b.contracte)}"></div>
+            <div class="barre b-dir-encaisse"  data-hauteur="${h(b.encaisse)}"></div>
+          </div>
+        </div>
+        <div class="jour">${jourMois(b.debut)} – ${jourMois(b.fin)}</div>
+      </div>`;
+    })
+    .join("");
+
+  cible.innerHTML = legende + `<div class="histo-barres">${colonnes}</div>`;
+  brancherInfobulles(cible);
+
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      cible.querySelectorAll(".barre").forEach((b) => {
+        b.style.height = b.dataset.hauteur + "%";
+      });
+    }, 120)
+  );
+}
+
+function camembertsDirection(contrats) {
+  const cible = document.getElementById("direction-camemberts");
+  if (!cible) return;
+
+  const parClef = (clef) => {
+    const totaux = {};
+    contrats.forEach((c) => {
+      const nom = c[clef] || "Inconnu";
+      totaux[nom] = (totaux[nom] || 0) + (c.montantTotal || 0);
+    });
+    return Object.entries(totaux)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([nom, valeur], i) => [nom, valeur, PALETTE[i % PALETTE.length]]);
+  };
+
+  cible.innerHTML = [
+    disque("Répartition par Closer", parClef("closer"), euros),
+    disque("Répartition par Produit", parClef("produit"), euros),
+  ].join("");
+
+  brancherSurvol(cible);
+}
+
+function vueDirection() {
+  const cible = document.getElementById("direction-cartes");
+  if (!cible) return;
+
+  const contrats = contratsDirectionFiltres().filter((c) => c.statut !== "Annulé");
+  const paiements = paiementsDirectionFiltres();
+
+  const caContracte = somme(contrats, "montantTotal");
+  const caEncaisse = somme(paiements, "montantRecu");
+  const montantPrevu = somme(paiements, "montantPrevu");
+
+  const clientsSignes = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean));
+  const nbClients = clientsSignes.size;
+
+  const panierMoyen = contrats.length ? caContracte / contrats.length : null;
+  const tauxRecouvrement = montantPrevu > 0 ? caEncaisse / montantPrevu : null;
+
+  const ltvTotale = somme(contrats, "montantLtv");
+  const ltvMoyenne = nbClients ? ltvTotale / nbClients : null;
+
+  const resiliations = DIRECTION_CONTRATS.filter((c) => {
+    if (!c.dateResiliation) return false;
+    if (DEBUT && c.dateResiliation < DEBUT) return false;
+    if (FIN && c.dateResiliation > FIN) return false;
+    if (CANAL !== "tout" && c.canal !== CANAL) return false;
+    if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    return true;
+  }).length;
+
+  cible.innerHTML = [
+    carte("CA contracté", euros(caContracte), contrats.length ? null : "aucun contrat signé sur la période"),
+    carte("CA encaissé", euros(caEncaisse), null),
+    carte("Clients signés", nombre(nbClients), null),
+    carte("Panier moyen", panierMoyen === null ? "—" : euros(panierMoyen), contrats.length ? null : "aucun contrat sur la période"),
+  ].join("");
+
+  const bloc = document.getElementById("direction-sante");
+  if (bloc) {
+    bloc.innerHTML = [
+      carte("Taux de recouvrement", tauxRecouvrement === null ? "—" : pourcent(tauxRecouvrement), montantPrevu ? null : "aucune échéance sur la période"),
+      carte("LTV moyenne", ltvMoyenne === null ? "—" : euros(ltvMoyenne), nbClients ? null : "aucun client signé sur la période"),
+      carte("Résiliations", nombre(resiliations), null),
+    ].join("");
+  }
+
+  grapheDirection(contrats, paiements);
+  camembertsDirection(contrats);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Navigation et apparitions                                          */
 /* ------------------------------------------------------------------ */
 
@@ -1162,6 +1363,7 @@ function rendre() {
   vueJour(lignes);
   vueCanal(lignes);
   vueDepenses(lignes);
+  vueDirection();
 
   const active = document.querySelector(".vue.active");
   if (active) {
@@ -1278,6 +1480,20 @@ async function charger() {
 
     TOUTES = donnees.lignes;
     fixerCouleurs();
+
+    // La section Direction reste vide si /api/direction échoue (réseau, panne
+    // de la fonction...) — un try/catch dédié l'isole pour que ça n'empêche
+    // jamais le reste du dashboard (Acquisition) de fonctionner.
+    try {
+      const reponseDirection = await fetch("/api/direction");
+      const donneesDirection = await reponseDirection.json();
+      if (reponseDirection.ok) {
+        DIRECTION_CONTRATS = donneesDirection.contrats || [];
+        DIRECTION_PAIEMENTS = donneesDirection.paiements || [];
+      }
+    } catch {
+      // Ignoré volontairement : voir commentaire ci-dessus.
+    }
 
     brancherPeriode();
     brancherCanalProduit();

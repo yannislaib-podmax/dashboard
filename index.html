@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=6">
+<link rel="stylesheet" href="/assets/style.css?v=7">
 </head>
 <body>
 
@@ -41,6 +41,13 @@
       <button type="button">Acquisition <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
         <a href="#ensemble"  data-vue="ensemble"  class="actif">Vue d'ensemble</a>
+      </div></div>
+    </div>
+
+    <div class="groupe" data-groupe="direction">
+      <button type="button">Direction <span class="chevron">▶</span></button>
+      <div class="sous"><div class="sous-interieur">
+        <a href="#direction" data-vue="direction">Tableau de bord</a>
       </div></div>
     </div>
 
@@ -150,6 +157,34 @@
 
   </section>
 
+  <!-- ---------- Direction — Tableau de bord ---------- -->
+  <section class="vue" id="vue-direction">
+    <div class="titre-vue">
+      <h1>Tableau de bord</h1>
+      <p class="sous-titre">Ce que la boîte a vendu et encaissé sur la période.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Le CA contracté est le chiffre de pilotage.</strong>
+      Il compte au jour de la signature, pas de l'encaissement — c'est ce qui
+      dit ce que l'activité commerciale a réellement produit. Le CA encaissé
+      est un indicateur de trésorerie : il suit avec du retard, et l'écart
+      entre les deux dit si le recouvrement suit la vente.
+    </p>
+
+    <h2 class="section">Business</h2>
+    <div id="direction-cartes" class="cartes"></div>
+    <div id="direction-sante" class="cartes cartes-etroit"></div>
+
+    <h3 class="sous-section">CA contracté et encaissé</h3>
+    <p class="sous-titre rv">Par tranche de 7 jours, de la plus ancienne à la plus récente.</p>
+    <div class="glass histo rv" id="direction-graph"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <p class="sous-titre rv">Qui vend, et ce qui se vend — sur le CA contracté de la période.</p>
+    <div class="camemberts" id="direction-camemberts"></div>
+  </section>
+
   <!-- ---------- Détail par jour ---------- -->
   <section class="vue" id="vue-jour">
     <div class="titre-vue">
@@ -188,6 +223,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=10"></script>
+<script src="/assets/app.js?v=11"></script>
 </body>
 </html>
