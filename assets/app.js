@@ -847,17 +847,20 @@ function mesures(lignes) {
   return {
     panier: ratio(s("contracte"), s("ventes")),
     closing: ratio(s("ventes"), s("honores")),
-    presence: ratio(s("honores"), s("rendezVous")),
+    // Même correctif que partout ailleurs : la base du taux de présence est
+    // les RDV CONCLUS (Honoré/No-show), pas tous les RDV pris — sinon les
+    // RDV "Confirmé" à venir font chuter artificiellement le taux.
+    presence: ratio(s("honores"), s("rendezVousConclus")),
     leadRdv: ratio(s("rendezVous"), s("leads")),
     coutLead: ratio(s("depense"), s("leads")),
     reel: { ventes: s("ventes"), honores: s("honores"), rendezVous: s("rendezVous"), leads: s("leads"), depense: s("depense") },
-    bases: { ventes: s("ventes"), honores: s("honores"), rendezVous: s("rendezVous"), leads: s("leads") },
+    bases: { ventes: s("ventes"), honores: s("honores"), rendezVous: s("rendezVous"), rendezVousConclus: s("rendezVousConclus"), leads: s("leads") },
   };
 }
 
 const HYPOTHESES = [
   { cle: "leadRdv", nom: "Lead → rendez-vous", unite: "%", base: "leads", groupe: "taux" },
-  { cle: "presence", nom: "Taux de présence", unite: "%", base: "rendezVous", groupe: "taux" },
+  { cle: "presence", nom: "Taux de présence", unite: "%", base: "rendezVousConclus", groupe: "taux" },
   { cle: "closing", nom: "Taux de closing", unite: "%", base: "honores", groupe: "taux" },
   { cle: "panier", nom: "Panier moyen", unite: "€", base: "ventes", groupe: "eco" },
   { cle: "coutLead", nom: "Coût par lead", unite: "€", base: "leads", groupe: "eco" },
