@@ -176,6 +176,7 @@ const INDICATEURS = {
     return imp > 0 ? (somme(l, "depense") / imp) * 1000 : null;
   },
   cpc: (l) => ratio(somme(l, "depense"), somme(l, "clics")),
+  ctr: (l) => ratio(somme(l, "clics"), somme(l, "impressions")),
 
   leads: (l) => somme(l, "leads"),
   rendezVous: (l) => somme(l, "rendezVous"),
@@ -667,6 +668,7 @@ function vueEnsemble(lignes, precedentes) {
     carte("Coût par lead", enEuros(val("coutLead")), sansDepense, ecart("coutLead")),
     carte("CPM", enEuros(val("cpm")), impressions === 0 ? "impressions non saisies" : `sur ${nombre(impressions)} impressions`, ecart("cpm")),
     carte("CPC", enEuros(val("cpc")), clics === 0 ? "clics non saisis" : `sur ${nombre(clics)} clics`, ecart("cpc")),
+    carte("CTR", impressions === 0 ? "—" : pourcent(val("ctr")), impressions === 0 ? "impressions non saisies" : `${nombre(clics)} clics sur ${nombre(impressions)} impressions`, ecart("ctr")),
   ].join("");
 
   graphiqueCa(lignes);
