@@ -691,6 +691,9 @@ function vueEnsemble(lignes, precedentes) {
     carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense, ecart("coutAppel")),
     carte("Coût par call booké", enEuros(val("coutRdv")), sansDepense, ecart("coutRdv")),
     carte("Coût par lead", enEuros(val("coutLead")), sansDepense, ecart("coutLead")),
+  ].join("");
+
+  document.getElementById("perf-couts-media").innerHTML = [
     carte("CPM", enEuros(val("cpm")), impressions === 0 ? "impressions non saisies" : `sur ${nombre(impressions)} impressions`, ecart("cpm")),
     carte("CPC", enEuros(val("cpc")), clics === 0 ? "clics non saisis" : `sur ${nombre(clics)} clics`, ecart("cpc")),
     carte("CTR", impressions === 0 ? "—" : pourcent(val("ctr")), impressions === 0 ? "impressions non saisies" : `${nombre(clics)} clics sur ${nombre(impressions)} impressions`, ecart("ctr")),
