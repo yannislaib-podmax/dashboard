@@ -82,6 +82,11 @@ function brancherInfobulles(racine) {
 
 let TOUTES = [];
 
+// Pilotage quotidien — données de /api/pilotage-quotidien, séparées de TOUTES
+// à dessein : jour de l'APPEL, pas jour de réservation (voir ce fichier API).
+// Ne participe jamais aux filtres période/canal/produit de la vue cohorte.
+let QUOT = [];
+
 let DEBUT = null;
 let FIN = null;
 
@@ -1527,6 +1532,71 @@ function brancherPeriode() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Pilotage quotidien                                                 */
+/* ------------------------------------------------------------------ */
+
+function vueQuotidien(lignes) {
+  const cible = document.getElementById("quot-jour");
+  const table = document.getElementById("quot-table");
+  if (!cible || !table) return;
+
+  const duJour = lignes.filter((l) => l.jour === AUJOURDHUI);
+  const total = (jeu, champ) => somme(jeu, champ);
+
+  const conclusJour = total(duJour, "honores") + total(duJour, "noShow");
+
+  cible.innerHTML =
+    carte("Appels prévus", nombre(total(duJour, "appelsPrevus")), "réservés pour aujourd'hui, tous statuts") +
+    carte("Appels honorés", nombre(total(duJour, "honores")), conclusJour ? `sur ${nombre(conclusJour)} conclu${conclusJour > 1 ? "s" : ""} aujourd'hui` : "aucun appel conclu pour l'instant") +
+    carte("No-show", nombre(total(duJour, "noShow")), null) +
+    carte("Annulés", nombre(total(duJour, "annules")), null) +
+    carte("Ventes signées", nombre(total(duJour, "ventes")), null) +
+    carte("Contracté", euros(total(duJour, "contracte")), null);
+
+  // Table des 14 derniers jours, tous canaux/produits confondus par jour —
+  // le détail canal/produit reste dans la vue cohorte.
+  const parJour = new Map();
+  lignes.forEach((l) => {
+    if (!parJour.has(l.jour)) {
+      parJour.set(l.jour, { jour: l.jour, appelsPrevus: 0, appelsConclus: 0, honores: 0, noShow: 0, annules: 0, ventes: 0, contracte: 0 });
+    }
+    const j = parJour.get(l.jour);
+    ["appelsPrevus", "appelsConclus", "honores", "noShow", "annules", "ventes", "contracte"].forEach(
+      (champ) => (j[champ] += l[champ] || 0)
+    );
+  });
+
+  const jours = [...parJour.values()].sort((a, b) => b.jour.localeCompare(a.jour)).slice(0, 14);
+
+  if (!jours.length) {
+    table.innerHTML = `<div style="padding:28px;color:var(--txt3)">Aucune donnée.</div>`;
+    return;
+  }
+
+  const corps = jours
+    .map(
+      (j) => `<tr${j.jour === AUJOURDHUI ? ' class="total"' : ""}>
+        <td>${j.jour === AUJOURDHUI ? "<strong>Aujourd'hui</strong>" : jourCourt(j.jour)}</td>
+        ${cellule(j.appelsPrevus)}
+        ${cellule(j.honores)}
+        ${cellule(j.noShow)}
+        ${cellule(j.annules)}
+        ${cellule(j.ventes)}
+        ${cellule(j.contracte, euros)}
+      </tr>`
+    )
+    .join("");
+
+  table.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Jour</th><th>Appels prévus</th><th>Honorés</th><th>No-show</th><th>Annulés</th><th>Ventes</th><th>Contracté</th>
+      </tr></thead>
+      <tbody>${corps}</tbody>
+    </table>`;
+}
+
+/* ------------------------------------------------------------------ */
 
 async function charger() {
   try {
@@ -1536,6 +1606,20 @@ async function charger() {
 
     TOUTES = donnees.lignes;
     fixerCouleurs();
+
+    // Le pilotage quotidien reste vide si /api/pilotage-quotidien échoue —
+    // même logique d'isolement que pour Direction ci-dessous : ça n'empêche
+    // jamais le reste du dashboard de fonctionner.
+    try {
+      const reponseQuot = await fetch("/api/pilotage-quotidien");
+      const donneesQuot = await reponseQuot.json();
+      if (reponseQuot.ok) {
+        QUOT = donneesQuot.lignes || [];
+        vueQuotidien(QUOT);
+      }
+    } catch {
+      // Ignoré volontairement : voir commentaire ci-dessus.
+    }
 
     // La section Direction reste vide si /api/direction échoue (réseau, panne
     // de la fonction...) — un try/catch dédié l'isole pour que ça n'empêche

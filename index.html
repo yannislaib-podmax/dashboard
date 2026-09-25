@@ -47,7 +47,8 @@
     <div class="groupe ouvert" data-groupe="acquisition">
       <button type="button">Acquisition <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
-        <a href="#ensemble"  data-vue="ensemble"  class="actif">Vue d'ensemble</a>
+        <a href="#ensemble"  data-vue="ensemble"  class="actif">Performance (cohorte)</a>
+        <a href="#quotidien" data-vue="quotidien">Pilotage quotidien</a>
       </div></div>
     </div>
 
@@ -157,6 +158,32 @@
 
   </section>
 
+  <!-- ---------- Pilotage quotidien ---------- -->
+  <section class="vue" id="vue-quotidien">
+    <div class="titre-vue">
+      <h1>Pilotage quotidien</h1>
+      <p class="sous-titre">Ce qui s'est réellement passé aujourd'hui, appel par appel.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Ici, chaque appel compte le jour où il a réellement eu lieu</strong>
+      — pas le jour où il a été réservé. C'est l'inverse de la vue « Performance
+      (cohorte) », qui rattache chaque résultat à la dépense qui l'a produit.
+      Cette vue-ci sert à piloter l'activité du jour (l'équipe est-elle
+      productive, y a-t-il un problème de no-show) ; elle ne sert jamais à
+      juger la rentabilité d'une campagne — pour ça, revenir à la vue cohorte.
+      Volontairement, pas de taux de conversion ici : seulement des comptages
+      bruts, un taux n'ayant de sens que rapporté à une cohorte complète.
+    </p>
+
+    <h2 class="section">Aujourd'hui</h2>
+    <div id="quot-jour" class="cartes"></div>
+
+    <h3 class="sous-section">Derniers jours</h3>
+    <p class="sous-titre rv">Un appel réservé il y a plusieurs jours peut apparaître ici, sous sa date d'appel réelle.</p>
+    <div class="glass cadre-table rv" id="quot-table"></div>
+  </section>
+
   <!-- ---------- Direction — Tableau de bord ---------- -->
   <section class="vue" id="vue-direction">
     <div class="titre-vue">
@@ -223,6 +250,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=13"></script>
+<script src="/assets/app.js?v=14"></script>
 </body>
 </html>
