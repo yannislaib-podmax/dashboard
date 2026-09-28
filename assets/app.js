@@ -95,6 +95,81 @@ const enIso = (d) => d.toISOString().slice(0, 10);
 const enDate = (iso) => new Date(iso + "T12:00:00");
 const AUJOURDHUI = enIso(new Date());
 
+// Granularité des graphiques en bâtonnés (Dépense/CA et CA contracté/encaissé) :
+// "semaine" = tranches glissantes de 7 jours (comportement historique),
+// "mois" = un bâton par mois calendaire. Chaque graphique garde son état et
+// ses dernières données pour pouvoir se redessiner seul au clic sur le toggle.
+let GRANULARITE_CA = "semaine";
+let GRANULARITE_DIRECTION = "semaine";
+let DERNIERES_LIGNES_CA = [];
+let DERNIERS_CONTRATS_DIRECTION = [];
+let DERNIERS_PAIEMENTS_DIRECTION = [];
+
+const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+
+// Découpe une plage de dates (triées, format ISO) en blocs {debut, fin} selon
+// la granularité choisie. En semaine : tranches glissantes de 7 jours en
+// remontant depuis la plus récente (comportement historique). En mois : un
+// bloc par mois calendaire complet couvrant la plage.
+function decoupagePeriodes(joursTries, granularite) {
+  if (!joursTries.length) return [];
+  const premier = joursTries[0];
+  const dernier = joursTries[joursTries.length - 1];
+
+  if (granularite === "mois") {
+    const blocs = [];
+    let curDebut = new Date(enDate(premier).getFullYear(), enDate(premier).getMonth(), 1, 12);
+    const limite = enDate(dernier);
+    for (let garde = 0; garde < 60; garde++) {
+      const curFin = new Date(curDebut.getFullYear(), curDebut.getMonth() + 1, 0, 12);
+      blocs.push({ debut: enIso(curDebut), fin: enIso(curFin) });
+      if (curFin >= limite) break;
+      curDebut = new Date(curDebut.getFullYear(), curDebut.getMonth() + 1, 1, 12);
+    }
+    return blocs;
+  }
+
+  const blocs = [];
+  let fin = enDate(dernier);
+  for (let garde = 0; garde < 60; garde++) {
+    const debut = new Date(fin - 6 * JOUR_MS);
+    blocs.unshift({ debut: enIso(debut), fin: enIso(fin) });
+    if (enIso(debut) <= premier) break;
+    fin = new Date(debut - JOUR_MS);
+  }
+  return blocs;
+}
+
+function libellePeriode(b, granularite) {
+  const jourMois = (iso) => {
+    const d = enDate(iso);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  if (granularite === "mois") {
+    const d = enDate(b.debut);
+    return `${MOIS_COURTS[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  return `${jourMois(b.debut)} – ${jourMois(b.fin)}`;
+}
+
+// Boutons "Semaine / Mois" injectés dans un graphique en bâtonnés.
+function toggleGranulariteHtml(granulariteActuelle) {
+  return `
+    <div class="toggle-granularite">
+      <button type="button" class="${granulariteActuelle === "semaine" ? "actif" : ""}" data-granularite="semaine">Semaine</button>
+      <button type="button" class="${granulariteActuelle === "mois" ? "actif" : ""}" data-granularite="mois">Mois</button>
+    </div>`;
+}
+
+function brancherToggleGranularite(cible, onChange) {
+  cible.querySelectorAll(".toggle-granularite button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      onChange(btn.dataset.granularite);
+    });
+  });
+}
+
 const dansPeriode = (l) => {
   if (!DEBUT && !FIN) return true;
   if (!l.jour) return false;
@@ -425,21 +500,11 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
 /*  Dépense et chiffre d'affaires, par tranche de 7 jours              */
 /* ------------------------------------------------------------------ */
 
-function tranches7(lignes) {
+function tranches7(lignes, granularite) {
   const jours = lignes.map((l) => l.jour).filter(Boolean).sort();
   if (!jours.length) return [];
 
-  const premier = jours[0];
-  const dernier = jours[jours.length - 1];
-  const blocs = [];
-  let fin = enDate(dernier);
-
-  for (let garde = 0; garde < 60; garde++) {
-    const debut = new Date(fin - 6 * JOUR_MS);
-    blocs.unshift({ debut: enIso(debut), fin: enIso(fin) });
-    if (enIso(debut) <= premier) break;
-    fin = new Date(debut - JOUR_MS);
-  }
+  const blocs = decoupagePeriodes(jours, granularite);
 
   return blocs
     .map((b) => {
@@ -448,27 +513,31 @@ function tranches7(lignes) {
     })
     // On n'affiche une tranche que si elle a une dépense ou un CA à montrer :
     // des colonnes vides à hauteur minimale poussaient le graphique hors de
-    // son cadre quand la période couvrait beaucoup de semaines inactives.
+    // son cadre quand la période couvrait beaucoup de semaines/mois inactifs.
     .filter((b) => b.depense > 0 || b.contracte > 0);
 }
 
 function graphiqueCa(lignes) {
-  const blocs = tranches7(lignes);
+  DERNIERES_LIGNES_CA = lignes;
+
   const cible = document.getElementById("graph-ca");
   if (!cible) return;
 
+  const granularite = GRANULARITE_CA;
+  const blocs = tranches7(lignes, granularite);
+  const toggle = toggleGranulariteHtml(granularite);
+
   if (!blocs.length) {
-    cible.innerHTML = `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    brancherToggleGranularite(cible, (g) => {
+      GRANULARITE_CA = g;
+      graphiqueCa(DERNIERES_LIGNES_CA);
+    });
     return;
   }
 
   const max = Math.max(1, ...blocs.flatMap((b) => [b.depense, b.contracte]));
   const h = (v) => Math.round((v / max) * 100);
-
-  const jourMois = (iso) => {
-    const d = enDate(iso);
-    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
 
   const legende = `
     <div class="legende-graph">
@@ -479,7 +548,8 @@ function graphiqueCa(lignes) {
   const colonnes = blocs
     .map((b) => {
       const roas = b.depense > 0 ? (b.contracte / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
-      const bulle = `<strong>${jourMois(b.debut)} – ${jourMois(b.fin)}</strong>
+      const libelle = libellePeriode(b, granularite);
+      const bulle = `<strong>${libelle}</strong>
         <span><i class="p-depense"></i>Dépense pub<b>${euros(b.depense)}</b></span>
         <span><i class="p-contracte"></i>CA contracté<b>${euros(b.contracte)}</b></span>
         <span class="bulle-pied">ROAS<b>${roas}</b></span>`;
@@ -491,13 +561,25 @@ function graphiqueCa(lignes) {
             <div class="barre b-contracte" data-hauteur="${h(b.contracte)}"></div>
           </div>
         </div>
-        <div class="jour">${jourMois(b.debut)} – ${jourMois(b.fin)}</div>
+        <div class="jour">${libelle}</div>
       </div>`;
     })
     .join("");
 
-  cible.innerHTML = legende + `<div class="histo-barres">${colonnes}</div>`;
+  cible.innerHTML = toggle + legende + `<div class="histo-barres">${colonnes}</div>`;
   brancherInfobulles(cible);
+  brancherToggleGranularite(cible, (g) => {
+    GRANULARITE_CA = g;
+    graphiqueCa(DERNIERES_LIGNES_CA);
+  });
+
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      cible.querySelectorAll(".barre").forEach((b) => {
+        b.style.height = b.dataset.hauteur + "%";
+      });
+    }, 120)
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1154,7 +1236,7 @@ function mesuresDirection(contrats, paiements, resiliations) {
   };
 }
 
-function tranches7Direction(contrats, paiements) {
+function tranches7Direction(contrats, paiements, granularite) {
   const jours = [
     ...contrats.map((c) => c.dateSignature),
     ...paiements.map((p) => p.datePaiement),
@@ -1163,17 +1245,7 @@ function tranches7Direction(contrats, paiements) {
     .sort();
   if (!jours.length) return [];
 
-  const premier = jours[0];
-  const dernier = jours[jours.length - 1];
-  const blocs = [];
-  let fin = enDate(dernier);
-
-  for (let garde = 0; garde < 60; garde++) {
-    const debut = new Date(fin - 6 * JOUR_MS);
-    blocs.unshift({ debut: enIso(debut), fin: enIso(fin) });
-    if (enIso(debut) <= premier) break;
-    fin = new Date(debut - JOUR_MS);
-  }
+  const blocs = decoupagePeriodes(jours, granularite);
 
   return blocs
     .map((b) => ({
@@ -1189,23 +1261,29 @@ function tranches7Direction(contrats, paiements) {
 }
 
 function grapheDirection(contrats, paiements) {
+  DERNIERS_CONTRATS_DIRECTION = contrats;
+  DERNIERS_PAIEMENTS_DIRECTION = paiements;
+
   const cible = document.getElementById("direction-graph");
   if (!cible) return;
 
-  const blocs = tranches7Direction(contrats, paiements);
+  const granularite = GRANULARITE_DIRECTION;
+  const blocs = tranches7Direction(contrats, paiements, granularite);
+  const toggle = toggleGranulariteHtml(granularite);
+  const rebrancherToggle = () =>
+    brancherToggleGranularite(cible, (g) => {
+      GRANULARITE_DIRECTION = g;
+      grapheDirection(DERNIERS_CONTRATS_DIRECTION, DERNIERS_PAIEMENTS_DIRECTION);
+    });
 
   if (!blocs.length) {
-    cible.innerHTML = `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    rebrancherToggle();
     return;
   }
 
   const max = Math.max(1, ...blocs.flatMap((b) => [b.contracte, b.encaisse]));
   const h = (v) => Math.round((v / max) * 100);
-
-  const jourMois = (iso) => {
-    const d = enDate(iso);
-    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-  };
 
   const legende = `
     <div class="legende-graph">
@@ -1215,7 +1293,8 @@ function grapheDirection(contrats, paiements) {
 
   const colonnes = blocs
     .map((b) => {
-      const bulle = `<strong>${jourMois(b.debut)} – ${jourMois(b.fin)}</strong>
+      const libelle = libellePeriode(b, granularite);
+      const bulle = `<strong>${libelle}</strong>
         <span><i class="p-dir-contracte"></i>CA contracté<b>${euros(b.contracte)}</b></span>
         <span><i class="p-dir-encaisse"></i>CA encaissé<b>${euros(b.encaisse)}</b></span>`;
       return `<div class="barre-col"${info(bulle)}>
@@ -1225,13 +1304,14 @@ function grapheDirection(contrats, paiements) {
             <div class="barre b-dir-encaisse"  data-hauteur="${h(b.encaisse)}"></div>
           </div>
         </div>
-        <div class="jour">${jourMois(b.debut)} – ${jourMois(b.fin)}</div>
+        <div class="jour">${libelle}</div>
       </div>`;
     })
     .join("");
 
-  cible.innerHTML = legende + `<div class="histo-barres">${colonnes}</div>`;
+  cible.innerHTML = toggle + legende + `<div class="histo-barres">${colonnes}</div>`;
   brancherInfobulles(cible);
+  rebrancherToggle();
 
   requestAnimationFrame(() =>
     setTimeout(() => {
