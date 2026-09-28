@@ -694,6 +694,16 @@ function vueEnsemble(lignes, precedentes) {
 
   const sansDepense = depense === 0 ? "dépense non saisie" : null;
 
+  // RDV pris mais dont l'issue n'est pas encore connue (ni Honoré, ni
+  // No-show, ni Annulé) : ils pèsent dans la dépense de la période mais pas
+  // encore dans "honorés"/"ventes", donc "Coût par appel honoré" et "Coût
+  // par vente" sont mécaniquement surestimés tant qu'ils n'ont pas eu lieu.
+  const rdvAVenir = somme(lignes, "rendezVous") - somme(lignes, "rendezVousConclus");
+  const noteAVenir =
+    rdvAVenir > 0
+      ? `${nombre(rdvAVenir)} RDV de la période encore à venir : ce chiffre va bouger`
+      : null;
+
   document.getElementById("perf").innerHTML = [
     carte("Dépense pub", euros(depense), depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
     carte("CA contracté", enEuros(val("contracte")), null, ecart("contracte")),
@@ -701,8 +711,8 @@ function vueEnsemble(lignes, precedentes) {
   ].join("");
 
   document.getElementById("perf-couts").innerHTML = [
-    carte("Coût par vente", enEuros(val("coutVente")), depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense, ecart("coutVente")),
-    carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense, ecart("coutAppel")),
+    carte("Coût par vente", enEuros(val("coutVente")), (depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense) || noteAVenir, ecart("coutVente")),
+    carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense || noteAVenir, ecart("coutAppel")),
     carte("Coût par call booké", enEuros(val("coutRdv")), sansDepense, ecart("coutRdv")),
     carte("Coût par lead", enEuros(val("coutLead")), sansDepense, ecart("coutLead")),
   ].join("");
