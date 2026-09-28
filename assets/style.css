@@ -377,8 +377,6 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 #direction-cartes .carte:nth-child(4) .chiffre { color: #9FE1CB; }
 
-.b-dir-contracte { background: linear-gradient(180deg, #4FC3F7, rgba(79, 195, 247, .32)); }
-.b-dir-encaisse  { background: linear-gradient(180deg, var(--violet-clair), rgba(155, 107, 255, .32)); }
 .p-dir-contracte { background: #4FC3F7; }
 .p-dir-encaisse  { background: var(--violet-clair); }
 
@@ -472,6 +470,9 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 
 .b-depense  { background: linear-gradient(180deg, var(--ciel), rgba(201, 166, 255, .32)); }
 .b-contracte{ background: linear-gradient(180deg, var(--magenta), rgba(230, 25, 176, .32)); }
+
+.b-dir-contracte { background: linear-gradient(180deg, #4FC3F7, rgba(79, 195, 247, .32)); }
+.b-dir-encaisse  { background: linear-gradient(180deg, var(--violet-clair), rgba(155, 107, 255, .32)); }
 
 .toggle-granularite {
   display: inline-flex;
