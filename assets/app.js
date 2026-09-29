@@ -101,9 +101,11 @@ const AUJOURDHUI = enIso(new Date());
 // ses dernières données pour pouvoir se redessiner seul au clic sur le toggle.
 let GRANULARITE_CA = "semaine";
 let GRANULARITE_DIRECTION = "semaine";
+let GRANULARITE_QUOTIDIEN = "semaine";
 let DERNIERES_LIGNES_CA = [];
 let DERNIERS_CONTRATS_DIRECTION = [];
 let DERNIERS_PAIEMENTS_DIRECTION = [];
+let DERNIERS_JOURS_QUOTIDIEN = [];
 
 const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
@@ -1652,20 +1654,52 @@ function camembertQuotidien(duJour) {
   brancherSurvol(cible);
 }
 
-// Histogramme des 14 derniers jours : trois barres (honorés / no-show /
-// annulés) par jour réel d'appel, du plus ancien au plus récent.
-function graphiqueQuotidien(jours) {
+// Regroupe les jours (jour réel d'appel) en tranches de 7 jours glissantes
+// ou en mois calendaires — même découpage que les autres graphiques en
+// bâtonnés (cf. decoupagePeriodes), appliqué ici aux compteurs honorés /
+// no-show / annulés / appels prévus plutôt qu'à des montants.
+function tranchesQuotidien(joursData, granularite) {
+  const joursTries = joursData.map((j) => j.jour).filter(Boolean).sort();
+  if (!joursTries.length) return [];
+
+  const blocs = decoupagePeriodes(joursTries, granularite);
+
+  return blocs
+    .map((b) => {
+      const dedans = joursData.filter((j) => j.jour >= b.debut && j.jour <= b.fin);
+      return {
+        ...b,
+        appelsPrevus: somme(dedans, "appelsPrevus"),
+        honores: somme(dedans, "honores"),
+        noShow: somme(dedans, "noShow"),
+        annules: somme(dedans, "annules"),
+      };
+    })
+    .filter((b) => b.appelsPrevus > 0);
+}
+
+// Histogramme day-by-day, avec le même toggle Semaine/Mois que les
+// graphiques Dépense/CA et CA contracté/encaissé.
+function graphiqueQuotidien(joursData) {
+  DERNIERS_JOURS_QUOTIDIEN = joursData;
+
   const cible = document.getElementById("quot-graph");
   if (!cible) return;
 
-  const ordre = [...jours].sort((a, b) => a.jour.localeCompare(b.jour));
+  const granularite = GRANULARITE_QUOTIDIEN;
+  const blocs = tranchesQuotidien(joursData, granularite);
+  const toggle = toggleGranulariteHtml(granularite);
 
-  if (!ordre.length) {
-    cible.innerHTML = `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+  if (!blocs.length) {
+    cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    brancherToggleGranularite(cible, (g) => {
+      GRANULARITE_QUOTIDIEN = g;
+      graphiqueQuotidien(DERNIERS_JOURS_QUOTIDIEN);
+    });
     return;
   }
 
-  const max = Math.max(1, ...ordre.flatMap((j) => [j.honores, j.noShow, j.annules]));
+  const max = Math.max(1, ...blocs.flatMap((b) => [b.honores, b.noShow, b.annules]));
   const h = (v) => Math.round((v / max) * 100);
 
   const legende = `
@@ -1675,20 +1709,20 @@ function graphiqueQuotidien(jours) {
       <span><i class="p-annules"></i>Annulés</span>
     </div>`;
 
-  const colonnes = ordre
-    .map((j) => {
-      const libelle = j.jour === AUJOURDHUI ? "Auj." : jourCourt(j.jour);
-      const bulle = `<strong>${j.jour === AUJOURDHUI ? "Aujourd'hui" : jourCourt(j.jour)}</strong>
-        <span><i class="p-honores"></i>Honorés<b>${nombre(j.honores)}</b></span>
-        <span><i class="p-noshow"></i>No-show<b>${nombre(j.noShow)}</b></span>
-        <span><i class="p-annules"></i>Annulés<b>${nombre(j.annules)}</b></span>
-        <span class="bulle-pied">Appels prévus<b>${nombre(j.appelsPrevus)}</b></span>`;
+  const colonnes = blocs
+    .map((b) => {
+      const libelle = libellePeriode(b, granularite);
+      const bulle = `<strong>${libelle}</strong>
+        <span><i class="p-honores"></i>Honorés<b>${nombre(b.honores)}</b></span>
+        <span><i class="p-noshow"></i>No-show<b>${nombre(b.noShow)}</b></span>
+        <span><i class="p-annules"></i>Annulés<b>${nombre(b.annules)}</b></span>
+        <span class="bulle-pied">Appels prévus<b>${nombre(b.appelsPrevus)}</b></span>`;
       return `<div class="barre-col"${info(bulle)}>
         <div class="zone">
           <div class="groupe-barres">
-            <div class="barre b-honores" data-hauteur="${h(j.honores)}"></div>
-            <div class="barre b-noshow"  data-hauteur="${h(j.noShow)}"></div>
-            <div class="barre b-annules" data-hauteur="${h(j.annules)}"></div>
+            <div class="barre b-honores" data-hauteur="${h(b.honores)}"></div>
+            <div class="barre b-noshow"  data-hauteur="${h(b.noShow)}"></div>
+            <div class="barre b-annules" data-hauteur="${h(b.annules)}"></div>
           </div>
         </div>
         <div class="jour">${libelle}</div>
@@ -1696,8 +1730,12 @@ function graphiqueQuotidien(jours) {
     })
     .join("");
 
-  cible.innerHTML = legende + `<div class="histo-barres">${colonnes}</div>`;
+  cible.innerHTML = toggle + legende + `<div class="histo-barres">${colonnes}</div>`;
   brancherInfobulles(cible);
+  brancherToggleGranularite(cible, (g) => {
+    GRANULARITE_QUOTIDIEN = g;
+    graphiqueQuotidien(DERNIERS_JOURS_QUOTIDIEN);
+  });
 
   requestAnimationFrame(() =>
     setTimeout(() => {
@@ -1749,9 +1787,13 @@ function vueQuotidien(lignes) {
     );
   });
 
-  const jours = [...parJour.values()].sort((a, b) => b.jour.localeCompare(a.jour)).slice(0, 14);
+  const parJourTous = [...parJour.values()].sort((a, b) => b.jour.localeCompare(a.jour));
+  const jours = parJourTous.slice(0, 14);
 
-  graphiqueQuotidien(jours);
+  // Le graphique en bâtonnés prend tout l'historique dispo (le toggle
+  // Semaine/Mois a besoin de plus que 14 jours pour être utile) ; la table
+  // "Détail" ci-dessous reste bornée aux 14 derniers jours.
+  graphiqueQuotidien(parJourTous);
 
   if (!jours.length) {
     table.innerHTML = `<div style="padding:28px;color:var(--txt3)">Aucune donnée.</div>`;
