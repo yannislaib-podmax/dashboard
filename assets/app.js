@@ -1625,6 +1625,89 @@ function brancherPeriode() {
 /*  Pilotage quotidien                                                 */
 /* ------------------------------------------------------------------ */
 
+// Camembert du jour : répartition des appels prévus aujourd'hui par issue.
+// "En attente" = appels confirmés dont l'heure n'est pas encore passée (ou
+// dont l'issue n'a pas encore été saisie) — jamais négatif.
+function camembertQuotidien(duJour) {
+  const cible = document.getElementById("quot-camembert");
+  if (!cible) return;
+
+  const total = (champ) => somme(duJour, champ);
+  const honores = total("honores");
+  const noShow = total("noShow");
+  const annules = total("annules");
+  const enAttente = Math.max(0, total("appelsPrevus") - honores - noShow - annules);
+
+  cible.innerHTML = disque(
+    "Aujourd'hui, par issue",
+    [
+      ["Honorés", honores, "#6FD3A3"],
+      ["No-show", noShow, "#F08585"],
+      ["Annulés", annules, "#8895A7"],
+      ["En attente", enAttente, "#9B6BFF"],
+    ],
+    nombre
+  );
+
+  brancherSurvol(cible);
+}
+
+// Histogramme des 14 derniers jours : trois barres (honorés / no-show /
+// annulés) par jour réel d'appel, du plus ancien au plus récent.
+function graphiqueQuotidien(jours) {
+  const cible = document.getElementById("quot-graph");
+  if (!cible) return;
+
+  const ordre = [...jours].sort((a, b) => a.jour.localeCompare(b.jour));
+
+  if (!ordre.length) {
+    cible.innerHTML = `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    return;
+  }
+
+  const max = Math.max(1, ...ordre.flatMap((j) => [j.honores, j.noShow, j.annules]));
+  const h = (v) => Math.round((v / max) * 100);
+
+  const legende = `
+    <div class="legende-graph">
+      <span><i class="p-honores"></i>Honorés</span>
+      <span><i class="p-noshow"></i>No-show</span>
+      <span><i class="p-annules"></i>Annulés</span>
+    </div>`;
+
+  const colonnes = ordre
+    .map((j) => {
+      const libelle = j.jour === AUJOURDHUI ? "Auj." : jourCourt(j.jour);
+      const bulle = `<strong>${j.jour === AUJOURDHUI ? "Aujourd'hui" : jourCourt(j.jour)}</strong>
+        <span><i class="p-honores"></i>Honorés<b>${nombre(j.honores)}</b></span>
+        <span><i class="p-noshow"></i>No-show<b>${nombre(j.noShow)}</b></span>
+        <span><i class="p-annules"></i>Annulés<b>${nombre(j.annules)}</b></span>
+        <span class="bulle-pied">Appels prévus<b>${nombre(j.appelsPrevus)}</b></span>`;
+      return `<div class="barre-col"${info(bulle)}>
+        <div class="zone">
+          <div class="groupe-barres">
+            <div class="barre b-honores" data-hauteur="${h(j.honores)}"></div>
+            <div class="barre b-noshow"  data-hauteur="${h(j.noShow)}"></div>
+            <div class="barre b-annules" data-hauteur="${h(j.annules)}"></div>
+          </div>
+        </div>
+        <div class="jour">${libelle}</div>
+      </div>`;
+    })
+    .join("");
+
+  cible.innerHTML = legende + `<div class="histo-barres">${colonnes}</div>`;
+  brancherInfobulles(cible);
+
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      cible.querySelectorAll(".barre").forEach((b) => {
+        b.style.height = b.dataset.hauteur + "%";
+      });
+    }, 120)
+  );
+}
+
 function vueQuotidien(lignes) {
   const cible = document.getElementById("quot-jour");
   const table = document.getElementById("quot-table");
@@ -1635,13 +1718,23 @@ function vueQuotidien(lignes) {
 
   const conclusJour = total(duJour, "honores") + total(duJour, "noShow");
 
+  // Taux calculés uniquement à partir des compteurs du jour même (jamais
+  // mélangés à la cohorte/au spend) : présence = honorés / issue connue ce
+  // jour, closing = ventes / honorés ce jour. Cf. commentaire de l'API.
+  const tauxPresenceJour = ratio(total(duJour, "honores"), conclusJour);
+  const tauxClosingJour = ratio(total(duJour, "ventes"), total(duJour, "honores"));
+
   cible.innerHTML =
     carte("Appels prévus", nombre(total(duJour, "appelsPrevus")), "réservés pour aujourd'hui, tous statuts") +
     carte("Appels honorés", nombre(total(duJour, "honores")), conclusJour ? `sur ${nombre(conclusJour)} conclu${conclusJour > 1 ? "s" : ""} aujourd'hui` : "aucun appel conclu pour l'instant") +
+    carte("Taux de présence", pourcent(tauxPresenceJour), conclusJour ? "honorés sur appels conclus aujourd'hui" : "aucun appel conclu pour l'instant") +
     carte("No-show", nombre(total(duJour, "noShow")), null) +
     carte("Annulés", nombre(total(duJour, "annules")), null) +
+    carte("Taux de closing", pourcent(tauxClosingJour), total(duJour, "honores") ? "ventes sur honorés aujourd'hui" : "aucun appel honoré pour l'instant") +
     carte("Ventes signées", nombre(total(duJour, "ventes")), null) +
     carte("Contracté", euros(total(duJour, "contracte")), null);
+
+  camembertQuotidien(duJour);
 
   // Table des 14 derniers jours, tous canaux/produits confondus par jour —
   // le détail canal/produit reste dans la vue cohorte.
@@ -1658,29 +1751,38 @@ function vueQuotidien(lignes) {
 
   const jours = [...parJour.values()].sort((a, b) => b.jour.localeCompare(a.jour)).slice(0, 14);
 
+  graphiqueQuotidien(jours);
+
   if (!jours.length) {
     table.innerHTML = `<div style="padding:28px;color:var(--txt3)">Aucune donnée.</div>`;
     return;
   }
 
+  const cellulePourcent = (v) => `<td${v === null ? ' class="zero"' : ""}>${pourcent(v)}</td>`;
+
   const corps = jours
-    .map(
-      (j) => `<tr${j.jour === AUJOURDHUI ? ' class="total"' : ""}>
+    .map((j) => {
+      const conclus = j.honores + j.noShow;
+      const tauxPresence = ratio(j.honores, conclus);
+      const tauxClosing = ratio(j.ventes, j.honores);
+      return `<tr${j.jour === AUJOURDHUI ? ' class="total"' : ""}>
         <td>${j.jour === AUJOURDHUI ? "<strong>Aujourd'hui</strong>" : jourCourt(j.jour)}</td>
         ${cellule(j.appelsPrevus)}
         ${cellule(j.honores)}
+        ${cellulePourcent(tauxPresence)}
         ${cellule(j.noShow)}
         ${cellule(j.annules)}
         ${cellule(j.ventes)}
+        ${cellulePourcent(tauxClosing)}
         ${cellule(j.contracte, euros)}
-      </tr>`
-    )
+      </tr>`;
+    })
     .join("");
 
   table.innerHTML = `
     <table>
       <thead><tr>
-        <th>Jour</th><th>Appels prévus</th><th>Honorés</th><th>No-show</th><th>Annulés</th><th>Ventes</th><th>Contracté</th>
+        <th>Jour</th><th>Appels prévus</th><th>Honorés</th><th>Taux présence</th><th>No-show</th><th>Annulés</th><th>Ventes</th><th>Taux closing</th><th>Contracté</th>
       </tr></thead>
       <tbody>${corps}</tbody>
     </table>`;

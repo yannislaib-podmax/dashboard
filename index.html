@@ -172,15 +172,19 @@
       Cette vue-ci sert à piloter l'activité du jour (l'équipe est-elle
       productive, y a-t-il un problème de no-show) ; elle ne sert jamais à
       juger la rentabilité d'une campagne — pour ça, revenir à la vue cohorte.
-      Volontairement, pas de taux de conversion ici : seulement des comptages
-      bruts, un taux n'ayant de sens que rapporté à une cohorte complète.
+      Les deux taux affichés (présence, closing) se calculent uniquement sur
+      les compteurs du jour même — jamais mélangés à la cohorte ou au spend.
     </p>
 
     <h2 class="section">Aujourd'hui</h2>
     <div id="quot-jour" class="cartes"></div>
+    <div id="quot-camembert" class="camemberts"></div>
 
-    <h3 class="sous-section">Derniers jours</h3>
+    <h3 class="sous-section">Les 14 derniers jours</h3>
     <p class="sous-titre rv">Un appel réservé il y a plusieurs jours peut apparaître ici, sous sa date d'appel réelle.</p>
+    <div class="glass histo rv" id="quot-graph"></div>
+
+    <h3 class="sous-section">Détail</h3>
     <div class="glass cadre-table rv" id="quot-table"></div>
   </section>
 

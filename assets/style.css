@@ -474,6 +474,13 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .b-dir-contracte { background: linear-gradient(180deg, #4FC3F7, rgba(79, 195, 247, .32)); }
 .b-dir-encaisse  { background: linear-gradient(180deg, var(--violet-clair), rgba(155, 107, 255, .32)); }
 
+.b-honores   { background: linear-gradient(180deg, #6FD3A3, rgba(111, 211, 163, .32)); }
+.b-noshow    { background: linear-gradient(180deg, #F08585, rgba(240, 133, 133, .32)); }
+.b-annules   { background: linear-gradient(180deg, #8895A7, rgba(136, 149, 167, .32)); }
+.p-honores { background: #6FD3A3; }
+.p-noshow  { background: #F08585; }
+.p-annules { background: #8895A7; }
+
 .toggle-granularite {
   display: inline-flex;
   gap: 4px;
