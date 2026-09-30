@@ -966,7 +966,13 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 .part-ligne.actif { background: rgba(255, 255, 255, 0.07); }
 .part-ligne i { width: 11px; height: 11px; border-radius: 3px; }
-.part-ligne .nom { color: var(--txt2); }
+.part-ligne .nom {
+  color: var(--txt2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .part-ligne .taux-etape {
   display: block;
   font-style: normal;
@@ -978,6 +984,24 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .part-ligne .montant { color: var(--txt3); font-variant-numeric: tabular-nums; }
 
 .camembert .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
+
+.parts-plus { display: flex; flex-direction: column; gap: 9px; margin-top: 9px; }
+
+.parts-voir-plus {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 7px;
+  background: transparent;
+  border: 1px dashed var(--bord);
+  border-radius: 8px;
+  color: var(--txt3);
+  font-size: 12px;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.parts-voir-plus:hover { color: var(--txt2); border-color: var(--violet-clair); }
 
 /* ---------- Classement (tracking UTM) ---------- */
 

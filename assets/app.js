@@ -640,16 +640,26 @@ function disque(titre, parts, format) {
     })
     .join("");
 
-  const legende = parts
-    .map(
-      (p, i) => `<div class="part-ligne" data-i="${i}"${info(bulle(p))}>
+  const ligne = (p, i) => `<div class="part-ligne" data-i="${i}"${info(bulle(p))}>
         <i style="background:${p[2]}"></i>
         <span class="nom">${p[0]}${p[3] ? `<em class="taux-etape">${p[3]}</em>` : ""}</span>
         <span class="pct">${Math.round((p[1] / total) * 100)} %</span>
         <span class="montant">${format(p[1])}</span>
-      </div>`
-    )
-    .join("");
+      </div>`;
+
+  // Au-delà de 10 valeurs (courant sur une dimension UTM à forte cardinalité
+  // comme Content ou Campagne), la légende déborde et devient illisible :
+  // on affiche les 10 premières, le reste derrière un "voir plus".
+  const LIMITE_LEGENDE = 10;
+  const visibles = parts.slice(0, LIMITE_LEGENDE).map(ligne).join("");
+  const masquees = parts.slice(LIMITE_LEGENDE);
+
+  const legende =
+    visibles +
+    (masquees.length
+      ? `<div class="parts-plus" hidden>${masquees.map((p, i) => ligne(p, i + LIMITE_LEGENDE)).join("")}</div>
+         <button type="button" class="parts-voir-plus" data-n="${masquees.length}">Voir ${masquees.length} de plus</button>`
+      : "");
 
   const centres = parts
     .map((p) => JSON.stringify({ v: format(p[1]), n: Math.round((p[1] / total) * 100) + " %" }))
@@ -751,6 +761,15 @@ function brancherSurvol(cible) {
     [...svg.querySelectorAll(".part"), ...carteEl.querySelectorAll(".part-ligne")].forEach((el) => {
       el.addEventListener("mouseenter", () => montrer(Number(el.dataset.i)));
       el.addEventListener("mouseleave", () => montrer(null));
+    });
+  });
+
+  cible.querySelectorAll(".parts-voir-plus").forEach((bouton) => {
+    bouton.addEventListener("click", () => {
+      const bloc = bouton.previousElementSibling;
+      const masque = !bloc.hidden;
+      bloc.hidden = masque;
+      bouton.textContent = masque ? `Voir ${bouton.dataset.n} de plus` : "Réduire";
     });
   });
 
@@ -1977,6 +1996,27 @@ const carteInfo = (libelle, chiffre, infoHtml) => `
     <div class="chiffre">${chiffre}</div>
   </div>`;
 
+// Répartition d'une carte de synthèse par la dimension active : top 6
+// valeurs qui composent ce total, pour répondre à "combien de X, mais réparti
+// comment ?" directement au survol — pas juste le total brut de la carte.
+function trackBulleRepartition(titre, valeurs, champVal, format) {
+  const libelle = TRACK_LIBELLE[TRACK_DIMENSION];
+  const lignes = valeurs
+    .map(([nom, v]) => [nom, v[champVal] || 0])
+    .filter(([, val]) => val > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!lignes.length) return `<strong>${titre}</strong><span class="bulle-pied">Rien à répartir sur cette période</span>`;
+
+  const total = lignes.reduce((s, [, v]) => s + v, 0);
+  const haut = lignes.slice(0, 6);
+  const reste = lignes.length - haut.length;
+
+  return `<strong>${titre} par ${libelle}</strong>` +
+    haut.map(([nom, val]) => `<span>${nom}<b>${format(val)}</b></span>`).join("") +
+    `<span class="bulle-pied">${reste > 0 ? `+ ${reste} autre${reste > 1 ? "s" : ""} · ` : ""}Total<b>${format(total)}</b></span>`;
+}
+
 function vueTracking() {
   const cible = document.getElementById("vue-tracking");
   if (!cible) return;
@@ -1988,39 +2028,13 @@ function vueTracking() {
 
   const totalCa = somme(rdv, "montant");
   const totalPresent = somme(rdv, "present");
-  const totalConclu = somme(rdv, "conclu");
-  const totalVentes = somme(rdv, "ventes");
 
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
-    carteInfo(
-      "Leads",
-      nombre(leads.length),
-      `<strong>Leads</strong>
-       <span>Sur la période<b>${nombre(leads.length)}</b></span>
-       <span class="bulle-pied">Captés, pour la dimension active</span>`
-    ),
-    carteInfo(
-      "RDV booké",
-      nombre(rdv.length),
-      `<strong>RDV booké</strong>
-       <span>Sur la période<b>${nombre(rdv.length)}</b></span>
-       <span class="bulle-pied">Tous statuts confondus (à venir, honorés, no-show, annulés)</span>`
-    ),
-    carteInfo(
-      "RDV honoré",
-      nombre(totalPresent),
-      `<strong>RDV honoré</strong>
-       <span>Appels réellement tenus<b>${nombre(totalPresent)}</b></span>
-       ${totalConclu > 0 ? `<span class="bulle-pied">${Math.round((totalPresent / totalConclu) * 100)} % des RDV à l'issue connue</span>` : ""}`
-    ),
-    carteInfo(
-      "CA contracté",
-      euros(totalCa),
-      `<strong>CA contracté</strong>
-       <span>Annoncé sur les RDV<b>${euros(totalCa)}</b></span>
-       ${totalPresent > 0 ? `<span class="bulle-pied">${Math.round((totalVentes / totalPresent) * 100)} % de closing</span>` : ""}`
-    ),
+    carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre)),
+    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre)),
+    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre)),
+    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros)),
   ].join("");
   brancherInfobulles(cartesCible);
 
