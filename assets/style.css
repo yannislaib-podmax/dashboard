@@ -380,6 +380,31 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .p-dir-contracte { background: #4FC3F7; }
 .p-dir-encaisse  { background: var(--violet-clair); }
 
+/* Accent vif sur les 4 cartes du Tracking UTM : Leads, RDV booké, RDV honoré, CA contracté. */
+#tracking-cartes .carte:nth-child(1) {
+  border-left: 3px solid #4FC3F7;
+  background-image: linear-gradient(135deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0) 60%);
+}
+#tracking-cartes .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+
+#tracking-cartes .carte:nth-child(2) {
+  border-left: 3px solid var(--violet-clair);
+  background-image: linear-gradient(135deg, rgba(155, 107, 255, 0.12), rgba(155, 107, 255, 0) 60%);
+}
+#tracking-cartes .carte:nth-child(2) .chiffre { color: #C4A6FF; }
+
+#tracking-cartes .carte:nth-child(3) {
+  border-left: 3px solid var(--magenta);
+  background-image: linear-gradient(135deg, rgba(230, 25, 176, 0.12), rgba(230, 25, 176, 0) 60%);
+}
+#tracking-cartes .carte:nth-child(3) .chiffre { color: #F893DA; }
+
+#tracking-cartes .carte:nth-child(4) {
+  border-left: 3px solid #5DCAA5;
+  background-image: linear-gradient(135deg, rgba(93, 202, 165, 0.12), rgba(93, 202, 165, 0) 60%);
+}
+#tracking-cartes .carte:nth-child(4) .chiffre { color: #9FE1CB; }
+
 .cartes-etroit {
   grid-template-columns: repeat(auto-fit, minmax(236px, 320px));
   justify-content: start;

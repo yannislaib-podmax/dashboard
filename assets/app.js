@@ -1903,7 +1903,7 @@ function trackClassement(valeurs) {
 
   const def = TRACK_METRIQUES[TRACK_METRIQUE];
   const classe = valeurs
-    .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v)])
+    .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v), v])
     .filter(([, val]) => val > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8);
@@ -1915,10 +1915,18 @@ function trackClassement(valeurs) {
 
   const max = classe[0][1];
 
+  const bulle = (nom, v) => `
+    <strong>${nom}</strong>
+    <span>Leads<b>${nombre(v.leads)}</b></span>
+    <span>Call booké<b>${nombre(v.rdv)}</b></span>
+    <span>Call présent<b>${nombre(v.present)}</b></span>
+    <span>CA contracté<b>${euros(v.ca)}</b></span>
+    ${v.conclu > 0 ? `<span class="bulle-pied">${Math.round((v.ventes / v.conclu) * 100)} % de closing · ${Math.round((v.present / v.conclu) * 100)} % de présence</span>` : ""}`;
+
   cible.innerHTML = classe
     .map(
-      ([nom, val, secondaire], i) => `
-      <div class="classement-ligne">
+      ([nom, val, secondaire, v], i) => `
+      <div class="classement-ligne"${info(bulle(nom, v))}>
         <span class="classement-rang">${i + 1}</span>
         <span class="classement-nom">${nom}</span>
         <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
@@ -1929,6 +1937,8 @@ function trackClassement(valeurs) {
       </div>`
     )
     .join("");
+
+  brancherInfobulles(cible);
 }
 
 function trackCamemberts(valeurs) {
@@ -1949,14 +1959,23 @@ function trackCamemberts(valeurs) {
   const libelle = TRACK_LIBELLE[TRACK_DIMENSION];
 
   cible.innerHTML = [
-    disque(`CA contracté par ${libelle}`, partsPour("ca"), euros),
     disque(`Leads par ${libelle}`, partsPour("leads"), nombre),
     disque(`Call booké par ${libelle}`, partsPour("rdv"), nombre),
     disque(`Call présent par ${libelle}`, partsPour("present"), nombre),
+    disque(`CA contracté par ${libelle}`, partsPour("ca"), euros),
   ].join("");
 
   brancherSurvol(cible);
 }
+
+// Carte de stat avec infobulle au survol (même gabarit que carte(), avec
+// un attribut data-info en plus — carte() elle-même n'en a pas besoin
+// ailleurs, donc on ne la modifie pas globalement).
+const carteInfo = (libelle, chiffre, infoHtml) => `
+  <div class="glass carte rv"${info(infoHtml)}>
+    <div class="libelle">${libelle}</div>
+    <div class="chiffre">${chiffre}</div>
+  </div>`;
 
 function vueTracking() {
   const cible = document.getElementById("vue-tracking");
@@ -1969,16 +1988,51 @@ function vueTracking() {
 
   const totalCa = somme(rdv, "montant");
   const totalPresent = somme(rdv, "present");
+  const totalConclu = somme(rdv, "conclu");
+  const totalVentes = somme(rdv, "ventes");
 
-  document.getElementById("tracking-cartes").innerHTML = [
-    carte("Leads", nombre(leads.length)),
-    carte("RDV booké", nombre(rdv.length)),
-    carte("RDV honoré", nombre(totalPresent)),
-    carte("CA contracté", euros(totalCa)),
+  const cartesCible = document.getElementById("tracking-cartes");
+  cartesCible.innerHTML = [
+    carteInfo(
+      "Leads",
+      nombre(leads.length),
+      `<strong>Leads</strong>
+       <span>Sur la période<b>${nombre(leads.length)}</b></span>
+       <span class="bulle-pied">Captés, pour la dimension active</span>`
+    ),
+    carteInfo(
+      "RDV booké",
+      nombre(rdv.length),
+      `<strong>RDV booké</strong>
+       <span>Sur la période<b>${nombre(rdv.length)}</b></span>
+       <span class="bulle-pied">Tous statuts confondus (à venir, honorés, no-show, annulés)</span>`
+    ),
+    carteInfo(
+      "RDV honoré",
+      nombre(totalPresent),
+      `<strong>RDV honoré</strong>
+       <span>Appels réellement tenus<b>${nombre(totalPresent)}</b></span>
+       ${totalConclu > 0 ? `<span class="bulle-pied">${Math.round((totalPresent / totalConclu) * 100)} % des RDV à l'issue connue</span>` : ""}`
+    ),
+    carteInfo(
+      "CA contracté",
+      euros(totalCa),
+      `<strong>CA contracté</strong>
+       <span>Annoncé sur les RDV<b>${euros(totalCa)}</b></span>
+       ${totalPresent > 0 ? `<span class="bulle-pied">${Math.round((totalVentes / totalPresent) * 100)} % de closing</span>` : ""}`
+    ),
   ].join("");
+  brancherInfobulles(cartesCible);
 
   trackClassement(valeurs);
   trackCamemberts(valeurs);
+
+  // Les cartes/classement/camemberts ci-dessus viennent d'être reconstruits
+  // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
+  // l'IntersectionObserver d'apparitions() (qui n'observe qu'une fois, au
+  // premier rendu de la vue). Sans ce ré-armement, ils resteraient invisibles
+  // pour toujours après un clic sur un toggle Source/Canal/.../métrique.
+  requestAnimationFrame(() => apparitions(cible));
 }
 
 function brancherTracking() {
