@@ -1517,6 +1517,7 @@ function rendre() {
   vueCanal(lignes);
   vueDepenses(lignes);
   vueDirection();
+  vueTracking();
 
   const active = document.querySelector(".vue.active");
   if (active) {
@@ -1831,6 +1832,175 @@ function vueQuotidien(lignes) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Tracking UTM — Source / Campagne / Content                        */
+/* ------------------------------------------------------------------ */
+
+// Données brutes de /api/tracking (une ligne par lead, une ligne par
+// rendez-vous), séparées de TOUTES à dessein : la granularité UTM n'a pas
+// d'équivalent agrégé côté Airtable, contrairement à ACQUISITION.
+let TRACK_LEADS = [];
+let TRACK_RDV = [];
+
+let TRACK_DIMENSION = "source"; // "source" | "campagne" | "content"
+let TRACK_METRIQUE = "ca"; // "ca" | "present" | "booke"
+
+// "Source" et "Canal" utilisent les champs de qualification (pas les UTM) :
+// Source = Ads/Organique/Recommandation/Autre, Canal = Instagram/TikTok/Facebook...
+// "Campagne" et "Content" restent les UTM bruts (granularité pub, pas de
+// qualification équivalente ailleurs dans Airtable).
+const TRACK_CHAMP = { source: "source", canal: "canal", campagne: "utmCampaign", content: "utmContent" };
+const TRACK_LIBELLE = { source: "source", canal: "canal", campagne: "campagne", content: "content" };
+const TRACK_NON_RENSEIGNE = "Non renseigné";
+
+// Même filtre période (DEBUT/FIN) que le reste du dashboard, pour que changer
+// les dates dans la barre commune se répercute aussi sur ce tracking-ci.
+const trackLignesFiltrees = () => ({
+  leads: TRACK_LEADS.filter(dansPeriode),
+  rdv: TRACK_RDV.filter(dansPeriode),
+});
+
+function trackAgreger(champ, leads, rdv) {
+  const parValeur = {};
+  const point = (cle) => (parValeur[cle] = parValeur[cle] || { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 });
+
+  leads.forEach((l) => { point(l[champ] || TRACK_NON_RENSEIGNE).leads += 1; });
+  rdv.forEach((r) => {
+    const p = point(r[champ] || TRACK_NON_RENSEIGNE);
+    p.rdv += 1;
+    p.present += r.present || 0;
+    p.conclu += r.conclu || 0;
+    p.ventes += r.vente || 0;
+    p.ca += r.montant || 0;
+  });
+
+  return parValeur;
+}
+
+const TRACK_METRIQUES = {
+  ca: {
+    titre: "Classement par CA contracté",
+    valeur: (v) => v.ca,
+    format: euros,
+    secondaire: (v) => (v.present > 0 ? `${Math.round((v.ventes / v.present) * 100)} % de closing` : null),
+  },
+  present: {
+    titre: "Classement par rendez-vous honorés",
+    valeur: (v) => v.present,
+    format: nombre,
+    secondaire: (v) => (v.conclu > 0 ? `${Math.round((v.present / v.conclu) * 100)} % de présence` : null),
+  },
+  booke: {
+    titre: "Classement par rendez-vous booké",
+    valeur: (v) => v.rdv,
+    format: nombre,
+    secondaire: () => null,
+  },
+};
+
+function trackClassement(valeurs) {
+  const cible = document.getElementById("tracking-classement");
+  if (!cible) return;
+
+  const def = TRACK_METRIQUES[TRACK_METRIQUE];
+  const classe = valeurs
+    .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v)])
+    .filter(([, val]) => val > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
+
+  if (!classe.length) {
+    cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
+    return;
+  }
+
+  const max = classe[0][1];
+
+  cible.innerHTML = classe
+    .map(
+      ([nom, val, secondaire], i) => `
+      <div class="classement-ligne">
+        <span class="classement-rang">${i + 1}</span>
+        <span class="classement-nom">${nom}</span>
+        <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
+        <div class="classement-chiffres">
+          <span class="classement-valeur">${def.format(val)}</span>
+          ${secondaire ? `<span class="classement-secondaire">${secondaire}</span>` : ""}
+        </div>
+      </div>`
+    )
+    .join("");
+}
+
+function trackCamemberts(valeurs) {
+  const cible = document.getElementById("tracking-camemberts");
+  if (!cible) return;
+
+  // Couleur stable par valeur UTM (ordre alphabétique) pour que les deux
+  // disques (CA / Leads) utilisent la même teinte pour une même valeur.
+  const noms = valeurs.map(([nom]) => nom).sort();
+  const couleur = Object.fromEntries(noms.map((n, i) => [n, PALETTE[i % PALETTE.length]]));
+
+  const partsPour = (champVal) =>
+    valeurs
+      .map(([nom, v]) => [nom, v[champVal], couleur[nom]])
+      .filter(([, val]) => val > 0)
+      .sort((a, b) => b[1] - a[1]);
+
+  const libelle = TRACK_LIBELLE[TRACK_DIMENSION];
+
+  cible.innerHTML = [
+    disque(`CA contracté par ${libelle}`, partsPour("ca"), euros),
+    disque(`Leads par ${libelle}`, partsPour("leads"), nombre),
+    disque(`Call booké par ${libelle}`, partsPour("rdv"), nombre),
+    disque(`Call présent par ${libelle}`, partsPour("present"), nombre),
+  ].join("");
+
+  brancherSurvol(cible);
+}
+
+function vueTracking() {
+  const cible = document.getElementById("vue-tracking");
+  if (!cible) return;
+
+  const champ = TRACK_CHAMP[TRACK_DIMENSION];
+  const { leads, rdv } = trackLignesFiltrees();
+  const parValeur = trackAgreger(champ, leads, rdv);
+  const valeurs = Object.entries(parValeur);
+
+  const totalCa = somme(rdv, "montant");
+  const totalPresent = somme(rdv, "present");
+
+  document.getElementById("tracking-cartes").innerHTML = [
+    carte("Leads", nombre(leads.length)),
+    carte("RDV booké", nombre(rdv.length)),
+    carte("RDV honoré", nombre(totalPresent)),
+    carte("CA contracté", euros(totalCa)),
+  ].join("");
+
+  trackClassement(valeurs);
+  trackCamemberts(valeurs);
+}
+
+function brancherTracking() {
+  const brancherToggle = (id, attribut, onChoix) => {
+    const zone = document.getElementById(id);
+    if (!zone) return;
+    zone.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.classList.contains("actif")) return;
+        zone.querySelectorAll("button").forEach((b) => b.classList.remove("actif"));
+        btn.classList.add("actif");
+        onChoix(btn.dataset[attribut]);
+        vueTracking();
+      });
+    });
+  };
+
+  brancherToggle("tracking-dimension", "dimension", (v) => (TRACK_DIMENSION = v));
+  brancherToggle("tracking-metrique", "metrique", (v) => (TRACK_METRIQUE = v));
+}
+
+/* ------------------------------------------------------------------ */
 
 async function charger() {
   try {
@@ -1869,8 +2039,22 @@ async function charger() {
       // Ignoré volontairement : voir commentaire ci-dessus.
     }
 
+    // Tracking UTM — même isolement : ça ne bloque jamais le reste du
+    // dashboard si /api/tracking échoue.
+    try {
+      const reponseTracking = await fetch("/api/tracking");
+      const donneesTracking = await reponseTracking.json();
+      if (reponseTracking.ok) {
+        TRACK_LEADS = donneesTracking.leads || [];
+        TRACK_RDV = donneesTracking.rdv || [];
+      }
+    } catch {
+      // Ignoré volontairement : voir commentaire ci-dessus.
+    }
+
     brancherPeriode();
     brancherCanalProduit();
+    brancherTracking();
     rendre();
 
     const heure = new Date(donnees.genereLe).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });

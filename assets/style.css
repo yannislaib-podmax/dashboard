@@ -954,6 +954,71 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 
 .camembert .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
 
+/* ---------- Classement (tracking UTM) ---------- */
+
+.classement { padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; }
+.classement .vide { color: var(--txt3); font-size: 13px; }
+
+.classement-ligne {
+  display: grid;
+  grid-template-columns: 22px minmax(120px, 1fr) minmax(90px, 2fr) max-content;
+  align-items: center;
+  gap: 14px;
+}
+
+.classement-rang {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--txt3);
+  font-variant-numeric: tabular-nums;
+}
+
+.classement-nom {
+  font-size: 13px;
+  color: var(--txt2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.classement-piste {
+  height: 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.classement-barre {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--violet-clair), var(--magenta));
+}
+
+.classement-chiffres {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.classement-valeur {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--blanc);
+  font-variant-numeric: tabular-nums;
+}
+
+.classement-secondaire {
+  font-size: 11px;
+  color: var(--txt3);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .classement-ligne { grid-template-columns: 18px 1fr max-content; }
+  .classement-piste { display: none; }
+}
+
 /* ---------- Tableau ---------- */
 
 .cadre-table { overflow: hidden; }

@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=8">
+<link rel="stylesheet" href="/assets/style.css?v=9">
 </head>
 <body>
 
@@ -49,6 +49,7 @@
       <div class="sous"><div class="sous-interieur">
         <a href="#ensemble"  data-vue="ensemble"  class="actif">Performance (cohorte)</a>
         <a href="#quotidien" data-vue="quotidien">Pilotage quotidien</a>
+        <a href="#tracking"  data-vue="tracking">Tracking UTM</a>
       </div></div>
     </div>
 
@@ -188,6 +189,44 @@
     <div class="glass cadre-table rv" id="quot-table"></div>
   </section>
 
+  <!-- ---------- Tracking UTM ---------- -->
+  <section class="vue" id="vue-tracking">
+    <div class="titre-vue">
+      <h1>Tracking UTM</h1>
+      <p class="sous-titre">Quelle source, quelle campagne, quel contenu rapporte le plus — lead par lead, rendez-vous par rendez-vous.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Chaque lead et chaque rendez-vous ne comptent qu'une fois.</strong>
+      Changer de dimension (Source / Campagne / Content) ne change pas les
+      volumes totaux : ça change seulement la façon de les découper. Le CA
+      contracté compte au jour du rendez-vous, comme dans le reste de
+      l'acquisition.
+    </p>
+
+    <div class="toggle-granularite" id="tracking-dimension">
+      <button type="button" class="actif" data-dimension="source">Source</button>
+      <button type="button" data-dimension="canal">Canal</button>
+      <button type="button" data-dimension="campagne">Campagne</button>
+      <button type="button" data-dimension="content">Content</button>
+    </div>
+
+    <div id="tracking-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur en haut. Change la métrique pour voir un autre classement, sur la même dimension.</p>
+    <div class="toggle-granularite" id="tracking-metrique">
+      <button type="button" class="actif" data-metrique="ca">CA + taux de closing</button>
+      <button type="button" data-metrique="present">Présents + taux de show</button>
+      <button type="button" data-metrique="booke">Call booké</button>
+    </div>
+    <div class="glass classement rv" id="tracking-classement"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <p class="sous-titre rv">Le CA et les leads, éclatés par la même dimension.</p>
+    <div class="camemberts" id="tracking-camemberts"></div>
+  </section>
+
   <!-- ---------- Direction — Tableau de bord ---------- -->
   <section class="vue" id="vue-direction">
     <div class="titre-vue">
@@ -254,6 +293,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=15"></script>
+<script src="/assets/app.js?v=17"></script>
 </body>
 </html>
