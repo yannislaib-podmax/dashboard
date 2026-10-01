@@ -371,6 +371,11 @@ function vueConversion(lignes, precedentes) {
   const annulationPrec = precedentes ? INDICATEURS.tauxAnnulation(precedentes) : null;
   const rdvPris = somme(lignes, "rendezVous");
 
+  // Pour expliquer le taux "Rendez-vous pris -> RDV conclus" dans l'entonnoir :
+  // ce qui n'est ni conclu ni annule est encore "a venir" (RDV futur, pas un souci).
+  const annulesCount = somme(lignes, "annules");
+  const aVenir = Math.max(0, rdvPris - rdvConclus - annulesCount);
+
   const fragile = (base) => (base > 0 && base < SEUIL_FIABILITE ? " · trop peu pour conclure" : "");
 
   const bloc = document.getElementById("qualite");
@@ -403,7 +408,11 @@ function vueConversion(lignes, precedentes) {
   // nécessaire avant que "RDV conclus" n'existe comme marche à part entière).
   const bases = (jeu, vals) => ETAPES.map((e, i) => (i === 0 ? null : vals[i - 1]));
 
-  entonnoir(ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null);
+  entonnoir(ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null, {
+    aVenir,
+    annulesCount,
+    annulationPct: annulation,
+  });
   camembertsConversion(lignes);
 }
 
@@ -430,7 +439,7 @@ function ecartPoints(actuel, precedent, baisseEstBonne = false) {
 
 const marqueur = (e) => (e ? ` <span class="ecart-inline ${e.classe}">${e.texte}</span>` : "");
 
-function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
+function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec, extra = {}) {
   const cible = document.getElementById("entonnoir");
   if (!cible) return;
 
@@ -493,16 +502,8 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
       const avant = bases[i];
       const milieu = ((x(i - 1) + x(i)) / 2 / L) * 100;
 
-      // Pas de % affiché sur "Rendez-vous pris → RDV conclus" : ce taux
-      // mélange les RDV encore "Confirmé" (pas encore passés, pas un souci)
-      // et les vrais annulés (un souci) — contre-intuitif et pas un signal
-      // de pilotage fiable. Le vrai signal isolé est la carte "Taux
-      // d'annulation" plus haut. Cette étape garde son volume dans
-      // l'entonnoir (nécessaire pour la base du taux suivant), juste sans %.
-      if (!avant || e.cle === "rendezVousConclus") {
-        return `<div class="taux" style="left:${milieu}%"${
-          e.cle === "rendezVousConclus" ? info(`<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong><span class="bulle-pied">Mélange RDV à venir et annulés — voir le Taux d'annulation plus haut.</span>`) : ""
-        }><span class="muet">—</span></div>`;
+      if (!avant) {
+        return `<div class="taux" style="left:${milieu}%"><span class="muet">—</span></div>`;
       }
 
       const t = Math.round((valeurs[i] / avant) * 100);
@@ -511,6 +512,25 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
       const ecart = valeursPrec && avantP ? ecartPoints(valeurs[i] / avant, valeursPrec[i] / avantP) : null;
 
       const libelleBase = ETAPES[i - 1].nom.toLowerCase();
+
+      // "Rendez-vous pris → RDV conclus" : ce taux mélange de base les RDV
+      // encore "Confirmé" (pas encore passés, pas un souci) et les vrais
+      // annulés (un souci). On l'affiche quand meme, mais avec le detail
+      // (RDV a venir + taux d'annulation) pour que le pourcentage se
+      // comprenne sans ambiguite, au lieu du "—" muet d'avant.
+      if (e.cle === "rendezVousConclus") {
+        const { aVenir = 0, annulesCount = 0, annulationPct = null } = extra;
+        const bulle = `<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong>
+          <span>Taux<b>${t} %</b></span>
+          <span>Base<b>${nombre(avant)} ${libelleBase}</b></span>
+          <span>Conclus<b>${nombre(valeurs[i])}</b></span>
+          <span class="bulle-pied">Dont ${nombre(aVenir)} encore à venir (pas un souci) et ${nombre(annulesCount)} annulés, soit un taux d'annulation de ${pourcent(annulationPct)}.</span>`;
+
+        return `<div class="taux" style="left:${milieu}%"${info(bulle)}>
+          <span class="t-valeur">${t} %</span>${marqueur(ecart)}
+          <span class="t-base">dont ${nombre(aVenir)} à venir</span>
+        </div>`;
+      }
 
       const bulle = `<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong>
         <span>Taux<b>${t} %</b></span>
