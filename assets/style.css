@@ -380,7 +380,7 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .p-dir-contracte { background: #4FC3F7; }
 .p-dir-encaisse  { background: var(--violet-clair); }
 
-/* Accent vif sur les 4 cartes du Tracking UTM : Leads, RDV booké, RDV honoré, CA contracté. */
+/* Accent vif sur les 5 cartes du Tracking UTM : Leads, RDV booké, RDV honoré, Ventes, CA contracté. */
 #tracking-cartes .carte:nth-child(1) {
   border-left: 3px solid #4FC3F7;
   background-image: linear-gradient(135deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0) 60%);
@@ -404,6 +404,12 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   background-image: linear-gradient(135deg, rgba(93, 202, 165, 0.12), rgba(93, 202, 165, 0) 60%);
 }
 #tracking-cartes .carte:nth-child(4) .chiffre { color: #9FE1CB; }
+
+#tracking-cartes .carte:nth-child(5) {
+  border-left: 3px solid #F0B95A;
+  background-image: linear-gradient(135deg, rgba(240, 185, 90, 0.12), rgba(240, 185, 90, 0) 60%);
+}
+#tracking-cartes .carte:nth-child(5) .chiffre { color: #F6D399; }
 
 .cartes-etroit {
   grid-template-columns: repeat(auto-fit, minmax(236px, 320px));
@@ -980,6 +986,14 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   color: var(--txt3);
   margin-top: 1px;
 }
+/* Le badge d'écart (Tracking) est injecté dans ce même emplacement, mais son
+   style ecart-inline (pensé pour s'accoler à un chiffre, margin-left inclus)
+   bavait hors ligne une fois seul sur sa propre ligne : on le recolle à
+   gauche, sans le margin pensé pour un voisin de texte. */
+.part-ligne .taux-etape .ecart-inline {
+  display: inline-block;
+  margin-left: 0;
+}
 .part-ligne .pct { color: var(--blanc); font-weight: 700; font-variant-numeric: tabular-nums; }
 .part-ligne .montant { color: var(--txt3); font-variant-numeric: tabular-nums; }
 
@@ -1066,6 +1080,46 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 @media (max-width: 640px) {
   .classement-ligne { grid-template-columns: 18px 1fr max-content; }
   .classement-piste { display: none; }
+}
+
+/* ---------- Courbe (tracking UTM) ---------- */
+
+.courbe-carte { padding: 22px 26px 18px; }
+.courbe-carte .toggle-granularite { margin-bottom: 14px; }
+.courbe-carte .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
+
+.courbe-svg {
+  width: 100%;
+  height: 260px;
+  overflow: visible;
+}
+
+.courbe-grille {
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.courbe-ligne {
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.courbe-point {
+  cursor: default;
+  transition: r .15s;
+}
+.courbe-point:hover { r: 5.5; }
+
+.courbe-axe {
+  fill: var(--txt3);
+  font-family: var(--sans);
+  font-size: 10.5px;
+}
+
+@media (max-width: 640px) {
+  .courbe-svg { height: 200px; }
 }
 
 /* ---------- Tableau ---------- */

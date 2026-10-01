@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=10">
+<link rel="stylesheet" href="/assets/style.css?v=13">
 </head>
 <body>
 
@@ -219,9 +219,14 @@
       <button type="button" data-metrique="leads">Leads</button>
       <button type="button" data-metrique="booke">Call booké</button>
       <button type="button" data-metrique="present">Présents + taux de show</button>
+      <button type="button" data-metrique="ventes">Ventes + taux de closing</button>
       <button type="button" class="actif" data-metrique="ca">CA + taux de closing</button>
     </div>
     <div class="glass classement rv" id="tracking-classement"></div>
+
+    <h3 class="sous-section">Évolution</h3>
+    <p class="sous-titre rv">Le top 5 de la dimension active, dans le temps, sur la même métrique que le classement.</p>
+    <div class="glass courbe-carte rv" id="tracking-courbe"></div>
 
     <h3 class="sous-section">Répartition</h3>
     <p class="sous-titre rv">Le CA et les leads, éclatés par la même dimension.</p>
@@ -294,6 +299,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=23"></script>
+<script src="/assets/app.js?v=25"></script>
 </body>
 </html>

@@ -102,6 +102,7 @@ const AUJOURDHUI = enIso(new Date());
 let GRANULARITE_CA = "semaine";
 let GRANULARITE_DIRECTION = "semaine";
 let GRANULARITE_QUOTIDIEN = "semaine";
+let GRANULARITE_TRACKING = "semaine";
 let DERNIERES_LIGNES_CA = [];
 let DERNIERS_CONTRATS_DIRECTION = [];
 let DERNIERS_PAIEMENTS_DIRECTION = [];
@@ -152,6 +153,38 @@ function libellePeriode(b, granularite) {
     return `${MOIS_COURTS[d.getMonth()]} ${d.getFullYear()}`;
   }
   return `${jourMois(b.debut)} – ${jourMois(b.fin)}`;
+}
+
+// Découpage étendu (jour/semaine/mois/année) pour la courbe Tracking — les
+// graphiques en bâtonnés n'ont que semaine/mois, décline ici le même principe
+// en délégant à decoupagePeriodes() pour ces deux-là.
+function decoupagePeriodesEtendu(joursTries, granularite) {
+  if (!joursTries.length) return [];
+
+  if (granularite === "jour") return joursTries.map((j) => ({ debut: j, fin: j }));
+
+  if (granularite === "annee") {
+    const premier = joursTries[0];
+    const dernier = joursTries[joursTries.length - 1];
+    const blocs = [];
+    for (let an = enDate(premier).getFullYear(); an <= enDate(dernier).getFullYear(); an++) {
+      blocs.push({ debut: `${an}-01-01`, fin: `${an}-12-31` });
+    }
+    return blocs;
+  }
+
+  return decoupagePeriodes(joursTries, granularite); // "semaine" | "mois"
+}
+
+const JOUR_MOIS_COURT = (iso) => {
+  const d = enDate(iso);
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+function libellePeriodeEtendu(b, granularite) {
+  if (granularite === "jour") return JOUR_MOIS_COURT(b.debut);
+  if (granularite === "annee") return String(enDate(b.debut).getFullYear());
+  return libellePeriode(b, granularite); // "semaine" | "mois"
 }
 
 // Boutons "Semaine / Mois" injectés dans un graphique en bâtonnés.
@@ -1939,6 +1972,12 @@ const TRACK_METRIQUES = {
     format: nombre,
     secondaire: () => null,
   },
+  ventes: {
+    titre: "Classement par ventes",
+    valeur: (v) => v.ventes,
+    format: nombre,
+    secondaire: (v) => (v.present > 0 ? `${Math.round((v.ventes / v.present) * 100)} % de closing` : null),
+  },
 };
 
 // vide-type pour une valeur UTM qui n'existait pas encore sur la période
@@ -2025,6 +2064,7 @@ function trackCamemberts(valeurs, parValeurPrec) {
     disque(`Leads par ${libelle}`, partsPour("leads"), nombre),
     disque(`Call booké par ${libelle}`, partsPour("rdv"), nombre),
     disque(`Call présent par ${libelle}`, partsPour("present"), nombre),
+    disque(`Ventes par ${libelle}`, partsPour("ventes"), nombre),
     disque(`CA contracté par ${libelle}`, partsPour("ca"), euros),
   ].join("");
 
@@ -2062,6 +2102,131 @@ function trackBulleRepartition(titre, valeurs, champVal, format) {
     `<span class="bulle-pied">${reste > 0 ? `+ ${reste} autre${reste > 1 ? "s" : ""} · ` : ""}Total<b>${format(total)}</b></span>`;
 }
 
+// Boutons Jour/Semaine/Mois/Année pour la courbe — même mécanique que
+// brancherToggleGranularite (générique sur data-granularite), gabarit à 4
+// options au lieu de 2.
+function toggleGranulariteCourbeHtml(actuelle) {
+  const options = [["jour", "Jour"], ["semaine", "Semaine"], ["mois", "Mois"], ["annee", "Année"]];
+  return `<div class="toggle-granularite">${options
+    .map(([v, libelle]) => `<button type="button" class="${actuelle === v ? "actif" : ""}" data-granularite="${v}">${libelle}</button>`)
+    .join("")}</div>`;
+}
+
+// Valeur de la métrique active pour une valeur UTM donnée, sur un seul bloc
+// de la courbe (recalcule l'agrégat à partir des lignes brutes filtrées par
+// nom+bloc — trackAgreger() agrège sur toute la période d'un coup, ici il
+// faut un agrégat par tranche de temps).
+function trackValeurBloc(nom, champ, leads, rdv, bloc) {
+  const dansBloc = (l) => (l[champ] || TRACK_NON_RENSEIGNE) === nom && l.jour >= bloc.debut && l.jour <= bloc.fin;
+  const lJ = leads.filter(dansBloc);
+  const rJ = rdv.filter(dansBloc);
+
+  const v = {
+    leads: lJ.length,
+    rdv: rJ.length,
+    present: somme(rJ, "present"),
+    conclu: somme(rJ, "conclu"),
+    ventes: somme(rJ, "vente"),
+    ca: somme(rJ, "montant"),
+  };
+
+  return TRACK_METRIQUES[TRACK_METRIQUE].valeur(v);
+}
+
+function trackCourbe(champ, leads, rdv, valeurs) {
+  const cible = document.getElementById("tracking-courbe");
+  if (!cible) return;
+
+  const def = TRACK_METRIQUES[TRACK_METRIQUE];
+
+  // Top 5 valeurs UTM sur la métrique active — au-delà, la courbe devient
+  // illisible (même logique que le plafond à 10 des camemberts, en plus
+  // strict ici car chaque valeur est une ligne entière, pas juste une part).
+  const top5 = valeurs
+    .map(([nom, v]) => [nom, def.valeur(v)])
+    .filter(([, val]) => val > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([nom]) => nom);
+
+  if (!top5.length) {
+    cible.innerHTML = `${toggleGranulariteCourbeHtml(GRANULARITE_TRACKING)}<div class="vide">Rien à tracer sur cette période.</div>`;
+    brancherToggleGranularite(cible, (g) => {
+      GRANULARITE_TRACKING = g;
+      trackCourbe(champ, leads, rdv, valeurs);
+    });
+    return;
+  }
+
+  // Même couleur que les camemberts pour une même valeur UTM : ordre
+  // alphabétique sur TOUTES les valeurs (pas seulement le top 5), pour que
+  // l'attribution d'index dans la palette reste stable d'un graphique à
+  // l'autre.
+  const nomsTries = valeurs.map(([nom]) => nom).sort();
+  const couleur = Object.fromEntries(nomsTries.map((n, i) => [n, PALETTE[i % PALETTE.length]]));
+
+  const jours = [...new Set([...leads, ...rdv].map((l) => l.jour).filter(Boolean))].sort();
+  const blocs = decoupagePeriodesEtendu(jours, GRANULARITE_TRACKING);
+
+  const series = top5.map((nom) => ({
+    nom,
+    couleur: couleur[nom],
+    points: blocs.map((b) => trackValeurBloc(nom, champ, leads, rdv, b)),
+  }));
+
+  const max = Math.max(1, ...series.flatMap((s) => s.points));
+
+  const L = 1000, H = 260, M_HAUT = 16, M_BAS = 34, M_COTE = 8;
+  const largeurUtile = L - 2 * M_COTE;
+  const hauteurUtile = H - M_HAUT - M_BAS;
+  const x = (i) => (blocs.length > 1 ? M_COTE + (i * largeurUtile) / (blocs.length - 1) : M_COTE + largeurUtile / 2);
+  const y = (v) => M_HAUT + hauteurUtile - (v / max) * hauteurUtile;
+
+  const grille = [0, 0.25, 0.5, 0.75, 1]
+    .map((t) => {
+      const yy = (M_HAUT + hauteurUtile * (1 - t)).toFixed(1);
+      return `<line x1="${M_COTE}" x2="${L - M_COTE}" y1="${yy}" y2="${yy}" class="courbe-grille" />`;
+    })
+    .join("");
+
+  // Pas tous les libellés d'axe si trop de blocs (ex: vue "Jour" sur 60 jours)
+  // — un sur N pour rester lisible, toujours en gardant le premier/dernier.
+  const PAS_AXE = Math.max(1, Math.ceil(blocs.length / 8));
+  const axeX = blocs
+    .map((b, i) => (i % PAS_AXE === 0 || i === blocs.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" class="courbe-axe" text-anchor="middle">${libellePeriodeEtendu(b, GRANULARITE_TRACKING)}</text>` : ""))
+    .join("");
+
+  const lignesSvg = series
+    .map((s) => {
+      const pts = s.points.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      const points = s.points
+        .map((v, i) => {
+          const bulle = `<strong>${s.nom}</strong><span>${libellePeriodeEtendu(blocs[i], GRANULARITE_TRACKING)}<b>${def.format(v)}</b></span>`;
+          return `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="${s.couleur}" class="courbe-point"${info(bulle)}></circle>`;
+        })
+        .join("");
+      return `<polyline points="${pts}" fill="none" stroke="${s.couleur}" stroke-width="2.5" class="courbe-ligne" />${points}`;
+    })
+    .join("");
+
+  const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}</div>`;
+
+  cible.innerHTML = `
+    ${toggleGranulariteCourbeHtml(GRANULARITE_TRACKING)}
+    ${legende}
+    <svg class="courbe-svg" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none">
+      ${grille}
+      ${lignesSvg}
+      ${axeX}
+    </svg>`;
+
+  brancherToggleGranularite(cible, (g) => {
+    GRANULARITE_TRACKING = g;
+    trackCourbe(champ, leads, rdv, valeurs);
+  });
+  brancherInfobulles(cible);
+}
+
 function vueTracking() {
   const cible = document.getElementById("vue-tracking");
   if (!cible) return;
@@ -2073,12 +2238,14 @@ function vueTracking() {
 
   const totalCa = somme(rdv, "montant");
   const totalPresent = somme(rdv, "present");
+  const totalVentes = somme(rdv, "vente");
 
   // Comparaison à la période précédente, même principe que les autres onglets.
   const precedentes = trackLignesPrecedentes();
   const ecartLeads = precedentes ? ecartDe(leads.length, precedentes.leads.length, "leads") : null;
   const ecartRdv = precedentes ? ecartDe(rdv.length, precedentes.rdv.length, "rendezVous") : null;
   const ecartPresent = precedentes ? ecartDe(totalPresent, somme(precedentes.rdv, "present"), "honores") : null;
+  const ecartVentes = precedentes ? ecartDe(totalVentes, somme(precedentes.rdv, "vente"), "ventes") : null;
   const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "montant"), "contracte") : null;
 
   const cartesCible = document.getElementById("tracking-cartes");
@@ -2086,6 +2253,7 @@ function vueTracking() {
     carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads),
     carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
     carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
+    carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes),
     carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros), ecartCa),
   ].join("");
   brancherInfobulles(cartesCible);
@@ -2097,9 +2265,10 @@ function vueTracking() {
   const parValeurPrec = precedentes ? trackAgreger(champ, precedentes.leads, precedentes.rdv) : null;
 
   trackClassement(valeurs, parValeurPrec);
+  trackCourbe(champ, leads, rdv, valeurs);
   trackCamemberts(valeurs, parValeurPrec);
 
-  // Les cartes/classement/camemberts ci-dessus viennent d'être reconstruits
+  // Les cartes/classement/courbe/camemberts ci-dessus viennent d'être reconstruits
   // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
   // l'IntersectionObserver d'apparitions() (qui n'observe qu'une fois, au
   // premier rendu de la vue). Sans ce ré-armement, ils resteraient invisibles
