@@ -338,6 +338,7 @@ const SEUIL_FIABILITE = 10;
 const ETAPES = [
   { cle: "leads", nom: "Leads" },
   { cle: "rendezVous", nom: "Rendez-vous pris" },
+  { cle: "rendezVousConclus", nom: "RDV conclus" },
   { cle: "honores", nom: "Rendez-vous honorés" },
   { cle: "ventes", nom: "Ventes" },
 ];
@@ -376,16 +377,16 @@ function vueConversion(lignes, precedentes) {
   if (bloc) {
     bloc.innerHTML =
       carte(
-        "Taux de présence",
-        pourcent(presence),
-        rdvConclus === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclus)} rendez-vous conclu${rdvConclus > 1 ? "s" : ""} (hors RDV encore à venir)${fragile(rdvConclus)}`,
-        presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null
-      ) +
-      carte(
         "Taux d'annulation",
         pourcent(annulation),
         rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (R1, closing)${fragile(rdvPris)}`,
         annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null
+      ) +
+      carte(
+        "Taux de présence",
+        pourcent(presence),
+        rdvConclus === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclus)} rendez-vous conclu${rdvConclus > 1 ? "s" : ""} (hors RDV encore à venir)${fragile(rdvConclus)}`,
+        presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null
       ) +
       carte(
         "Taux de closing",
@@ -395,17 +396,12 @@ function vueConversion(lignes, precedentes) {
       );
   }
 
-  // Base de la marche "Rendez-vous honorés" : les rendez-vous CONCLUS (Honoré
-  // ou No-show), pas tous les rendez-vous pris. Un RDV encore "Confirmé" (à
-  // venir) n'a pas encore d'issue et ne doit pas compter dans le dénominateur
-  // — sinon le taux affiché chute artificiellement tant qu'il reste des RDV
-  // à venir sur la période (même bug que le taux de présence).
-  const bases = (jeu, vals) =>
-    ETAPES.map((e, i) => {
-      if (i === 0) return null;
-      if (e.cle === "honores") return INDICATEURS.rendezVousConclus(jeu);
-      return vals[i - 1];
-    });
+  // Base de chaque marche : la valeur de la marche précédente. Depuis l'ajout
+  // du step "RDV conclus" (Honoré + No-show, hors RDV encore "Confirmé" à
+  // venir) juste avant "Rendez-vous honorés", ce step précédent EST déjà la
+  // bonne base pour "honorés" — plus besoin de cas particulier ici (c'était
+  // nécessaire avant que "RDV conclus" n'existe comme marche à part entière).
+  const bases = (jeu, vals) => ETAPES.map((e, i) => (i === 0 ? null : vals[i - 1]));
 
   entonnoir(ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null);
   camembertsConversion(lignes);
@@ -506,9 +502,7 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
       const avantP = basesPrec ? basesPrec[i] : null;
       const ecart = valeursPrec && avantP ? ecartPoints(valeurs[i] / avant, valeursPrec[i] / avantP) : null;
 
-      // Pour la marche honorés, la base réelle est les RDV conclus, pas les
-      // RDV pris (voir bases() ci-dessus) : le libellé doit le refléter.
-      const libelleBase = e.cle === "honores" ? "rendez-vous conclus" : ETAPES[i - 1].nom.toLowerCase();
+      const libelleBase = ETAPES[i - 1].nom.toLowerCase();
 
       const bulle = `<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong>
         <span>Taux<b>${t} %</b></span>
