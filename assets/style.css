@@ -411,6 +411,19 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 #tracking-cartes .carte:nth-child(5) .chiffre { color: #F6D399; }
 
+/* 5 camemberts (Leads/Call booké/Call présent/Ventes/CA) : le minmax(286px)
+   générique en auto-fit ne laisse passer que 4 colonnes sur un écran courant,
+   isolant le 5e tout seul sur sa ligne. Grille à 6 colonnes techniques ici :
+   les 3 premières cartes prennent 2/6 chacune (ligne 1, comme avant), les 2
+   dernières 3/6 chacune (ligne 2, aussi large que la ligne du dessus, sans
+   trou ni carte rétrécie). En dessous de 900px, on repasse sur la grille
+   générique de .camemberts (2 puis 1 colonne) : les spans n'y servent plus. */
+@media (min-width: 901px) {
+  #tracking-camemberts { grid-template-columns: repeat(6, 1fr); }
+  #tracking-camemberts > .camembert:nth-child(-n + 3) { grid-column: span 2; }
+  #tracking-camemberts > .camembert:nth-child(n + 4) { grid-column: span 3; }
+}
+
 .cartes-etroit {
   grid-template-columns: repeat(auto-fit, minmax(236px, 320px));
   justify-content: start;
@@ -1000,6 +1013,7 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .camembert .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
 
 .parts-plus { display: flex; flex-direction: column; gap: 9px; margin-top: 9px; }
+.parts-plus[hidden] { display: none; }
 
 .parts-voir-plus {
   display: block;
@@ -1088,9 +1102,13 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .courbe-carte .toggle-granularite { margin-bottom: 14px; }
 .courbe-carte .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
 
+/* width:100% + aspect-ratio (pas de hauteur fixe) : le viewBox (1000x260)
+   s'affiche à l'échelle réelle, sans preserveAspectRatio="none" — avant, la
+   hauteur fixe + l'étirement non-uniforme écrasaient le texte des axes et
+   rendaient les courbes illisibles. Même échelle en x et en y partout. */
 .courbe-svg {
   width: 100%;
-  height: 260px;
+  aspect-ratio: 1000 / 260;
   overflow: visible;
 }
 
@@ -1115,11 +1133,13 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .courbe-axe {
   fill: var(--txt3);
   font-family: var(--sans);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
-@media (max-width: 640px) {
-  .courbe-svg { height: 200px; }
+.courbe-label {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 700;
 }
 
 /* ---------- Tableau ---------- */

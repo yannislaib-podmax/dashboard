@@ -1958,7 +1958,7 @@ const TRACK_METRIQUES = {
     titre: "Classement par CA contracté",
     valeur: (v) => v.ca,
     format: euros,
-    secondaire: (v) => (v.present > 0 ? `${Math.round((v.ventes / v.present) * 100)} % de closing` : null),
+    secondaire: () => null,
   },
   present: {
     titre: "Classement par rendez-vous honorés",
@@ -2176,16 +2176,20 @@ function trackCourbe(champ, leads, rdv, valeurs) {
 
   const max = Math.max(1, ...series.flatMap((s) => s.points));
 
-  const L = 1000, H = 260, M_HAUT = 16, M_BAS = 34, M_COTE = 8;
-  const largeurUtile = L - 2 * M_COTE;
+  // Marge de droite plus large que les autres : c'est là que vient s'écrire
+  // le libellé de fin de ligne (nom + dernière valeur), pour identifier
+  // chaque courbe sans avoir à survoler ou à faire l'aller-retour avec la
+  // légende du dessus.
+  const L = 1000, H = 260, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 8, M_DROITE = 118;
+  const largeurUtile = L - M_GAUCHE - M_DROITE;
   const hauteurUtile = H - M_HAUT - M_BAS;
-  const x = (i) => (blocs.length > 1 ? M_COTE + (i * largeurUtile) / (blocs.length - 1) : M_COTE + largeurUtile / 2);
+  const x = (i) => (blocs.length > 1 ? M_GAUCHE + (i * largeurUtile) / (blocs.length - 1) : M_GAUCHE + largeurUtile / 2);
   const y = (v) => M_HAUT + hauteurUtile - (v / max) * hauteurUtile;
 
   const grille = [0, 0.25, 0.5, 0.75, 1]
     .map((t) => {
       const yy = (M_HAUT + hauteurUtile * (1 - t)).toFixed(1);
-      return `<line x1="${M_COTE}" x2="${L - M_COTE}" y1="${yy}" y2="${yy}" class="courbe-grille" />`;
+      return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille" />`;
     })
     .join("");
 
@@ -2196,16 +2200,54 @@ function trackCourbe(champ, leads, rdv, valeurs) {
     .map((b, i) => (i % PAS_AXE === 0 || i === blocs.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" class="courbe-axe" text-anchor="middle">${libellePeriodeEtendu(b, GRANULARITE_TRACKING)}</text>` : ""))
     .join("");
 
+  // Courbe lissée (Catmull-Rom → Bézier cubique) au lieu de segments droits
+  // entre points — une vraie courbe, pas des lignes brisées qui zigzaguent.
+  const cheminLisse = (pts) => {
+    if (pts.length < 2) return "";
+    if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i === 0 ? 0 : i - 1];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+      const c1x = (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1);
+      const c1y = (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1);
+      const c2x = (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1);
+      const c2y = (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1);
+      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+    }
+    return d;
+  };
+
   const lignesSvg = series
     .map((s) => {
-      const pts = s.points.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      const pts = s.points.map((v, i) => [Number(x(i).toFixed(1)), Number(y(v).toFixed(1))]);
       const points = s.points
         .map((v, i) => {
           const bulle = `<strong>${s.nom}</strong><span>${libellePeriodeEtendu(blocs[i], GRANULARITE_TRACKING)}<b>${def.format(v)}</b></span>`;
-          return `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5" fill="${s.couleur}" class="courbe-point"${info(bulle)}></circle>`;
+          return `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="3.5" fill="${s.couleur}" class="courbe-point"${info(bulle)}></circle>`;
         })
         .join("");
-      return `<polyline points="${pts}" fill="none" stroke="${s.couleur}" stroke-width="2.5" class="courbe-ligne" />${points}`;
+      return `<path d="${cheminLisse(pts)}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />${points}`;
+    })
+    .join("");
+
+  // Libellés de fin de ligne : nom + dernière valeur, à hauteur du dernier
+  // point de chaque série — avec un écart minimal entre eux pour ne pas se
+  // chevaucher quand plusieurs courbes finissent proches les unes des autres.
+  const MIN_ECART_LABEL = 14;
+  const labelsFin = series
+    .map((s) => ({ s, yBrut: y(s.points[s.points.length - 1]) }))
+    .sort((a, b) => a.yBrut - b.yBrut)
+    .reduce((acc, cur, i) => {
+      const yPlace = i === 0 ? cur.yBrut : Math.max(cur.yBrut, acc[i - 1].yPlace + MIN_ECART_LABEL);
+      acc.push({ ...cur, yPlace });
+      return acc;
+    }, [])
+    .map(({ s, yPlace }) => {
+      const dernier = s.points[s.points.length - 1];
+      return `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle">${s.nom} · ${def.format(dernier)}</text>`;
     })
     .join("");
 
@@ -2214,10 +2256,11 @@ function trackCourbe(champ, leads, rdv, valeurs) {
   cible.innerHTML = `
     ${toggleGranulariteCourbeHtml(GRANULARITE_TRACKING)}
     ${legende}
-    <svg class="courbe-svg" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none">
+    <svg class="courbe-svg" viewBox="0 0 ${L} ${H}">
       ${grille}
       ${lignesSvg}
       ${axeX}
+      ${labelsFin}
     </svg>`;
 
   brancherToggleGranularite(cible, (g) => {
