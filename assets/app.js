@@ -2297,7 +2297,12 @@ function trackCourbe(champ, leads, rdv, valeurs) {
 
   // Libellés de fin de ligne : juste le nom (la valeur exacte vient du
   // curseur au survol, voir plus bas) — avec un écart minimal entre eux pour
-  // ne pas se chevaucher quand plusieurs courbes finissent proches.
+  // ne pas se chevaucher quand plusieurs courbes finissent proches. Les noms
+  // UTM réels peuvent être très longs (campagnes Meta, IDs bruts) : tronqués
+  // ici pour tenir dans la marge de droite, le nom complet reste visible dans
+  // la légende au-dessus du graphique et dans l'infobulle au survol.
+  const MAX_CAR_LABEL = 20;
+  const tronqueLabel = (texte) => (texte.length > MAX_CAR_LABEL ? `${texte.slice(0, MAX_CAR_LABEL - 1)}…` : texte);
   const MIN_ECART_LABEL = 15;
   const labelsFin = series
     .map((s, i) => ({ s, yBrut: y(s.points[s.points.length - 1]) }))
@@ -2307,7 +2312,7 @@ function trackCourbe(champ, leads, rdv, valeurs) {
       acc.push({ ...cur, yPlace });
       return acc;
     }, [])
-    .map(({ s, yPlace }) => `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle">${s.nom}</text>`)
+    .map(({ s, yPlace }) => `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle"><title>${s.nom}</title>${tronqueLabel(s.nom)}</text>`)
     .join("");
 
   // Curseur de survol synchronisé : une ligne verticale + un point par série
