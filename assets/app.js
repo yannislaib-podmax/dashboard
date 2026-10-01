@@ -1871,12 +1871,31 @@ const TRACK_CHAMP = { source: "source", canal: "canal", campagne: "utmCampaign",
 const TRACK_LIBELLE = { source: "source", canal: "canal", campagne: "campagne", content: "content" };
 const TRACK_NON_RENSEIGNE = "Non renseigné";
 
-// Même filtre période (DEBUT/FIN) que le reste du dashboard, pour que changer
-// les dates dans la barre commune se répercute aussi sur ce tracking-ci.
+// Même filtre période (DEBUT/FIN) ET même filtre Canal/Produit (barre commune)
+// que le reste du dashboard, pour que les deux se répercutent aussi ici.
+const parCanalEtProduitTrack = (lignes) =>
+  lignes.filter(
+    (l) => (CANAL === "tout" || l.canal === CANAL) && (PRODUIT === "tout" || l.produit === PRODUIT)
+  );
+
 const trackLignesFiltrees = () => ({
-  leads: TRACK_LEADS.filter(dansPeriode),
-  rdv: TRACK_RDV.filter(dansPeriode),
+  leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPeriode)),
+  rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPeriode)),
 });
+
+// Même logique de période précédente que le reste du dashboard (barre de
+// comparaison commune), appliquée aux lignes brutes leads/RDV du tracking.
+function trackLignesPrecedentes() {
+  const plage = plagePrecedente();
+  if (!plage) return null;
+  const [a, b] = plage;
+  const dansPlage = (l) => l.jour && l.jour >= a && l.jour <= b;
+
+  return {
+    leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPlage)),
+    rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPlage)),
+  };
+}
 
 function trackAgreger(champ, leads, rdv) {
   const parValeur = {};
@@ -1896,6 +1915,12 @@ function trackAgreger(champ, leads, rdv) {
 }
 
 const TRACK_METRIQUES = {
+  leads: {
+    titre: "Classement par leads",
+    valeur: (v) => v.leads,
+    format: nombre,
+    secondaire: () => null,
+  },
   ca: {
     titre: "Classement par CA contracté",
     valeur: (v) => v.ca,
@@ -1990,10 +2015,11 @@ function trackCamemberts(valeurs) {
 // Carte de stat avec infobulle au survol (même gabarit que carte(), avec
 // un attribut data-info en plus — carte() elle-même n'en a pas besoin
 // ailleurs, donc on ne la modifie pas globalement).
-const carteInfo = (libelle, chiffre, infoHtml) => `
+const carteInfo = (libelle, chiffre, infoHtml, ecart) => `
   <div class="glass carte rv"${info(infoHtml)}>
     <div class="libelle">${libelle}</div>
     <div class="chiffre">${chiffre}</div>
+    ${ecart ? `<div class="ecart ${ecart.classe}">${ecart.texte}</div>` : ""}
   </div>`;
 
 // Répartition d'une carte de synthèse par la dimension active : top 6
@@ -2029,12 +2055,19 @@ function vueTracking() {
   const totalCa = somme(rdv, "montant");
   const totalPresent = somme(rdv, "present");
 
+  // Comparaison à la période précédente, même principe que les autres onglets.
+  const precedentes = trackLignesPrecedentes();
+  const ecartLeads = precedentes ? ecartDe(leads.length, precedentes.leads.length, "leads") : null;
+  const ecartRdv = precedentes ? ecartDe(rdv.length, precedentes.rdv.length, "rendezVous") : null;
+  const ecartPresent = precedentes ? ecartDe(totalPresent, somme(precedentes.rdv, "present"), "honores") : null;
+  const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "montant"), "contracte") : null;
+
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
-    carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre)),
-    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre)),
-    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre)),
-    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros)),
+    carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads),
+    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
+    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
+    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros), ecartCa),
   ].join("");
   brancherInfobulles(cartesCible);
 
