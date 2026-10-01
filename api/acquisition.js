@@ -10,6 +10,16 @@
 // nous-mêmes ces 5 compteurs en ne gardant que le rang R1 (même règle que le
 // Tracking UTM), puis on les substitue aux rollups Airtable.
 //
+// IMPORTANT : la jointure CALL BOOKED → ACQUISITION se fait par le vrai lien
+// Airtable (champ "Dépense média", un ID d'enregistrement), PAS en
+// reconstruisant une clé texte "jour | canal | produit". Vérifié sur les
+// données réelles (2026-10-01) : le champ Produit de CALL BOOKED a été
+// renommé après coup (ex. "Pack Créa Ads" → "🎯 Podmax Ads") sur des
+// événements iClosed déjà en base, alors que le texte figé dans la colonne
+// Produit/Clé d'ACQUISITION, lui, ne bouge jamais. Rejoindre par texte aurait
+// donc cassé le lien sur la quasi-totalité des lignes existantes — vérifié
+// sur Airtable avant d'écrire ce fichier, pas supposé.
+//
 // Le jeton Airtable ne quitte jamais le serveur. Il est lu depuis la variable
 // d'environnement AIRTABLE_TOKEN, définie dans les réglages du projet Vercel.
 //
@@ -51,6 +61,8 @@ const CHAMPS_CALL_BOOKED = {
   fldTBeyP7bcOpxz4p: "rangR",
 };
 
+const CHAMP_LIEN_ACQUISITION = "fld5Wqq8cb4vPqWW2"; // "Dépense média" — lien CALL BOOKED -> ACQUISITION
+
 // Un select Airtable arrive sous forme d'objet { id, name, color } ; un
 // multipleSelects arrive en tableau d'objets ; un nombre arrive brut ; un
 // champ vide n'arrive pas du tout.
@@ -63,15 +75,16 @@ function valeur(brut) {
   return brut;
 }
 
-async function lireTable(token, tableId, champs) {
+async function lireTable(token, tableId, champs, champsBruts = []) {
   const lignes = [];
   let offset;
+  const tousLesChamps = [...Object.keys(champs), ...champsBruts];
 
   do {
     const url = new URL(`https://api.airtable.com/v0/${BASE_ID}/${tableId}`);
     url.searchParams.set("pageSize", "100");
     url.searchParams.set("returnFieldsByFieldId", "true");
-    Object.keys(champs).forEach((id) => url.searchParams.append("fields[]", id));
+    tousLesChamps.forEach((id) => url.searchParams.append("fields[]", id));
     if (offset) url.searchParams.set("offset", offset);
 
     const reponse = await fetch(url, {
@@ -86,9 +99,14 @@ async function lireTable(token, tableId, champs) {
     const donnees = await reponse.json();
 
     for (const enr of donnees.records) {
-      const ligne = {};
+      const ligne = { _id: enr.id };
       for (const [id, nom] of Object.entries(champs)) {
         ligne[nom] = valeur(enr.fields[id]);
+      }
+      // Champs bruts (non passés dans `valeur()`) : on garde le tableau
+      // d'IDs liés tel quel, sans le transformer en texte joint.
+      for (const id of champsBruts) {
+        ligne[id] = Array.isArray(enr.fields[id]) ? enr.fields[id] : [];
       }
       lignes.push(ligne);
     }
@@ -99,27 +117,20 @@ async function lireTable(token, tableId, champs) {
   return lignes;
 }
 
-// Même clé que la colonne "Clé" d'ACQUISITION (AAAA-MM-JJ | Canal | Produit),
-// reconstruite à partir des champs bruts de CALL BOOKED (Pris le, Canal,
-// Produit sont déjà les mêmes valeurs que celles écrites dans ACQUISITION par
-// Make — pas besoin de refaire le calcul UTM → Canal/Produit ici).
-function cleDe(jour, canal, produit) {
-  return `${jour} | ${canal || ""} | ${produit || ""}`;
-}
-
-// Recalcule rendezVous/rendezVousConclus/honores/ventes/contracte par clé
-// jour+canal+produit, à partir des seuls calls Closing de rang R1 — un lead
-// qui relance (R2, R3...) ne doit pas compter comme un 2e rendez-vous.
+// Recalcule rendezVous/rendezVousConclus/honores/ventes/contracte par ligne
+// ACQUISITION (identifiée par son ID Airtable réel, pas par un texte
+// reconstruit), à partir des seuls calls Closing de rang R1 — un lead qui
+// relance (R2, R3...) ne doit pas compter comme un 2e rendez-vous.
 function recalculerDepuisCallBooked(callsBooked) {
-  const parCle = {};
-  const point = (cle) => (parCle[cle] = parCle[cle] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0 });
+  const parIdAcquisition = {};
+  const point = (id) => (parIdAcquisition[id] = parIdAcquisition[id] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0 });
 
   for (const c of callsBooked) {
     if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
-    const jour = c.prisLe ? String(c.prisLe).slice(0, 10) : null;
-    if (!jour) continue;
+    const idsLies = c[CHAMP_LIEN_ACQUISITION] || [];
+    if (!idsLies.length) continue; // pas de ligne ACQUISITION liée — rien à rattacher
 
-    const p = point(cleDe(jour, c.canal, c.produit));
+    const p = point(idsLies[0]);
     p.rendezVous += 1;
     p.rendezVousConclus += c.conclu || 0;
     p.honores += c.present || 0;
@@ -127,7 +138,7 @@ function recalculerDepuisCallBooked(callsBooked) {
     p.contracte += c.montant || 0;
   }
 
-  return parCle;
+  return parIdAcquisition;
 }
 
 export default async function handler(req, res) {
@@ -143,19 +154,17 @@ export default async function handler(req, res) {
   try {
     const [lignesAcquisition, callsBooked] = await Promise.all([
       lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
-      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED),
+      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION]),
     ]);
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
     const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0 };
-    const clesVues = new Set();
 
     const lignes = lignesAcquisition.map((ligne) => {
-      const cle = ligne.cle || cleDe(ligne.jour, ligne.canal, ligne.produit);
-      clesVues.add(cle);
-      const r = recalcul[cle] || vide;
+      const r = recalcul[ligne._id] || vide;
+      const { _id, ...reste } = ligne;
       return {
-        ...ligne,
+        ...reste,
         depense: ligne.depense ?? 0,
         impressions: ligne.impressions ?? 0,
         clics: ligne.clics ?? 0,
@@ -167,24 +176,6 @@ export default async function handler(req, res) {
         contracte: r.contracte,
       };
     });
-
-    // Filet de sécurité : un call R1 dont la clé jour+canal+produit n'a pas
-    // (ou plus) de ligne ACQUISITION en face — ne devrait pas arriver (Make
-    // upserte toujours la ligne ACQUISITION à la prise du call), mais si ça
-    // arrive on ne veut pas perdre silencieusement du volume.
-    for (const [cle, r] of Object.entries(recalcul)) {
-      if (clesVues.has(cle)) continue;
-      const [jour, canal, produit] = cle.split(" | ");
-      lignes.push({
-        cle, jour, canal: canal || null, produit: produit || null,
-        depense: 0, impressions: 0, clics: 0, leads: 0,
-        rendezVous: r.rendezVous,
-        rendezVousConclus: r.rendezVousConclus,
-        honores: r.honores,
-        ventes: r.ventes,
-        contracte: r.contracte,
-      });
-    }
 
     lignes.sort((a, b) => String(b.jour ?? "").localeCompare(String(a.jour ?? "")));
 
