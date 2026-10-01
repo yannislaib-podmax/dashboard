@@ -213,10 +213,35 @@ const dansPeriode = (l) => {
 
 let CANAL = "tout";
 let PRODUIT = "tout";
+let SOURCE = "tout";
+
+// La table ACQUISITION (dépense/impressions/clics) n'a pas de champ Source
+// propre : seul Canal y existe. Mais chaque valeur de Canal correspond sans
+// ambiguïté à une Source (confirmé avec Yannis le 02/10) — on dérive donc
+// Source depuis Canal au lieu de redemander une saisie manuelle chaque matin.
+// Ça permet de filtrer dépense/impressions/clics par Source comme le reste.
+const CANAL_VERS_SOURCE = {
+  "Fb ads": "Ads",
+  "Tiktok ads": "Ads",
+  "Google ads": "Ads",
+  Instagram: "Organique",
+  TikTok: "Organique",
+  YouTube: "Organique",
+  Facebook: "Organique",
+  LinkedIn: "Organique",
+  "Site web": "Organique",
+  "Setting Call": "Autre",
+  "Setting dm": "Autre",
+  Autre: "Autre",
+};
+const deriverSource = (canal) => CANAL_VERS_SOURCE[canal] || "Autre";
 
 const parCanalEtProduit = (lignes) =>
   lignes.filter(
-    (l) => (CANAL === "tout" || l.canal === CANAL) && (PRODUIT === "tout" || l.produit === PRODUIT)
+    (l) =>
+      (CANAL === "tout" || l.canal === CANAL) &&
+      (PRODUIT === "tout" || l.produit === PRODUIT) &&
+      (SOURCE === "tout" || l.source === SOURCE)
   );
 
 const lignesFiltrees = () => parCanalEtProduit(TOUTES.filter(dansPeriode));
@@ -1628,7 +1653,11 @@ function majLegende() {
   const borne = (v) => (v ? jourCourt(v) : "—");
   const periode = DEBUT || FIN ? `du ${borne(DEBUT)} au ${borne(FIN)}` : "toute la période";
 
-  const restrictions = [CANAL !== "tout" ? CANAL : null, PRODUIT !== "tout" ? PRODUIT : null].filter(Boolean);
+  const restrictions = [
+    CANAL !== "tout" ? CANAL : null,
+    PRODUIT !== "tout" ? PRODUIT : null,
+    SOURCE !== "tout" ? SOURCE : null,
+  ].filter(Boolean);
 
   document.getElementById("filtre-note").textContent = [`${n} ligne${n > 1 ? "s" : ""}`, periode, ...restrictions].join(" · ");
 }
@@ -1662,9 +1691,11 @@ function brancherCanalProduit() {
 
   const canaux = [...new Set(TOUTES.map((l) => l.canal).filter(Boolean))].sort();
   const produits = [...new Set(TOUTES.map((l) => l.produit).filter(Boolean))].sort();
+  const sources = [...new Set(TOUTES.map((l) => l.source).filter(Boolean))].sort();
 
   const sCanal = remplir("canal", canaux, "Tous les canaux");
   const sProduit = remplir("produit", produits, "Tous les produits");
+  const sSource = remplir("source", sources, "Toutes les sources");
 
   sCanal.addEventListener("change", () => {
     CANAL = sCanal.value;
@@ -1673,6 +1704,11 @@ function brancherCanalProduit() {
   });
   sProduit.addEventListener("change", () => {
     PRODUIT = sProduit.value;
+    majLegende();
+    rendre();
+  });
+  sSource.addEventListener("change", () => {
+    SOURCE = sSource.value;
     majLegende();
     rendre();
   });
@@ -1986,11 +2022,16 @@ const TRACK_CHAMP = { source: "source", canal: "canal", campagne: "utmCampaign",
 const TRACK_LIBELLE = { source: "source", canal: "canal", campagne: "campagne", content: "content" };
 const TRACK_NON_RENSEIGNE = "Non renseigné";
 
-// Même filtre période (DEBUT/FIN) ET même filtre Canal/Produit (barre commune)
-// que le reste du dashboard, pour que les deux se répercutent aussi ici.
+// Même filtre période (DEBUT/FIN) ET même filtre Canal/Produit/Source (barre
+// commune) que le reste du dashboard, pour que les trois se répercutent aussi
+// ici. Ici `l.source` est le vrai champ de qualification du lead/RDV (pas une
+// dérivation depuis Canal comme pour les lignes ACQUISITION).
 const parCanalEtProduitTrack = (lignes) =>
   lignes.filter(
-    (l) => (CANAL === "tout" || l.canal === CANAL) && (PRODUIT === "tout" || l.produit === PRODUIT)
+    (l) =>
+      (CANAL === "tout" || l.canal === CANAL) &&
+      (PRODUIT === "tout" || l.produit === PRODUIT) &&
+      (SOURCE === "tout" || l.source === SOURCE)
   );
 
 const trackLignesFiltrees = () => ({
@@ -2622,7 +2663,7 @@ async function charger() {
     const donnees = await reponse.json();
     if (!reponse.ok) throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
 
-    TOUTES = donnees.lignes;
+    TOUTES = donnees.lignes.map((l) => ({ ...l, source: deriverSource(l.canal) }));
     fixerCouleurs();
 
     // Le pilotage quotidien reste vide si /api/pilotage-quotidien échoue —
