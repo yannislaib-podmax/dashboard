@@ -35,6 +35,8 @@ const CHAMPS_CALL_BOOKED = {
   fldHub4Sw3d9ZiEzC: "conclu",
   fldwA9cRx6qHqForP: "vente",
   fld1GgVHXLLo54h8s: "montant",
+  fldFPd5SGaSFfImIE: "typeAppel",
+  fldTBeyP7bcOpxz4p: "rangR",
 };
 
 // Un select Airtable arrive en objet { id, name, color } ; un multipleSelects
@@ -102,10 +104,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [leads, rdv] = await Promise.all([
+    const [leads, rdvBrut] = await Promise.all([
       lireTable(token, TABLE_LEADS, CHAMPS_LEADS, "capteLe"),
       lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, "prisLe"),
     ]);
+
+    // On exclut les calls Diagnostic (requalification post-disqualif, pas un
+    // call produit) : seuls les calls Closing comptent pour le Tracking UTM.
+    // Le Rang R (1/2/3...) reste dans la ligne : le funnel principal (cartes,
+    // classement, camemberts, courbe) ne garde que le rang 1 côté app.js,
+    // mais le rapport R1/R2 a besoin de voir aussi les rangs suivants.
+    const rdv = rdvBrut
+      .filter((r) => r.typeAppel === "Closing")
+      .map(({ typeAppel, ...reste }) => reste);
 
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 

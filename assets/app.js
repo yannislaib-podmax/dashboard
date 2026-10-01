@@ -1903,7 +1903,14 @@ function vueQuotidien(lignes) {
 // rendez-vous), séparées de TOUTES à dessein : la granularité UTM n'a pas
 // d'équivalent agrégé côté Airtable, contrairement à ACQUISITION.
 let TRACK_LEADS = [];
+// TRACK_RDV = funnel principal, uniquement le 1er call Closing par lead
+// (Rang R = 1) : un lead ne compte qu'une fois dans les cartes/classement/
+// camemberts/courbe, quel que soit le nombre de calls qu'il a eu ensuite.
 let TRACK_RDV = [];
+// TRACK_RDV_TOUS = tous les calls Closing, tous rangs confondus (R1, R2, R3...)
+// — uniquement pour le rapport R1/R2 plus bas, qui a justement besoin de voir
+// les rangs suivants pour mesurer le taux de relance par UTM.
+let TRACK_RDV_TOUS = [];
 
 let TRACK_DIMENSION = "source"; // "source" | "campagne" | "content"
 let TRACK_METRIQUE = "ca"; // "ca" | "present" | "booke"
@@ -1923,9 +1930,14 @@ const parCanalEtProduitTrack = (lignes) =>
     (l) => (CANAL === "tout" || l.canal === CANAL) && (PRODUIT === "tout" || l.produit === PRODUIT)
   );
 
+// "relances" = les R2+ de la période, mêmes filtres Canal/Produit que rdv.
+// Elles ne comptent pas comme un nouveau RDV (déjà tranché : scope R1), mais
+// si l'une d'elles conclut une vente, cet argent doit être rattaché quelque
+// part — voir trackAgreger ci-dessous.
 const trackLignesFiltrees = () => ({
   leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPeriode)),
   rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPeriode)),
+  relances: parCanalEtProduitTrack(TRACK_RDV_TOUS.filter((r) => dansPeriode(r) && r.rangR > 1)),
 });
 
 // Même logique de période précédente que le reste du dashboard (barre de
@@ -1939,12 +1951,79 @@ function trackLignesPrecedentes() {
   return {
     leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPlage)),
     rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPlage)),
+    relances: parCanalEtProduitTrack(TRACK_RDV_TOUS.filter((r) => dansPlage(r) && r.rangR > 1)),
   };
 }
 
-function trackAgreger(champ, leads, rdv) {
+// Même filtre période + Canal/Produit que trackLignesFiltrees, mais sur
+// TRACK_RDV_TOUS (tous les rangs R) : sert uniquement au rapport R1/R2.
+const trackRelancesFiltrees = () => parCanalEtProduitTrack(TRACK_RDV_TOUS.filter(dansPeriode));
+
+// Rapport R1 / R2 : par valeur de la dimension active, combien de leads ont
+// eu un 1er call Closing (R1) et combien sont repartis en relance (R2, R3...).
+// Un taux de relance élevé sur une valeur donnée peut signaler des leads
+// moins qualifiés/moins chauds sur ce canal (ils ne closent pas au 1er call).
+function trackRapportR1R2(champ, rdvTous) {
+  const cible = document.getElementById("tracking-rapport-r");
+  if (!cible) return;
+
+  const parValeur = {};
+  const point = (cle) => (parValeur[cle] = parValeur[cle] || { r1: 0, relances: 0 });
+
+  rdvTous.forEach((r) => {
+    const p = point(r[champ] || TRACK_NON_RENSEIGNE);
+    if (r.rangR === 1) p.r1 += 1;
+    else if (r.rangR > 1) p.relances += 1;
+  });
+
+  const lignes = Object.entries(parValeur)
+    .map(([nom, v]) => [nom, v.r1, v.relances, ratio(v.relances, v.r1)])
+    .filter(([, r1, relances]) => r1 > 0 || relances > 0)
+    .sort((a, b) => (b[3] ?? -1) - (a[3] ?? -1));
+
+  if (!lignes.length) {
+    cible.innerHTML = `<div class="vide">Aucun call Closing sur cette période.</div>`;
+    return;
+  }
+
+  const totalR1 = lignes.reduce((s, [, r1]) => s + r1, 0);
+  const totalRelances = lignes.reduce((s, [, , relances]) => s + relances, 0);
+  const tauxGlobal = ratio(totalRelances, totalR1);
+
+  const cellulePourcent = (v) => `<td${v === null ? ' class="zero"' : ""}>${pourcent(v)}</td>`;
+
+  const corps = lignes
+    .map(([nom, r1, relances, taux]) => `<tr>
+        <td>${nom}</td>
+        ${cellule(r1)}
+        ${cellule(relances)}
+        ${cellulePourcent(taux)}
+      </tr>`)
+    .join("");
+
+  cible.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>${TRACK_LIBELLE[TRACK_DIMENSION]}</th><th>R1 (1er call)</th><th>Relances (R2+)</th><th>Taux de relance</th>
+      </tr></thead>
+      <tbody>${corps}</tbody>
+      <tfoot><tr class="total">
+        <td>Total</td>${cellule(totalR1)}${cellule(totalRelances)}${cellulePourcent(tauxGlobal)}
+      </tr></tfoot>
+    </table>`;
+}
+
+// relances = les calls R2+ (voir trackLignesFiltrees) : ils ne comptent pas
+// comme un nouveau RDV/lead (le funnel reste scope R1), mais une vente
+// conclue sur une relance est une vraie vente — elle ne doit pas disparaître
+// du Tracking sous prétexte qu'elle n'est pas sur le call R1. On la rattache
+// à la valeur UTM du R1 d'origine du même lead (via contactId), parce que la
+// relance elle-même n'a souvent plus d'UTM (rebookée en direct par le closer,
+// pas via un clic pub) — c'est le R1 qui porte l'acquisition réelle.
+function trackAgreger(champ, leads, rdv, relances = []) {
   const parValeur = {};
   const point = (cle) => (parValeur[cle] = parValeur[cle] || { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 });
+  const valeurParLead = {};
 
   leads.forEach((l) => { point(l[champ] || TRACK_NON_RENSEIGNE).leads += 1; });
   rdv.forEach((r) => {
@@ -1952,6 +2031,14 @@ function trackAgreger(champ, leads, rdv) {
     p.rdv += 1;
     p.present += r.present || 0;
     p.conclu += r.conclu || 0;
+    p.ventes += r.vente || 0;
+    p.ca += r.montant || 0;
+    if (r.contactId) valeurParLead[r.contactId] = r[champ] || TRACK_NON_RENSEIGNE;
+  });
+
+  relances.forEach((r) => {
+    if (!r.contactId || !valeurParLead[r.contactId]) return;
+    const p = point(valeurParLead[r.contactId]);
     p.ventes += r.vente || 0;
     p.ca += r.montant || 0;
   });
@@ -2417,21 +2504,29 @@ function vueTracking() {
   if (!cible) return;
 
   const champ = TRACK_CHAMP[TRACK_DIMENSION];
-  const { leads, rdv } = trackLignesFiltrees();
-  const parValeur = trackAgreger(champ, leads, rdv);
+  const { leads, rdv, relances } = trackLignesFiltrees();
+  const parValeur = trackAgreger(champ, leads, rdv, relances);
   const valeurs = Object.entries(parValeur);
 
-  const totalCa = somme(rdv, "montant");
+  // Le CA/Ventes compte aussi ce qui a été conclu sur une relance (R2+) :
+  // sinon une vente réelle disparaîtrait du Tracking sous prétexte qu'elle
+  // n'a pas été signée dès le 1er call. Le RDV/Présent restent scope R1 (un
+  // lead = un seul RDV compté), décision prise plus haut dans la conv.
+  const totalCa = somme(rdv, "montant") + somme(relances, "montant");
   const totalPresent = somme(rdv, "present");
-  const totalVentes = somme(rdv, "vente");
+  const totalVentes = somme(rdv, "vente") + somme(relances, "vente");
 
   // Comparaison à la période précédente, même principe que les autres onglets.
   const precedentes = trackLignesPrecedentes();
   const ecartLeads = precedentes ? ecartDe(leads.length, precedentes.leads.length, "leads") : null;
   const ecartRdv = precedentes ? ecartDe(rdv.length, precedentes.rdv.length, "rendezVous") : null;
   const ecartPresent = precedentes ? ecartDe(totalPresent, somme(precedentes.rdv, "present"), "honores") : null;
-  const ecartVentes = precedentes ? ecartDe(totalVentes, somme(precedentes.rdv, "vente"), "ventes") : null;
-  const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "montant"), "contracte") : null;
+  const ecartVentes = precedentes
+    ? ecartDe(totalVentes, somme(precedentes.rdv, "vente") + somme(precedentes.relances, "vente"), "ventes")
+    : null;
+  const ecartCa = precedentes
+    ? ecartDe(totalCa, somme(precedentes.rdv, "montant") + somme(precedentes.relances, "montant"), "contracte")
+    : null;
 
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
@@ -2447,11 +2542,12 @@ function vueTracking() {
   // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
   // classement et les camemberts (pas juste un total global comme sur les
   // cartes ci-dessus).
-  const parValeurPrec = precedentes ? trackAgreger(champ, precedentes.leads, precedentes.rdv) : null;
+  const parValeurPrec = precedentes ? trackAgreger(champ, precedentes.leads, precedentes.rdv, precedentes.relances) : null;
 
   trackClassement(valeurs, parValeurPrec);
   trackCourbe(champ, leads, rdv, valeurs);
   trackCamemberts(valeurs, parValeurPrec);
+  trackRapportR1R2(champ, trackRelancesFiltrees());
 
   // Les cartes/classement/courbe/camemberts ci-dessus viennent d'être reconstruits
   // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
@@ -2526,7 +2622,8 @@ async function charger() {
       const donneesTracking = await reponseTracking.json();
       if (reponseTracking.ok) {
         TRACK_LEADS = donneesTracking.leads || [];
-        TRACK_RDV = donneesTracking.rdv || [];
+        TRACK_RDV_TOUS = donneesTracking.rdv || [];
+        TRACK_RDV = TRACK_RDV_TOUS.filter((r) => r.rangR === 1);
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.
