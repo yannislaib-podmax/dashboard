@@ -310,6 +310,7 @@ const INDICATEURS = {
   rendezVousConclus: (l) => somme(l, "rendezVousConclus"),
   honores: (l) => somme(l, "honores"),
   ventes: (l) => somme(l, "ventes"),
+  annules: (l) => somme(l, "annules"),
 
   // Taux de présence : honorés rapportés aux rendez-vous CONCLUS (Honoré ou
   // No-show), pas à tous les rendez-vous pris. Un rendez-vous encore
@@ -320,6 +321,12 @@ const INDICATEURS = {
 
   // Taux de closing : ventes rapportées aux appels réellement honorés.
   tauxClosing: (l) => ratio(somme(l, "ventes"), somme(l, "honores")),
+
+  // Taux d'annulation : annulés rapportés à TOUS les rendez-vous pris (pas
+  // aux seuls rendez-vous conclus) — l'annulation se joue avant que le call
+  // ait lieu, donc sa base est le total réservé, comme le taux de closing se
+  // base sur les honorés et le taux de présence sur les conclus.
+  tauxAnnulation: (l) => ratio(somme(l, "annules"), somme(l, "rendezVous")),
 };
 
 const SEUIL_FIABILITE = 10;
@@ -356,6 +363,13 @@ function vueConversion(lignes, precedentes) {
   const closingPrec = precedentes ? INDICATEURS.tauxClosing(precedentes) : null;
   const appels = somme(lignes, "honores");
 
+  // Taux d'annulation sur R1 Closing uniquement : `lignes` vient toujours de
+  // TOUTES (/api/acquisition), déjà recalculée en ne gardant que les calls
+  // Closing de rang R1 — cf. commentaire en tête de ce fichier API.
+  const annulation = INDICATEURS.tauxAnnulation(lignes);
+  const annulationPrec = precedentes ? INDICATEURS.tauxAnnulation(precedentes) : null;
+  const rdvPris = somme(lignes, "rendezVous");
+
   const fragile = (base) => (base > 0 && base < SEUIL_FIABILITE ? " · trop peu pour conclure" : "");
 
   const bloc = document.getElementById("qualite");
@@ -366,6 +380,12 @@ function vueConversion(lignes, precedentes) {
         pourcent(presence),
         rdvConclus === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclus)} rendez-vous conclu${rdvConclus > 1 ? "s" : ""} (hors RDV encore à venir)${fragile(rdvConclus)}`,
         presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null
+      ) +
+      carte(
+        "Taux d'annulation",
+        pourcent(annulation),
+        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (R1, closing)${fragile(rdvPris)}`,
+        annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null
       ) +
       carte(
         "Taux de closing",
@@ -391,7 +411,9 @@ function vueConversion(lignes, precedentes) {
   camembertsConversion(lignes);
 }
 
-function ecartPoints(actuel, precedent) {
+// `baisseEstBonne` : par défaut une hausse est "bon" (présence, closing...).
+// Pour un taux dont la baisse est souhaitable (annulation), passer true.
+function ecartPoints(actuel, precedent, baisseEstBonne = false) {
   if (actuel === null || precedent === null) return null;
 
   const brut = (actuel - precedent) * 100;
@@ -404,7 +426,10 @@ function ecartPoints(actuel, precedent) {
     return { classe: "stable", texte: pts === 0 ? "→ stable" : `→ ${valeur} ${unite}` };
   }
 
-  return { classe: pts > 0 ? "bon" : "mauvais", texte: `${pts > 0 ? "↑" : "↓"} ${valeur} ${unite}` };
+  const monte = pts > 0;
+  const classe = (baisseEstBonne ? !monte : monte) ? "bon" : "mauvais";
+
+  return { classe, texte: `${monte ? "↑" : "↓"} ${valeur} ${unite}` };
 }
 
 const marqueur = (e) => (e ? ` <span class="ecart-inline ${e.classe}">${e.texte}</span>` : "");

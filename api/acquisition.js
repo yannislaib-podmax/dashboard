@@ -59,6 +59,7 @@ const CHAMPS_CALL_BOOKED = {
   fld1GgVHXLLo54h8s: "montant",
   fldFPd5SGaSFfImIE: "typeAppel",
   fldTBeyP7bcOpxz4p: "rangR",
+  fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
 };
 
 const CHAMP_LIEN_ACQUISITION = "fld5Wqq8cb4vPqWW2"; // "Dépense média" — lien CALL BOOKED -> ACQUISITION
@@ -123,7 +124,7 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // relance (R2, R3...) ne doit pas compter comme un 2e rendez-vous.
 function recalculerDepuisCallBooked(callsBooked) {
   const parIdAcquisition = {};
-  const point = (id) => (parIdAcquisition[id] = parIdAcquisition[id] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0 });
+  const point = (id) => (parIdAcquisition[id] = parIdAcquisition[id] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 });
 
   for (const c of callsBooked) {
     if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
@@ -136,6 +137,7 @@ function recalculerDepuisCallBooked(callsBooked) {
     p.honores += c.present || 0;
     p.ventes += c.vente || 0;
     p.contracte += c.montant || 0;
+    p.annules += c.annule || 0;
   }
 
   return parIdAcquisition;
@@ -158,7 +160,7 @@ export default async function handler(req, res) {
     ]);
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
-    const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0 };
+    const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 };
 
     const lignes = lignesAcquisition.map((ligne) => {
       const r = recalcul[ligne._id] || vide;
@@ -174,6 +176,7 @@ export default async function handler(req, res) {
         honores: r.honores,
         ventes: r.ventes,
         contracte: r.contracte,
+        annules: r.annules,
       };
     });
 
