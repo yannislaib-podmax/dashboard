@@ -2267,40 +2267,56 @@ function trackCourbe(champ, leads, rdv, valeurs) {
     return chemin;
   };
 
-  const lignesSvg = series
-    .map((s) => {
-      const pts = s.points.map((v, i) => [Number(x(i).toFixed(1)), Number(y(v).toFixed(1))]);
-      const trace = cheminLisse(pts);
-      const points = s.points
-        .map((v, i) => {
-          const bulle = `<strong>${s.nom}</strong><span>${libellePeriodeEtendu(blocs[i], GRANULARITE_TRACKING)}<b>${def.format(v)}</b></span>`;
-          return `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="3.5" fill="${s.couleur}" class="courbe-point"${info(bulle)}></circle>`;
-        })
-        .join("");
-      // Zone de survol invisible, bien plus large que le trait visible : sans
-      // elle, il fallait viser pile un point pour savoir quelle ligne on
-      // regarde. Ici toute la longueur de la courbe répond, avec le nom.
-      const zoneSurvol = `<path d="${trace}" fill="none" stroke="${s.couleur}" stroke-width="16" opacity="0" class="courbe-zone-survol"${info(`<strong>${s.nom}</strong>`)}></path>`;
-      return `${zoneSurvol}<path d="${trace}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />${points}`;
+  // ID de dégradé unique par série (couleur -> transparent), pour remplir
+  // l'aire sous chaque courbe et donner tout de suite une masse visuelle à la
+  // tendance, pas juste un trait fin perdu dans la carte.
+  const pointsParSerie = series.map((s) => s.points.map((v, i) => [Number(x(i).toFixed(1)), Number(y(v).toFixed(1))]));
+  const tracesParSerie = pointsParSerie.map(cheminLisse);
+
+  const degrades = series
+    .map(
+      (s, i) => `<linearGradient id="courbe-degrade-${i}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${s.couleur}" stop-opacity="0.32" />
+        <stop offset="100%" stop-color="${s.couleur}" stop-opacity="0" />
+      </linearGradient>`
+    )
+    .join("");
+
+  const baseY = (M_HAUT + hauteurUtile).toFixed(1);
+  const aires = series
+    .map((s, i) => {
+      const pts = pointsParSerie[i];
+      const aireD = `${tracesParSerie[i]} L${pts[pts.length - 1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
+      return `<path d="${aireD}" fill="url(#courbe-degrade-${i})" class="courbe-aire"></path>`;
     })
     .join("");
 
-  // Libellés de fin de ligne : nom + dernière valeur, à hauteur du dernier
-  // point de chaque série — avec un écart minimal entre eux pour ne pas se
-  // chevaucher quand plusieurs courbes finissent proches les unes des autres.
-  const MIN_ECART_LABEL = 14;
+  const lignesSvg = series
+    .map((s, i) => `<path d="${tracesParSerie[i]}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />`)
+    .join("");
+
+  // Libellés de fin de ligne : juste le nom (la valeur exacte vient du
+  // curseur au survol, voir plus bas) — avec un écart minimal entre eux pour
+  // ne pas se chevaucher quand plusieurs courbes finissent proches.
+  const MIN_ECART_LABEL = 15;
   const labelsFin = series
-    .map((s) => ({ s, yBrut: y(s.points[s.points.length - 1]) }))
+    .map((s, i) => ({ s, yBrut: y(s.points[s.points.length - 1]) }))
     .sort((a, b) => a.yBrut - b.yBrut)
     .reduce((acc, cur, i) => {
       const yPlace = i === 0 ? cur.yBrut : Math.max(cur.yBrut, acc[i - 1].yPlace + MIN_ECART_LABEL);
       acc.push({ ...cur, yPlace });
       return acc;
     }, [])
-    .map(({ s, yPlace }) => {
-      const dernier = s.points[s.points.length - 1];
-      return `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle">${s.nom} · ${def.format(dernier)}</text>`;
-    })
+    .map(({ s, yPlace }) => `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle">${s.nom}</text>`)
+    .join("");
+
+  // Curseur de survol synchronisé : une ligne verticale + un point par série
+  // à l'index survolé, une seule bulle qui regroupe toutes les valeurs de ce
+  // jour-là — bien plus lisible que deviner quelle courbe on frôle au pixel
+  // près. Les éléments existent dès le rendu (opacity 0), le JS ci-dessous
+  // se contente de les repositionner/afficher au survol.
+  const pointsCurseur = series
+    .map((s, i) => `<circle class="courbe-curseur-point" data-i="${i}" r="4.5" fill="${s.couleur}" cx="${x(0)}" cy="${y(s.points[0])}" opacity="0"></circle>`)
     .join("");
 
   const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}</div>`;
@@ -2309,8 +2325,13 @@ function trackCourbe(champ, leads, rdv, valeurs) {
     ${toggleGranulariteCourbeHtml(GRANULARITE_TRACKING)}
     ${legende}
     <svg class="courbe-svg" viewBox="0 0 ${L} ${H}">
+      <defs>${degrades}</defs>
       ${grille}
+      ${aires}
       ${lignesSvg}
+      <line class="courbe-curseur-ligne" x1="${x(0)}" x2="${x(0)}" y1="${M_HAUT}" y2="${M_HAUT + hauteurUtile}" opacity="0"></line>
+      ${pointsCurseur}
+      <rect class="courbe-survol" x="${M_GAUCHE}" y="${M_HAUT}" width="${largeurUtile}" height="${hauteurUtile}" fill="transparent"></rect>
       ${axeX}
       ${labelsFin}
     </svg>`;
@@ -2319,7 +2340,71 @@ function trackCourbe(champ, leads, rdv, valeurs) {
     GRANULARITE_TRACKING = g;
     trackCourbe(champ, leads, rdv, valeurs);
   });
-  brancherInfobulles(cible);
+
+  // Survol synchronisé : on retrouve l'index de bloc le plus proche du
+  // curseur, on déplace la ligne verticale + les points dessus, et on affiche
+  // une bulle unique (réutilise le composant infobulle partagé) avec toutes
+  // les valeurs de ce jour-là, triées de la plus grande à la plus petite.
+  const svg = cible.querySelector(".courbe-svg");
+  const zoneSurvol = cible.querySelector(".courbe-survol");
+  const ligneCurseur = cible.querySelector(".courbe-curseur-ligne");
+  const pointsCurseurEls = [...cible.querySelectorAll(".courbe-curseur-point")];
+
+  if (!INFOBULLE) {
+    INFOBULLE = document.createElement("div");
+    INFOBULLE.className = "infobulle";
+    document.body.appendChild(INFOBULLE);
+  }
+
+  const placerBulle = (evt) => {
+    const marge = 16;
+    const r = INFOBULLE.getBoundingClientRect();
+    let gauche = evt.clientX + marge;
+    let haut = evt.clientY - r.height - marge;
+    if (gauche + r.width > window.innerWidth - 8) gauche = evt.clientX - r.width - marge;
+    if (haut < 8) haut = evt.clientY + marge;
+    INFOBULLE.style.left = gauche + "px";
+    INFOBULLE.style.top = haut + "px";
+  };
+
+  const survol = (evt) => {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const ratio = blocs.length > 1 ? (loc.x - M_GAUCHE) / largeurUtile : 0;
+    const index = Math.min(blocs.length - 1, Math.max(0, Math.round(ratio * (blocs.length - 1))));
+
+    const xi = x(index).toFixed(1);
+    ligneCurseur.setAttribute("x1", xi);
+    ligneCurseur.setAttribute("x2", xi);
+    ligneCurseur.setAttribute("opacity", "1");
+
+    const lignesBulle = series
+      .map((s, i) => ({ s, v: s.points[index] }))
+      .sort((a, b) => b.v - a.v)
+      .map(({ s, v }) => `<span><i style="background:${s.couleur}"></i>${s.nom}<b>${def.format(v)}</b></span>`)
+      .join("");
+
+    series.forEach((s, i) => {
+      pointsCurseurEls[i].setAttribute("cx", xi);
+      pointsCurseurEls[i].setAttribute("cy", y(s.points[index]).toFixed(1));
+      pointsCurseurEls[i].setAttribute("opacity", "1");
+    });
+
+    INFOBULLE.innerHTML = `<strong>${libellePeriodeEtendu(blocs[index], GRANULARITE_TRACKING)}</strong>${lignesBulle}`;
+    INFOBULLE.classList.add("on");
+    placerBulle(evt);
+  };
+
+  const quitter = () => {
+    ligneCurseur.setAttribute("opacity", "0");
+    pointsCurseurEls.forEach((p) => p.setAttribute("opacity", "0"));
+    INFOBULLE.classList.remove("on");
+  };
+
+  zoneSurvol.addEventListener("mousemove", survol);
+  zoneSurvol.addEventListener("mouseleave", quitter);
 }
 
 function vueTracking() {

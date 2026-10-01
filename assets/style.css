@@ -1102,13 +1102,13 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .courbe-carte .toggle-granularite { margin-bottom: 14px; }
 .courbe-carte .vide { color: var(--txt3); font-size: 13px; padding: 20px 0 10px; }
 
-/* width:100% + aspect-ratio (pas de hauteur fixe) : le viewBox (1000x260)
+/* width:100% + aspect-ratio (pas de hauteur fixe) : le viewBox (1000x300)
    s'affiche à l'échelle réelle, sans preserveAspectRatio="none" — avant, la
    hauteur fixe + l'étirement non-uniforme écrasaient le texte des axes et
    rendaient les courbes illisibles. Même échelle en x et en y partout. */
 .courbe-svg {
   width: 100%;
-  aspect-ratio: 1000 / 260;
+  aspect-ratio: 1000 / 300;
   overflow: visible;
 }
 
@@ -1118,24 +1118,17 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   vector-effect: non-scaling-stroke;
 }
 
+/* Remplissage sous chaque courbe (degrade couleur -> transparent) : donne
+   une masse visuelle a la tendance au lieu d'un simple trait fin. */
+.courbe-aire {
+  pointer-events: none;
+}
+
 .courbe-ligne {
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
   stroke-linecap: round;
-}
-
-.courbe-point {
-  cursor: default;
-  transition: r .15s;
-}
-.courbe-point:hover { r: 5.5; }
-
-/* Hitbox invisible, bien plus large que le trait : permet de savoir quelle
-   courbe on regarde en survolant n'importe où le long de la ligne, pas
-   seulement pile sur un point. */
-.courbe-zone-survol {
-  cursor: default;
-  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .courbe-axe {
@@ -1144,10 +1137,43 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   font-size: 11.5px;
 }
 
+/* Valeurs de l'axe Y (a gauche de chaque ligne de grille) : meme style que
+   l'axe X mais alignees a droite sur la grille. */
+.courbe-axe-y {
+  fill: var(--txt3);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+
 .courbe-label {
   font-family: var(--sans);
   font-size: 11.5px;
   font-weight: 700;
+}
+
+/* Curseur de survol synchronise : ligne verticale + point par serie,
+   caches par defaut (opacity 0 pose dans le markup), affiches par le JS
+   au survol de la zone transparente ci-dessous. */
+.courbe-curseur-ligne {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  transition: opacity .1s;
+}
+
+.courbe-curseur-point {
+  stroke: var(--fond);
+  stroke-width: 1.5;
+  pointer-events: none;
+  transition: opacity .1s;
+}
+
+/* Zone transparente couvrant toute la surface du graphique : permet de
+   savoir quel jour on regarde en survolant n'importe ou dans le cadre, pas
+   seulement pile sur un point. */
+.courbe-survol {
+  cursor: default;
 }
 
 /* ---------- Tableau ---------- */
