@@ -1941,7 +1941,12 @@ const TRACK_METRIQUES = {
   },
 };
 
-function trackClassement(valeurs) {
+// vide-type pour une valeur UTM qui n'existait pas encore sur la période
+// précédente (pas de ligne du tout pour ce nom-là) : traité comme 0, pas
+// comme "pas de donnée" — "cette source est apparue" est une info en soi.
+const TRACK_VIDE = { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 };
+
+function trackClassement(valeurs, parValeurPrec) {
   const cible = document.getElementById("tracking-classement");
   if (!cible) return;
 
@@ -1968,24 +1973,31 @@ function trackClassement(valeurs) {
     ${v.conclu > 0 ? `<span class="bulle-pied">${Math.round((v.ventes / v.conclu) * 100)} % de closing · ${Math.round((v.present / v.conclu) * 100)} % de présence</span>` : ""}`;
 
   cible.innerHTML = classe
-    .map(
-      ([nom, val, secondaire, v], i) => `
+    .map(([nom, val, secondaire, v], i) => {
+      // Écart vs la même valeur UTM sur la période précédente — c'est ici,
+      // pas sur les cartes globales, que la comparaison a un sens : elle
+      // porte bien sur la dimension active (ex: "Instagram ↑ 18 %").
+      const ecart = parValeurPrec
+        ? ecartDe(val, def.valeur(parValeurPrec[nom] || TRACK_VIDE), "track")
+        : null;
+
+      return `
       <div class="classement-ligne"${info(bulle(nom, v))}>
         <span class="classement-rang">${i + 1}</span>
         <span class="classement-nom">${nom}</span>
         <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
         <div class="classement-chiffres">
-          <span class="classement-valeur">${def.format(val)}</span>
+          <span class="classement-valeur">${def.format(val)}${ecart ? `<span class="ecart-inline ${ecart.classe}">${ecart.texte}</span>` : ""}</span>
           ${secondaire ? `<span class="classement-secondaire">${secondaire}</span>` : ""}
         </div>
-      </div>`
-    )
+      </div>`;
+    })
     .join("");
 
   brancherInfobulles(cible);
 }
 
-function trackCamemberts(valeurs) {
+function trackCamemberts(valeurs, parValeurPrec) {
   const cible = document.getElementById("tracking-camemberts");
   if (!cible) return;
 
@@ -1994,9 +2006,16 @@ function trackCamemberts(valeurs) {
   const noms = valeurs.map(([nom]) => nom).sort();
   const couleur = Object.fromEntries(noms.map((n, i) => [n, PALETTE[i % PALETTE.length]]));
 
+  // Même principe que le classement : l'écart affiché sur chaque part vise
+  // la valeur UTM de cette part-là, vs la période précédente — pas un total
+  // global qui ne dit rien sur la répartition.
   const partsPour = (champVal) =>
     valeurs
-      .map(([nom, v]) => [nom, v[champVal], couleur[nom]])
+      .map(([nom, v]) => {
+        const ecart = parValeurPrec ? ecartDe(v[champVal], (parValeurPrec[nom] || TRACK_VIDE)[champVal], "track") : null;
+        const badge = ecart ? `<span class="ecart-inline ${ecart.classe}">${ecart.texte}</span>` : null;
+        return [nom, v[champVal], couleur[nom], badge];
+      })
       .filter(([, val]) => val > 0)
       .sort((a, b) => b[1] - a[1]);
 
@@ -2071,8 +2090,14 @@ function vueTracking() {
   ].join("");
   brancherInfobulles(cartesCible);
 
-  trackClassement(valeurs);
-  trackCamemberts(valeurs);
+  // Même agrégation que parValeur, mais sur la période précédente, pour
+  // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
+  // classement et les camemberts (pas juste un total global comme sur les
+  // cartes ci-dessus).
+  const parValeurPrec = precedentes ? trackAgreger(champ, precedentes.leads, precedentes.rdv) : null;
+
+  trackClassement(valeurs, parValeurPrec);
+  trackCamemberts(valeurs, parValeurPrec);
 
   // Les cartes/classement/camemberts ci-dessus viennent d'être reconstruits
   // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
