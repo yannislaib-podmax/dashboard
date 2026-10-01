@@ -660,8 +660,22 @@ function disque(titre, parts, format) {
      <span>Part du total<b>${Math.round((valeur / total) * 100)} %</b></span>
      ${second ? `<span class="bulle-pied">${second}</span>` : ""}`;
 
+  // Au-delà de 10 valeurs (courant sur une dimension UTM à forte cardinalité
+  // comme Content ou Campagne) : la légende ET l'anneau lui-même devenaient
+  // illisibles (plein de tranches fines indiscernables). On plafonne les deux
+  // — l'anneau agrège le surplus dans une tranche "Autres", la légende le
+  // garde en détail derrière un "voir plus".
+  const LIMITE_LEGENDE = 10;
+  const visiblesParts = parts.slice(0, LIMITE_LEGENDE);
+  const masquees = parts.slice(LIMITE_LEGENDE);
+  const sommeAutres = masquees.reduce((s, p) => s + p[1], 0);
+  const partsArc = masquees.length
+    ? [...visiblesParts, [`Autres (${masquees.length} valeurs)`, sommeAutres, "#8895A7", null]]
+    : visiblesParts;
+  const iAutres = LIMITE_LEGENDE; // index de la tranche "Autres" dans partsArc/arcs
+
   let cumul = 0;
-  const arcs = parts
+  const arcs = partsArc
     .map((p, i) => {
       const pct = (p[1] / total) * 100;
       const arc = `<circle class="part" data-i="${i}"${info(bulle(p))} cx="21" cy="21" r="15.915" fill="none"
@@ -680,21 +694,19 @@ function disque(titre, parts, format) {
         <span class="montant">${format(p[1])}</span>
       </div>`;
 
-  // Au-delà de 10 valeurs (courant sur une dimension UTM à forte cardinalité
-  // comme Content ou Campagne), la légende déborde et devient illisible :
-  // on affiche les 10 premières, le reste derrière un "voir plus".
-  const LIMITE_LEGENDE = 10;
-  const visibles = parts.slice(0, LIMITE_LEGENDE).map(ligne).join("");
-  const masquees = parts.slice(LIMITE_LEGENDE);
+  const visibles = visiblesParts.map(ligne).join("");
 
+  // Les lignes masquées n'ont pas de tranche individuelle dans l'anneau (elles
+  // sont fondues dans "Autres") : leur survol pointe toutes vers cette même
+  // tranche agrégée, pas vers un index inexistant.
   const legende =
     visibles +
     (masquees.length
-      ? `<div class="parts-plus" hidden>${masquees.map((p, i) => ligne(p, i + LIMITE_LEGENDE)).join("")}</div>
+      ? `<div class="parts-plus" hidden>${masquees.map((p) => ligne(p, iAutres)).join("")}</div>
          <button type="button" class="parts-voir-plus" data-n="${masquees.length}">Voir ${masquees.length} de plus</button>`
       : "");
 
-  const centres = parts
+  const centres = partsArc
     .map((p) => JSON.stringify({ v: format(p[1]), n: Math.round((p[1] / total) * 100) + " %" }))
     .join(",");
 
@@ -2177,19 +2189,23 @@ function trackCourbe(champ, leads, rdv, valeurs) {
   const max = Math.max(1, ...series.flatMap((s) => s.points));
 
   // Marge de droite plus large que les autres : c'est là que vient s'écrire
-  // le libellé de fin de ligne (nom + dernière valeur), pour identifier
-  // chaque courbe sans avoir à survoler ou à faire l'aller-retour avec la
-  // légende du dessus.
-  const L = 1000, H = 260, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 8, M_DROITE = 118;
+  // le nom de fin de ligne. Marge de gauche élargie pour loger les valeurs
+  // de l'axe Y (sans elles, la grille ne donne aucune échelle concrète).
+  const L = 1000, H = 300, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 46, M_DROITE = 108;
   const largeurUtile = L - M_GAUCHE - M_DROITE;
   const hauteurUtile = H - M_HAUT - M_BAS;
   const x = (i) => (blocs.length > 1 ? M_GAUCHE + (i * largeurUtile) / (blocs.length - 1) : M_GAUCHE + largeurUtile / 2);
   const y = (v) => M_HAUT + hauteurUtile - (v / max) * hauteurUtile;
 
+  // Grille + échelle : sans les valeurs à gauche, une courbe ne dit rien de
+  // la tendance réelle (de combien à combien ?) — chaque ligne de grille
+  // porte maintenant sa valeur, formatée comme la métrique active.
   const grille = [0, 0.25, 0.5, 0.75, 1]
     .map((t) => {
       const yy = (M_HAUT + hauteurUtile * (1 - t)).toFixed(1);
-      return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille" />`;
+      const valeurAxe = def.format(Math.round(max * t));
+      return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille" />
+        <text x="${M_GAUCHE - 10}" y="${yy}" class="courbe-axe-y" text-anchor="end" dominant-baseline="middle">${valeurAxe}</text>`;
     })
     .join("");
 
@@ -2200,36 +2216,72 @@ function trackCourbe(champ, leads, rdv, valeurs) {
     .map((b, i) => (i % PAS_AXE === 0 || i === blocs.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" class="courbe-axe" text-anchor="middle">${libellePeriodeEtendu(b, GRANULARITE_TRACKING)}</text>` : ""))
     .join("");
 
-  // Courbe lissée (Catmull-Rom → Bézier cubique) au lieu de segments droits
-  // entre points — une vraie courbe, pas des lignes brisées qui zigzaguent.
+  // Courbe lissée par interpolation monotone (Hermite cubique, méthode
+  // Fritsch-Carlson) plutôt que Catmull-Rom : Catmull-Rom dépasse les valeurs
+  // réelles entre deux points (il "fait des collines" même entre deux zéros
+  // dès qu'un pic est à proximité), ce qui rendait le graphique trompeur et
+  // illisible sur des séries à beaucoup de zéros. La version monotone ne
+  // dépasse jamais le min/max des deux points qu'elle relie.
   const cheminLisse = (pts) => {
-    if (pts.length < 2) return "";
-    if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
-    let d = `M${pts[0][0]},${pts[0][1]}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i === 0 ? 0 : i - 1];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
-      const c1x = (p1[0] + (p2[0] - p0[0]) / 6).toFixed(1);
-      const c1y = (p1[1] + (p2[1] - p0[1]) / 6).toFixed(1);
-      const c2x = (p2[0] - (p3[0] - p1[0]) / 6).toFixed(1);
-      const c2y = (p2[1] - (p3[1] - p1[1]) / 6).toFixed(1);
-      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+    const n = pts.length;
+    if (n < 2) return "";
+    if (n === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+
+    const dx = [];
+    const d = []; // pente de chaque segment
+    for (let i = 0; i < n - 1; i++) {
+      dx.push(pts[i + 1][0] - pts[i][0]);
+      d.push((pts[i + 1][1] - pts[i][1]) / (dx[i] || 1));
     }
-    return d;
+
+    const m = [d[0]];
+    for (let i = 1; i < n - 1; i++) m.push((d[i - 1] + d[i]) / 2);
+    m.push(d[n - 2]);
+
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) {
+        m[i] = 0;
+        m[i + 1] = 0;
+        continue;
+      }
+      const a = m[i] / d[i];
+      const b = m[i + 1] / d[i];
+      if (a < 0) m[i] = 0;
+      if (b < 0) m[i + 1] = 0;
+      const s2 = a * a + b * b;
+      if (s2 > 9) {
+        const tau = 3 / Math.sqrt(s2);
+        m[i] = tau * a * d[i];
+        m[i + 1] = tau * b * d[i];
+      }
+    }
+
+    let chemin = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < n - 1; i++) {
+      const c1x = (pts[i][0] + dx[i] / 3).toFixed(1);
+      const c1y = (pts[i][1] + (m[i] * dx[i]) / 3).toFixed(1);
+      const c2x = (pts[i + 1][0] - dx[i] / 3).toFixed(1);
+      const c2y = (pts[i + 1][1] - (m[i + 1] * dx[i]) / 3).toFixed(1);
+      chemin += ` C${c1x},${c1y} ${c2x},${c2y} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+    }
+    return chemin;
   };
 
   const lignesSvg = series
     .map((s) => {
       const pts = s.points.map((v, i) => [Number(x(i).toFixed(1)), Number(y(v).toFixed(1))]);
+      const trace = cheminLisse(pts);
       const points = s.points
         .map((v, i) => {
           const bulle = `<strong>${s.nom}</strong><span>${libellePeriodeEtendu(blocs[i], GRANULARITE_TRACKING)}<b>${def.format(v)}</b></span>`;
           return `<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="3.5" fill="${s.couleur}" class="courbe-point"${info(bulle)}></circle>`;
         })
         .join("");
-      return `<path d="${cheminLisse(pts)}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />${points}`;
+      // Zone de survol invisible, bien plus large que le trait visible : sans
+      // elle, il fallait viser pile un point pour savoir quelle ligne on
+      // regarde. Ici toute la longueur de la courbe répond, avec le nom.
+      const zoneSurvol = `<path d="${trace}" fill="none" stroke="${s.couleur}" stroke-width="16" opacity="0" class="courbe-zone-survol"${info(`<strong>${s.nom}</strong>`)}></path>`;
+      return `${zoneSurvol}<path d="${trace}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />${points}`;
     })
     .join("");
 

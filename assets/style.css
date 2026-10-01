@@ -1130,6 +1130,14 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 .courbe-point:hover { r: 5.5; }
 
+/* Hitbox invisible, bien plus large que le trait : permet de savoir quelle
+   courbe on regarde en survolant n'importe où le long de la ligne, pas
+   seulement pile sur un point. */
+.courbe-zone-survol {
+  cursor: default;
+  vector-effect: non-scaling-stroke;
+}
+
 .courbe-axe {
   fill: var(--txt3);
   font-family: var(--sans);
