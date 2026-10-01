@@ -493,8 +493,16 @@ function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec) {
       const avant = bases[i];
       const milieu = ((x(i - 1) + x(i)) / 2 / L) * 100;
 
-      if (!avant) {
-        return `<div class="taux" style="left:${milieu}%"><span class="muet">—</span></div>`;
+      // Pas de % affiché sur "Rendez-vous pris → RDV conclus" : ce taux
+      // mélange les RDV encore "Confirmé" (pas encore passés, pas un souci)
+      // et les vrais annulés (un souci) — contre-intuitif et pas un signal
+      // de pilotage fiable. Le vrai signal isolé est la carte "Taux
+      // d'annulation" plus haut. Cette étape garde son volume dans
+      // l'entonnoir (nécessaire pour la base du taux suivant), juste sans %.
+      if (!avant || e.cle === "rendezVousConclus") {
+        return `<div class="taux" style="left:${milieu}%"${
+          e.cle === "rendezVousConclus" ? info(`<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong><span class="bulle-pied">Mélange RDV à venir et annulés — voir le Taux d'annulation plus haut.</span>`) : ""
+        }><span class="muet">—</span></div>`;
       }
 
       const t = Math.round((valeurs[i] / avant) * 100);
