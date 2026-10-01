@@ -946,6 +946,14 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .disque-centre {
   position: absolute;
   inset: 0;
+  /* Largeur/hauteur calées sur le "trou" réel de l'anneau (viewBox 42, rayon
+     15.915, épaisseur de trait 6.5 => trou ≈ 60% de l'enveloppe), centrées
+     via margin:auto + inset:0. Sans ça le texte (ex. un montant en euros
+     long) débordait visuellement par-dessus l'anneau au lieu de rester
+     dedans. */
+  width: 60%;
+  height: 60%;
+  margin: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -954,12 +962,16 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   pointer-events: none;
 }
 .c-valeur {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 900;
   letter-spacing: -0.025em;
   color: var(--blanc);
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1.15;
+  /* Intl.NumberFormat("fr-FR") insère des espaces insécables dans les
+     montants ("45 230 €") : sans overflow-wrap, un gros total ne pouvait
+     jamais retourner à la ligne et débordait du cercle. */
+  overflow-wrap: anywhere;
 }
 .c-nom {
   font-size: 11px;

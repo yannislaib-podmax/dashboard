@@ -794,7 +794,23 @@ function camembertsConversion(lignes) {
     ["Ventes", v.ventes, TEINTES_PERTE.vente, null],
   ].filter(([, valeur]) => valeur > 0);
 
-  cible.innerHTML = [disque("Où la chaîne se perd", pertes, nombre), camembert("Ventes par canal", lignes, "ventes", nombre)].join("");
+  // Pertes par canal : combien de leads, canal par canal, n'ont finalement
+  // abouti à aucune vente. Complète le camembert de gauche (QUELLE étape fait
+  // le plus perdre) par le QUEL canal fait le plus perdre — contrairement à
+  // "Ventes par canal" (retiré), qui montrait une réussite, pas une perte,
+  // et n'avait donc pas sa place dans une section "Où ça se perd".
+  const parCanal = {};
+  lignes.forEach((l) => {
+    const c = l.canal || "Inconnu";
+    const perteLigne = Math.max(0, (l.leads || 0) - (l.ventes || 0));
+    parCanal[c] = (parCanal[c] || 0) + perteLigne;
+  });
+  const pertesParCanal = Object.entries(parCanal)
+    .filter(([, val]) => val > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([nom, valeur]) => [nom, valeur, COULEUR_CANAL[nom] || "#8895A7"]);
+
+  cible.innerHTML = [disque("Où la chaîne se perd", pertes, nombre), disque("Pertes par canal", pertesParCanal, nombre)].join("");
 
   brancherSurvol(cible);
 }
