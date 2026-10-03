@@ -3195,17 +3195,37 @@ function salesCallsClosingPrecedentes() {
 // calls Closing que le reste de l'onglet (`calls` dans vueSalesClosing : tous
 // rangs confondus, période + closer actif déjà appliqués), juste éclatée par
 // rang pour comparer le 1er call à la relance.
+//
+// Le chiffre principal (le donut) répond à UNE question précise : parmi les
+// R1 qui ont effectivement eu lieu (présents), combien repartent en relance
+// R2+ ? Un R1 non honoré n'a pas eu de conversation, il ne peut pas "repartir"
+// en R2 au sens d'un 2e entretien — donc la base n'est PAS tous les R1
+// bookés, seulement les R1 présents. On rapproche par contact (un même lead
+// peut avoir plusieurs lignes de call), pas par simple comptage de lignes.
 function salesStatsR1R2(calls) {
   const r1 = calls.filter((c) => c.rangR === 1);
   const r2 = calls.filter((c) => c.rangR > 1);
+  const r1Presents = r1.filter((c) => c.present);
+
   const conclusR1 = somme(r1, "conclu");
   const conclusR2 = somme(r2, "conclu");
-  const honoresR1 = somme(r1, "present");
+  const honoresR1 = r1Presents.length;
   const honoresR2 = somme(r2, "present");
+
+  const contactsR1Presents = new Set(r1Presents.map((c) => c.contactId).filter((id) => id != null));
+  const contactsR2 = new Set(r2.map((c) => c.contactId).filter((id) => id != null));
+  const nbR1PresentsQuiRepartent = [...contactsR1Presents].filter((id) => contactsR2.has(id)).length;
+
   return {
     nbR1: r1.length,
     nbR2: r2.length,
-    tauxRelance: ratio(r2.length, r1.length),
+    nbR1Presents: contactsR1Presents.size,
+    nbR1PresentsQuiRepartent,
+    tauxRelance: ratio(nbR1PresentsQuiRepartent, contactsR1Presents.size),
+    conclusR1,
+    conclusR2,
+    honoresR1,
+    honoresR2,
     presenceR1: ratio(honoresR1, conclusR1),
     presenceR2: ratio(honoresR2, conclusR2),
     closingR1: ratio(somme(r1, "vente"), honoresR1),
@@ -3214,9 +3234,13 @@ function salesStatsR1R2(calls) {
 }
 
 // Rendu "Relation R1/R2" : un donut pour le chiffre qui frappe (la part de R1
-// qui repart en relance) + deux paires de barres pour comparer présence et
-// closing entre le 1er call et la relance — même vocabulaire de couleur que
-// le reste du dashboard (bleu = R1, magenta = relance).
+// PRÉSENTS qui repart en relance) + deux paires de barres pour comparer
+// présence et closing entre le 1er call et la relance — même vocabulaire de
+// couleur que le reste du dashboard (bleu = R1, magenta = relance). Chaque
+// chiffre est sourcé (base précisée en note + bulle au survol) pour ne pas
+// laisser place à l'interprétation.
+const SEUIL_FIABILITE_R1R2 = 10;
+
 function salesGraphR1R2(cibleId, s) {
   const cible = document.getElementById(cibleId);
   if (!cible) return;
@@ -3226,6 +3250,8 @@ function salesGraphR1R2(cibleId, s) {
     return;
   }
 
+  const fragile = (base) => (base > 0 && base < SEUIL_FIABILITE_R1R2 ? " · trop peu pour conclure" : "");
+
   const RAYON = 64;
   const CIRCONFERENCE = 2 * Math.PI * RAYON;
   const taux = s.tauxRelance || 0;
@@ -3233,15 +3259,33 @@ function salesGraphR1R2(cibleId, s) {
   const reste = (CIRCONFERENCE - taux * CIRCONFERENCE).toFixed(1);
   const idDegrade = `degrade-r1r2-${cibleId}`;
 
-  const barre = (val, classe) => `
-    <div class="r1r2-barre-ligne">
-      <div class="r1r2-piste-barre"><div class="r1r2-barre ${classe}" style="width:${val === null ? 0 : Math.max(2, Math.round(val * 100))}%"></div></div>
-      <span class="r1r2-valeur">${val === null ? "—" : pourcent(val)}</span>
-    </div>`;
+  const bulleDonut = `
+    <strong>Taux de relance</strong>
+    <span>R1 présents (honorés)<b>${nombre(s.nbR1Presents)}</b></span>
+    <span>Dont repartis en R2+<b>${nombre(s.nbR1PresentsQuiRepartent)}</b></span>
+    <span class="bulle-pied">Base : R1 honorés uniquement — un R1 non honoré n'a pas eu lieu${fragile(s.nbR1Presents)}</span>`;
+
+  // `note` : phrase courte sous chaque barre qui précise la base du %, pour
+  // qu'un chiffre isolé (ex: "100 %") ne soit jamais lu hors contexte.
+  const barre = (val, classe, base, libelleBase) => {
+    const pct = val === null ? 0 : Math.max(2, Math.round(val * 100));
+    const bulle = `
+      <strong>${classe === "r1" ? "R1 — 1er call" : "R2+ — relance"}</strong>
+      <span>Taux<b>${val === null ? "—" : pourcent(val)}</b></span>
+      <span>Base (${libelleBase})<b>${nombre(base)}</b></span>`;
+    return `
+      <div class="r1r2-barre-bloc">
+        <div class="r1r2-barre-ligne"${info(bulle)}>
+          <div class="r1r2-piste-barre"><div class="r1r2-barre ${classe}" style="width:${pct}%"></div></div>
+          <span class="r1r2-valeur">${val === null ? "—" : pourcent(val)}</span>
+        </div>
+        <div class="r1r2-note">${base === 0 ? `aucun${classe === "r1" ? " R1" : "e relance"} ${libelleBase}` : `sur ${nombre(base)} ${libelleBase}${fragile(base)}`}</div>
+      </div>`;
+  };
 
   cible.innerHTML = `
     <div class="r1r2-wrap">
-      <div class="r1r2-donut">
+      <div class="r1r2-donut"${info(bulleDonut)}>
         <svg viewBox="0 0 160 160">
           <defs>
             <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="1">
@@ -3254,26 +3298,30 @@ function salesGraphR1R2(cibleId, s) {
         </svg>
         <div class="r1r2-donut-centre">
           <span class="r1r2-donut-chiffre">${s.tauxRelance === null ? "—" : pourcent(s.tauxRelance)}</span>
-          <span class="r1r2-donut-label">des R1 repartent en R2</span>
+          <span class="r1r2-donut-label">des R1 présents repartent en R2</span>
+          <span class="r1r2-donut-fraction">${nombre(s.nbR1PresentsQuiRepartent)} sur ${nombre(s.nbR1Presents)}</span>
         </div>
       </div>
       <div class="r1r2-compare">
         <div class="r1r2-legende">
-          <span><i class="r1"></i>R1 — 1er call (${nombre(s.nbR1)})</span>
+          <span><i class="r1"></i>R1 — 1er call (${nombre(s.nbR1)} bookés, ${nombre(s.honoresR1)} présents)</span>
           <span><i class="r2"></i>R2+ — relance (${nombre(s.nbR2)})</span>
         </div>
         <div class="r1r2-metrique">
           <div class="r1r2-metrique-titre">Taux de présence</div>
-          ${barre(s.presenceR1, "r1")}
-          ${barre(s.presenceR2, "r2")}
+          ${barre(s.presenceR1, "r1", s.conclusR1, "R1 conclus (honoré ou no-show)")}
+          ${barre(s.presenceR2, "r2", s.conclusR2, "relances conclues")}
         </div>
         <div class="r1r2-metrique">
           <div class="r1r2-metrique-titre">Taux de closing</div>
-          ${barre(s.closingR1, "r1")}
-          ${barre(s.closingR2, "r2")}
+          ${barre(s.closingR1, "r1", s.honoresR1, "R1 honorés")}
+          ${barre(s.closingR2, "r2", s.honoresR2, "relances honorées")}
         </div>
       </div>
     </div>`;
+  // Pas de brancherInfobulles() ici : vueSalesClosing() le fait déjà une fois
+  // sur toute la vue après ce rendu (double-binding sinon, cf. commentaire
+  // d'origine sur apparitions()).
 }
 
 function vueSalesClosing() {
