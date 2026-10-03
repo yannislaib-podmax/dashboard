@@ -556,10 +556,10 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 .p-annules { background: #8895A7; }
 
 .b-temp-leads  { background: linear-gradient(180deg, var(--ciel), rgba(201, 166, 255, .32)); }
-.b-temp-rdv    { background: linear-gradient(180deg, #F0B95A, rgba(240, 185, 90, .32)); }
+.b-temp-rdv    { background: linear-gradient(180deg, var(--magenta), rgba(230, 25, 176, .32)); }
 .b-temp-ventes { background: linear-gradient(180deg, #6FD3A3, rgba(111, 211, 163, .32)); }
 .p-temp-leads  { background: var(--ciel); }
-.p-temp-rdv    { background: #F0B95A; }
+.p-temp-rdv    { background: var(--magenta); }
 .p-temp-ventes { background: #6FD3A3; }
 
 .toggle-granularite {
