@@ -3045,11 +3045,108 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
 }
 
 let GRANULARITE_SALES_CLOSING = "semaine";
+let SALES_CLOSING_METRIQUE = "ca"; // "booke" | "present" | "ventes" | "ca"
 
-// Valeur (CA contracté) d'un closer sur un seul bloc de temps.
-function salesValeurBlocCloser(nom, calls, bloc) {
-  const dansBloc = (c) => (c.closer || "Non renseigné") === nom && c.jour >= bloc.debut && c.jour <= bloc.fin;
-  return somme(calls.filter(dansBloc), "montant");
+// Métriques sélectionnables sur le graphique d'évolution Closing — même
+// structure que TRACK_METRIQUES (titre court pour le toggle, valeur extraite
+// d'un agrégat {rdv,conclus,honores,ventes,ca}, format d'affichage, taux
+// secondaire optionnel affiché à côté du nom et dans la bulle de survol).
+const SALES_METRIQUES = {
+  booke: {
+    libelleCourt: "Call booké",
+    valeur: (v) => v.rdv,
+    format: nombre,
+    secondaire: () => null,
+  },
+  present: {
+    libelleCourt: "Call présent",
+    valeur: (v) => v.honores,
+    format: nombre,
+    secondaire: (v) => (v.conclus > 0 ? `${Math.round((v.honores / v.conclus) * 100)} % présence` : null),
+  },
+  ventes: {
+    libelleCourt: "Ventes",
+    valeur: (v) => v.ventes,
+    format: nombre,
+    secondaire: (v) => (v.honores > 0 ? `${Math.round((v.ventes / v.honores) * 100)} % closing` : null),
+  },
+  ca: {
+    libelleCourt: "CA",
+    valeur: (v) => v.ca,
+    format: euros,
+    secondaire: () => null,
+  },
+};
+
+// Agrégat {rdv,conclus,honores,ventes,ca} d'un closer sur un seul bloc de
+// temps — base commune pour toutes les métriques du toggle ci-dessus (avant,
+// ne renvoyait que le CA, ce qui ne permettait pas de changer de métrique).
+function salesStatsBlocCloser(nom, calls, bloc) {
+  const dansBloc = calls.filter((c) => (c.closer || "Non renseigné") === nom && c.jour >= bloc.debut && c.jour <= bloc.fin);
+  return {
+    rdv: dansBloc.length,
+    conclus: somme(dansBloc, "conclu"),
+    honores: somme(dansBloc, "present"),
+    ventes: somme(dansBloc, "vente"),
+    ca: somme(dansBloc, "montant"),
+  };
+}
+
+function salesMetriqueToggleHtml(id, actif) {
+  return Object.entries(SALES_METRIQUES)
+    .map(([cle, def]) => `<button type="button" class="${actif === cle ? "actif" : ""}" data-${id}="${cle}">${def.libelleCourt}</button>`)
+    .join("");
+}
+
+// Même correctif que brancherSalesToggle : `id` contient des tirets, donc on
+// lit l'attribut brut plutôt que btn.dataset[id].
+function brancherSalesMetrique(id, getActif, onChoix, rerender) {
+  const zone = document.getElementById(id);
+  if (!zone) return;
+  zone.innerHTML = salesMetriqueToggleHtml(id, getActif());
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      onChoix(btn.getAttribute("data-" + id));
+      rerender();
+    });
+  });
+}
+
+// Agrégat complet (volumes + taux) d'un jeu de calls Closing — factorisé pour
+// être calculé identiquement sur la période actuelle et la période
+// précédente (comparaison ↑/↓ sur les cartes).
+function salesStatsCallsClosing(calls) {
+  const rdv = calls.length;
+  const conclus = somme(calls, "conclu");
+  const honores = somme(calls, "present");
+  const ventes = somme(calls, "vente");
+  const ca = somme(calls, "montant");
+  const annules = calls.filter((c) => c.statut === "Annulé").length;
+  return {
+    rdv,
+    conclus,
+    honores,
+    ventes,
+    ca,
+    annules,
+    presence: ratio(honores, conclus),
+    closing: ratio(ventes, honores),
+    annulation: ratio(annules, rdv),
+    panier: ventes > 0 ? ca / ventes : null,
+  };
+}
+
+// Calls Closing de la période précédente (même filtre closer), pour les
+// badges ↑/↓ sur les cartes — `null` si la comparaison est désactivée
+// (COMPARAISON === "aucune").
+function salesCallsClosingPrecedentes() {
+  const plage = plagePrecedente();
+  if (!plage) return null;
+  const [a, b] = plage;
+  return SALES_CALLS.filter(
+    (c) => c.typeAppel === "Closing" && c.jour && c.jour >= a && c.jour <= b && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+  );
 }
 
 function vueSalesClosing() {
@@ -3066,21 +3163,40 @@ function vueSalesClosing() {
   );
 
   const calls = salesCallsClosing();
-  const rdv = calls.length;
-  const conclus = somme(calls, "conclu");
-  const honores = somme(calls, "present");
-  const ventes = somme(calls, "vente");
-  const ca = somme(calls, "montant");
-  const presence = ratio(honores, conclus);
-  const closing = ratio(ventes, honores);
-  const panier = ventes > 0 ? ca / ventes : null;
+  const callsPrec = salesCallsClosingPrecedentes();
+  const s = salesStatsCallsClosing(calls);
+  const sPrec = callsPrec ? salesStatsCallsClosing(callsPrec) : null;
+  const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   document.getElementById("sales-closing-cartes").innerHTML = [
-    carte("RDV bookés", nombre(rdv), "calls Closing sur la période"),
-    carte("Taux de présence", presence === null ? "—" : pourcent(presence), conclus ? `sur ${nombre(conclus)} conclu${conclus > 1 ? "s" : ""}` : "aucun call conclu"),
-    carte("Taux de closing", closing === null ? "—" : pourcent(closing), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré"),
-    carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente"),
-    carte("Panier moyen", panier === null ? "—" : euros(panier), "par vente"),
+    carte("RDV bookés", nombre(rdv), "calls Closing sur la période", sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
+    carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
+    carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
+    carte("Panier moyen", panier === null ? "—" : euros(panier), "par vente", panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null),
+  ].join("");
+
+  // Cartes-etroit — même traitement que #qualite en Performance : taux
+  // d'annulation (base = tous les RDV pris), présence (base = conclus) et
+  // closing (base = honorés), comparés à la période précédente en points.
+  document.getElementById("sales-closing-cartes-etroit").innerHTML = [
+    carte(
+      "Taux d'annulation",
+      rdv === 0 ? "—" : pourcent(s.annulation),
+      rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdv)} rendez-vous pris`,
+      s.annulation !== null && sPrec && sPrec.annulation !== null ? ecartPoints(s.annulation, sPrec.annulation, true) : null
+    ),
+    carte(
+      "Taux de présence",
+      s.presence === null ? "—" : pourcent(s.presence),
+      conclus === 0 ? "aucun call conclu sur la période" : `sur ${nombre(conclus)} conclu${conclus > 1 ? "s" : ""}`,
+      s.presence !== null && sPrec && sPrec.presence !== null ? ecartPoints(s.presence, sPrec.presence) : null
+    ),
+    carte(
+      "Taux de closing",
+      s.closing === null ? "—" : pourcent(s.closing),
+      honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}`,
+      s.closing !== null && sPrec && sPrec.closing !== null ? ecartPoints(s.closing, sPrec.closing) : null
+    ),
   ].join("");
 
   entonnoir(
@@ -3142,17 +3258,32 @@ function vueSalesClosing() {
 
   brancherSurvol(document.getElementById("sales-closing-camemberts"));
 
-  // Évolution du CA contracté par closer dans le temps — top 5, même couleur
-  // que la table/les camemberts ci-dessus pour une lecture cohérente.
+  // Évolution de la métrique active par closer dans le temps — top 5, même
+  // couleur que la table/les camemberts ci-dessus pour une lecture cohérente.
+  // Toggle Call booké/Call présent/Ventes/CA (comme le classement Tracking) :
+  // le taux secondaire (présence/closing) s'affiche dans la bulle et en bout
+  // de ligne via courbeMultiSeries.
+  brancherSalesMetrique(
+    "sales-closing-metrique",
+    () => SALES_CLOSING_METRIQUE,
+    (v) => (SALES_CLOSING_METRIQUE = v),
+    vueSalesClosing
+  );
+
+  const metriqueDef = SALES_METRIQUES[SALES_CLOSING_METRIQUE];
   const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
   const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
   const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
-  const seriesCloser = top5Closers.map((nom) => ({
-    nom,
-    couleur: couleurCloser[nom],
-    points: blocsCloser.map((b) => salesValeurBlocCloser(nom, calls, b)),
-  }));
-  courbeMultiSeries("sales-closing-courbe", blocsCloser, seriesCloser, euros, GRANULARITE_SALES_CLOSING, (g) => {
+  const seriesCloser = top5Closers.map((nom) => {
+    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, calls, b));
+    return {
+      nom,
+      couleur: couleurCloser[nom],
+      points: statsParBloc.map((st) => metriqueDef.valeur(st)),
+      secondaires: statsParBloc.map((st) => metriqueDef.secondaire(st)),
+    };
+  });
+  courbeMultiSeries("sales-closing-courbe", blocsCloser, seriesCloser, metriqueDef.format, GRANULARITE_SALES_CLOSING, (g) => {
     GRANULARITE_SALES_CLOSING = g;
     vueSalesClosing();
   });
@@ -3173,11 +3304,23 @@ const salesCallsDiagFamille = (famille) =>
     (c) => c.typeAppel === "Diagnostic" && c.famille === famille && dansPeriode(c) && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
   );
 
+// Même famille de calls Diagnostic, mais sur la période précédente (↑/↓ sur
+// les cartes) — `null` si la comparaison est désactivée.
+function salesCallsDiagFamillePrecedents(famille) {
+  const plage = plagePrecedente();
+  if (!plage) return null;
+  const [a, b] = plage;
+  return SALES_CALLS.filter(
+    (c) => c.typeAppel === "Diagnostic" && c.famille === famille && c.jour && c.jour >= a && c.jour <= b && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
+  );
+}
+
 // Rend un bloc Famille (cartes + entonnoir + table + camemberts) pour la
 // famille donnée. `libelleTaux`/`libelleAppels` adaptent le vocabulaire des
 // cartes à la famille (transfo vs rattrapage) sans dupliquer la logique.
 function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux) {
   const diag = salesCallsDiagFamille(famille);
+  const diagPrec = salesCallsDiagFamillePrecedents(famille);
   const contactsClosing = salesContactsAvecClosing();
   const honores = somme(diag, "present");
   const presence = ratio(honores, diag.length);
@@ -3186,10 +3329,20 @@ function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux
   const transformes = [...contactsDiagUniques].filter((id) => contactsClosing.has(id)).length;
   const taux = ratio(transformes, contactsDiagUniques.size);
 
+  // Même calcul sur la période précédente, pour les badges ↑/↓.
+  let honoresPrec = null;
+  let tauxPrec = null;
+  if (diagPrec) {
+    honoresPrec = somme(diagPrec, "present");
+    const contactsDiagUniquesPrec = new Set(diagPrec.map((c) => c.contactId).filter((id) => id != null));
+    const transformesPrec = [...contactsDiagUniquesPrec].filter((id) => contactsClosing.has(id)).length;
+    tauxPrec = ratio(transformesPrec, contactsDiagUniquesPrec.size);
+  }
+
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte(libelleAppels, nombre(diag.length), "sur la période"),
-    carte("Honorés", nombre(honores), presence === null ? "—" : `${pourcent(presence)} de présence`),
-    carte(libelleTaux, taux === null ? "—" : pourcent(taux), contactsDiagUniques.size ? `${nombre(transformes)} sur ${nombre(contactsDiagUniques.size)}` : "aucun appel sur la période"),
+    carte(libelleAppels, nombre(diag.length), "sur la période", diagPrec ? ecartDe(diag.length, diagPrec.length, "salesDiag") : null),
+    carte("Honorés", nombre(honores), presence === null ? "—" : `${pourcent(presence)} de présence`, diagPrec ? ecartDe(honores, honoresPrec, "salesHonores") : null),
+    carte(libelleTaux, taux === null ? "—" : pourcent(taux), contactsDiagUniques.size ? `${nombre(transformes)} sur ${nombre(contactsDiagUniques.size)}` : "aucun appel sur la période", taux !== null && tauxPrec !== null ? ecartPoints(taux, tauxPrec) : null),
   ].join("");
 
   entonnoir(

@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=24">
+<link rel="stylesheet" href="/assets/style.css?v=25">
 </head>
 <body>
 
@@ -271,13 +271,15 @@
     <div class="toggle-granularite" id="sales-closing-filtre"></div>
 
     <div id="sales-closing-cartes" class="cartes"></div>
+    <div class="cartes cartes-etroit" id="sales-closing-cartes-etroit"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <p class="sous-titre rv">RDV bookés → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
     <div class="glass entonnoir rv" id="sales-closing-entonnoir"></div>
 
     <h3 class="sous-section">Évolution</h3>
-    <p class="sous-titre rv">CA contracté par closer dans le temps — le top 5 sur la période.</p>
+    <p class="sous-titre rv">Change la métrique pour voir l'évolution par closer sur un autre indicateur, taux de présence/closing inclus.</p>
+    <div class="toggle-granularite" id="sales-closing-metrique"></div>
     <div class="glass courbe-carte rv" id="sales-closing-courbe"></div>
 
     <h3 class="sous-section">Par closer</h3>
@@ -404,6 +406,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=38"></script>
+<script src="/assets/app.js?v=39"></script>
 </body>
 </html>
