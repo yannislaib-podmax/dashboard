@@ -444,7 +444,7 @@ function vueConversion(lignes, precedentes) {
   // nécessaire avant que "RDV conclus" n'existe comme marche à part entière).
   const bases = (jeu, vals) => ETAPES.map((e, i) => (i === 0 ? null : vals[i - 1]));
 
-  entonnoir(ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null, {
+  entonnoir("entonnoir", ETAPES, valeurs, valeursPrec, bases(lignes, valeurs), valeursPrec ? bases(precedentes, valeursPrec) : null, {
     aVenir,
     annulesCount,
     annulationPct: annulation,
@@ -475,8 +475,8 @@ function ecartPoints(actuel, precedent, baisseEstBonne = false) {
 
 const marqueur = (e) => (e ? ` <span class="ecart-inline ${e.classe}">${e.texte}</span>` : "");
 
-function entonnoir(ETAPES, valeurs, valeursPrec, bases, basesPrec, extra = {}) {
-  const cible = document.getElementById("entonnoir");
+function entonnoir(cibleId, ETAPES, valeurs, valeursPrec, bases, basesPrec, extra = {}) {
+  const cible = document.getElementById(cibleId);
   if (!cible) return;
 
   const base = valeurs[0];
@@ -1803,6 +1803,8 @@ function rendre() {
   vueDepenses(lignes);
   vueDirection();
   vueTracking();
+  vueSalesClosing();
+  vueSalesSetting();
 
   const active = document.querySelector(".vue.active");
   if (active) {
@@ -2785,6 +2787,227 @@ function brancherTracking() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Sales Team — Closing & Setting                                     */
+/* ------------------------------------------------------------------ */
+
+let SALES_LEADS = [];
+let SALES_CALLS = [];
+let SALES_CLOSER = "tout";
+let SALES_SETTER = "tout";
+
+// Closing : calls Closing de CALL BOOKED, filtrés période + closer actif.
+const salesCallsClosing = () =>
+  SALES_CALLS.filter(
+    (c) => c.typeAppel === "Closing" && dansPeriode(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+  );
+
+// Setting : leads assignés (jour = date d'assignation, pas de capture) et
+// calls Diagnostic, filtrés période + setter actif.
+const salesLeadsSetting = () =>
+  SALES_LEADS.filter(
+    (l) => dansPeriode({ jour: l.jourAssignation }) && (SALES_SETTER === "tout" || l.setter === SALES_SETTER)
+  );
+const salesCallsDiagnostic = () =>
+  SALES_CALLS.filter(
+    (c) => c.typeAppel === "Diagnostic" && dansPeriode(c) && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
+  );
+
+function salesToggleHtml(noms, actif, attribut) {
+  return (
+    `<button type="button" class="${actif === "tout" ? "actif" : ""}" data-${attribut}="tout">Tous</button>` +
+    noms.map((n) => `<button type="button" class="${actif === n ? "actif" : ""}" data-${attribut}="${n}">${n}</button>`).join("")
+  );
+}
+
+function brancherSalesToggle(id, noms, getActif, onChoix, rerender) {
+  const zone = document.getElementById(id);
+  if (!zone) return;
+  zone.innerHTML = salesToggleHtml(noms, getActif(), id);
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      onChoix(btn.dataset[id]);
+      rerender();
+    });
+  });
+}
+
+function vueSalesClosing() {
+  const cible = document.getElementById("vue-sales-closing");
+  if (!cible) return;
+
+  const closers = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.closer).map((c) => c.closer))].sort();
+  brancherSalesToggle(
+    "sales-closing-filtre",
+    closers,
+    () => SALES_CLOSER,
+    (v) => (SALES_CLOSER = v),
+    vueSalesClosing
+  );
+
+  const calls = salesCallsClosing();
+  const rdv = calls.length;
+  const conclus = somme(calls, "conclu");
+  const honores = somme(calls, "present");
+  const ventes = somme(calls, "vente");
+  const ca = somme(calls, "montant");
+  const presence = ratio(honores, conclus);
+  const closing = ratio(ventes, honores);
+  const panier = ventes > 0 ? ca / ventes : null;
+
+  document.getElementById("sales-closing-cartes").innerHTML = [
+    carte("RDV bookés", nombre(rdv), "calls Closing sur la période"),
+    carte("Taux de présence", presence === null ? "—" : pourcent(presence), conclus ? `sur ${nombre(conclus)} conclu${conclus > 1 ? "s" : ""}` : "aucun call conclu"),
+    carte("Taux de closing", closing === null ? "—" : pourcent(closing), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré"),
+    carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente"),
+    carte("Panier moyen", panier === null ? "—" : euros(panier), "par vente"),
+  ].join("");
+
+  entonnoir(
+    "sales-closing-entonnoir",
+    [
+      { nom: "RDV bookés", cle: "rdv" },
+      { nom: "RDV conclus", cle: "conclus" },
+      { nom: "RDV honorés", cle: "honores" },
+      { nom: "Ventes", cle: "ventes" },
+    ],
+    [rdv, conclus, honores, ventes],
+    null,
+    [null, rdv, conclus, honores],
+    null
+  );
+
+  const parCloser = {};
+  calls.forEach((c) => {
+    const n = c.closer || "Non renseigné";
+    if (!parCloser[n]) parCloser[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 };
+    const p = parCloser[n];
+    p.rdv += 1;
+    p.conclus += c.conclu;
+    p.honores += c.present;
+    p.ventes += c.vente;
+    p.ca += c.montant;
+  });
+
+  const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
+
+  document.getElementById("sales-closing-table").innerHTML = lignesCloser.length
+    ? `<table>
+        <thead><tr><th>Closer</th><th>RDV bookés</th><th>Honorés</th><th>Présence</th><th>Ventes</th><th>Closing</th><th>CA contracté</th><th>Panier moyen</th></tr></thead>
+        <tbody>${lignesCloser
+          .map(
+            ([nom, p]) => `<tr>
+              <td>${nom}</td>
+              ${cellule(p.rdv)}
+              ${cellule(p.honores)}
+              <td>${p.conclus ? pourcent(p.honores / p.conclus) : "—"}</td>
+              ${cellule(p.ventes)}
+              <td>${p.honores ? pourcent(p.ventes / p.honores) : "—"}</td>
+              ${cellule(p.ca, euros)}
+              <td>${p.ventes ? euros(p.ca / p.ventes) : "—"}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
+      </table>`
+    : `<div class="vide">Pas encore de call Closing sur cette période.</div>`;
+
+  const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
+  const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
+  const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
+
+  document.getElementById("sales-closing-camemberts").innerHTML = [
+    disque("RDV bookés par closer", partsRdv, nombre),
+    disque("CA contracté par closer", partsCa, euros),
+  ].join("");
+
+  brancherSurvol(document.getElementById("sales-closing-camemberts"));
+  brancherInfobulles(cible);
+}
+
+function vueSalesSetting() {
+  const cible = document.getElementById("vue-sales-setting");
+  if (!cible) return;
+
+  const setters = [...new Set(SALES_LEADS.filter((l) => l.setter).map((l) => l.setter))].sort();
+  brancherSalesToggle(
+    "sales-setting-filtre",
+    setters,
+    () => SALES_SETTER,
+    (v) => (SALES_SETTER = v),
+    vueSalesSetting
+  );
+
+  const leads = salesLeadsSetting();
+  const diag = salesCallsDiagnostic();
+  const diagHonores = somme(diag, "present");
+  const presence = ratio(diagHonores, diag.length);
+  const conversion = ratio(diag.length, leads.length);
+
+  document.getElementById("sales-setting-cartes").innerHTML = [
+    carte("Leads assignés", nombre(leads.length), "sur la période"),
+    carte("Appels Diagnostic bookés", nombre(diag.length), conversion === null ? "—" : `${pourcent(conversion)} des leads assignés`),
+    carte("Appels Diagnostic honorés", nombre(diagHonores), presence === null ? "—" : `${pourcent(presence)} de présence`),
+  ].join("");
+
+  entonnoir(
+    "sales-setting-entonnoir",
+    [
+      { nom: "Leads assignés", cle: "leads" },
+      { nom: "Diagnostic bookés", cle: "diag" },
+      { nom: "Diagnostic honorés", cle: "honores" },
+    ],
+    [leads.length, diag.length, diagHonores],
+    null,
+    [null, leads.length, diag.length],
+    null
+  );
+
+  const parSetter = {};
+  leads.forEach((l) => {
+    const n = l.setter || "Non renseigné";
+    if (!parSetter[n]) parSetter[n] = { leads: 0, diag: 0, honores: 0 };
+    parSetter[n].leads += 1;
+  });
+  diag.forEach((c) => {
+    const n = c.setter || "Non renseigné";
+    if (!parSetter[n]) parSetter[n] = { leads: 0, diag: 0, honores: 0 };
+    parSetter[n].diag += 1;
+    parSetter[n].honores += c.present;
+  });
+
+  const lignesSetter = Object.entries(parSetter).sort((a, b) => b[1].leads - a[1].leads);
+
+  document.getElementById("sales-setting-table").innerHTML = lignesSetter.length
+    ? `<table>
+        <thead><tr><th>Setter</th><th>Leads assignés</th><th>Diagnostic bookés</th><th>Diagnostic honorés</th><th>Présence</th></tr></thead>
+        <tbody>${lignesSetter
+          .map(
+            ([nom, p]) => `<tr>
+              <td>${nom}</td>
+              ${cellule(p.leads)}
+              ${cellule(p.diag)}
+              ${cellule(p.honores)}
+              <td>${p.diag ? pourcent(p.honores / p.diag) : "—"}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
+      </table>`
+    : `<div class="vide">Pas encore de lead assigné sur cette période.</div>`;
+
+  const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
+  const partsLeads = lignesSetter.filter(([, p]) => p.leads > 0).map(([nom, p]) => [nom, p.leads, couleurSetter[nom]]);
+  const partsDiag = lignesSetter.filter(([, p]) => p.diag > 0).map(([nom, p]) => [nom, p.diag, couleurSetter[nom]]);
+
+  document.getElementById("sales-setting-camemberts").innerHTML = [
+    disque("Leads assignés par setter", partsLeads, nombre),
+    disque("Diagnostic bookés par setter", partsDiag, nombre),
+  ].join("");
+
+  brancherSurvol(document.getElementById("sales-setting-camemberts"));
+  brancherInfobulles(cible);
+}
+
+/* ------------------------------------------------------------------ */
 
 async function charger() {
   try {
@@ -2832,6 +3055,20 @@ async function charger() {
         TRACK_LEADS = donneesTracking.leads || [];
         TRACK_RDV_TOUS = donneesTracking.rdv || [];
         TRACK_RDV = TRACK_RDV_TOUS.filter((r) => r.rangR === 1);
+      }
+    } catch {
+      // Ignoré volontairement : voir commentaire ci-dessus.
+    }
+
+    // Sales Team (Closing/Setting) — même isolement que les sections ci-dessus.
+    try {
+      const reponseSales = await fetch("/api/sales-team");
+      const donneesSales = await reponseSales.json();
+      if (reponseSales.ok) {
+        SALES_LEADS = donneesSales.leads || [];
+        SALES_CALLS = donneesSales.calls || [];
+        vueSalesClosing();
+        vueSalesSetting();
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.

@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=21">
+<link rel="stylesheet" href="/assets/style.css?v=22">
 </head>
 <body>
 
@@ -49,6 +49,14 @@
       <div class="sous"><div class="sous-interieur">
         <a href="#ensemble"  data-vue="ensemble"  class="actif">Performance (cohorte)</a>
         <a href="#tracking"  data-vue="tracking">Tracking UTM</a>
+      </div></div>
+    </div>
+
+    <div class="groupe" data-groupe="sales">
+      <button type="button">Sales Team <span class="chevron">▶</span></button>
+      <div class="sous"><div class="sous-interieur">
+        <a href="#sales-closing" data-vue="sales-closing">Closing</a>
+        <a href="#sales-setting" data-vue="sales-setting">Setting</a>
       </div></div>
     </div>
 
@@ -246,6 +254,66 @@
     <div class="glass cadre-table rv" id="tracking-rapport-r"></div>
   </section>
 
+  <!-- ---------- Sales Team — Closing ---------- -->
+  <section class="vue" id="vue-sales-closing">
+    <div class="titre-vue">
+      <h1>Sales Team — Closing</h1>
+      <p class="sous-titre">Qui décroche les calls Closing, et ce que chacun rapporte.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Chaque call compte le jour du rendez-vous.</strong>
+      Les calls Diagnostic (requalification) n'apparaissent pas ici — voir
+      l'onglet Setting. Le filtre période global s'applique ; le toggle
+      ci-dessous ne fait que restreindre à un closer.
+    </p>
+
+    <div class="toggle-granularite" id="sales-closing-filtre"></div>
+
+    <div id="sales-closing-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Entonnoir</h3>
+    <p class="sous-titre rv">RDV bookés → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
+    <div class="glass entonnoir rv" id="sales-closing-entonnoir"></div>
+
+    <h3 class="sous-section">Par closer</h3>
+    <p class="sous-titre rv">Le classement se lit sur le CA contracté ; les autres colonnes donnent le détail.</p>
+    <div class="glass cadre-table rv" id="sales-closing-table"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="sales-closing-camemberts"></div>
+  </section>
+
+  <!-- ---------- Sales Team — Setting ---------- -->
+  <section class="vue" id="vue-sales-setting">
+    <div class="titre-vue">
+      <h1>Sales Team — Setting</h1>
+      <p class="sous-titre">Qui travaille les leads assignés, et ce que ça produit en rendez-vous.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Un lead compte le jour où il a été assigné au setter</strong>,
+      pas le jour où il est entré dans la base iClosed — c'est le travail du
+      setter qu'on mesure ici. Les calls Diagnostic comptent le jour du
+      rendez-vous. Le filtre période global s'applique ; le toggle ci-dessous
+      ne fait que restreindre à un setter.
+    </p>
+
+    <div class="toggle-granularite" id="sales-setting-filtre"></div>
+
+    <div id="sales-setting-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Entonnoir</h3>
+    <p class="sous-titre rv">Leads assignés → appels Diagnostic bookés → honorés, pour le périmètre sélectionné. Approximation en volume (pas un suivi lead par lead).</p>
+    <div class="glass entonnoir rv" id="sales-setting-entonnoir"></div>
+
+    <h3 class="sous-section">Par setter</h3>
+    <div class="glass cadre-table rv" id="sales-setting-table"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="sales-setting-camemberts"></div>
+  </section>
+
   <!-- ---------- Direction — Tableau de bord ---------- -->
   <section class="vue" id="vue-direction">
     <div class="titre-vue">
@@ -312,6 +380,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=35"></script>
+<script src="/assets/app.js?v=36"></script>
 </body>
 </html>
