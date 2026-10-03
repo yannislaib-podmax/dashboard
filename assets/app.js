@@ -110,6 +110,15 @@ let DERNIERS_JOURS_QUOTIDIEN = [];
 
 const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
+// Graphique "Temporalité de l'acquisition" (sous les cartes de conversion) :
+// regroupe Leads / RDV bookés / Ventes par jour de semaine, semaine du mois
+// ou mois de l'année, toutes années confondues — pour repérer des créneaux
+// structurellement plus ou moins performants (ex. pas de lead le week-end).
+let GRANULARITE_TEMPO = "jour"; // "jour" (Lun-Dim) | "semaine" (S1-S4) | "mois" (Janv-Déc)
+let DERNIERES_LIGNES_TEMPO = [];
+const JOURS_SEMAINE_LONGS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const MOIS_LONGS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+
 // Découpe une plage de dates (triées, format ISO) en blocs {debut, fin} selon
 // la granularité choisie. En semaine : tranches glissantes de 7 jours en
 // remontant depuis la plus récente (comportement historique). En mois : un
@@ -426,6 +435,8 @@ function vueConversion(lignes, precedentes) {
       );
   }
 
+  graphiqueTemporalite(lignes);
+
   // Base de chaque marche : la valeur de la marche précédente. Depuis l'ajout
   // du step "RDV conclus" (Honoré + No-show, hors RDV encore "Confirmé" à
   // venir) juste avant "Rendez-vous honorés", ce step précédent EST déjà la
@@ -679,6 +690,124 @@ function graphiqueCa(lignes) {
     GRANULARITE_CA = g;
     graphiqueCa(DERNIERES_LIGNES_CA);
   });
+
+  requestAnimationFrame(() =>
+    setTimeout(() => {
+      cible.querySelectorAll(".barre").forEach((b) => {
+        b.style.height = b.dataset.hauteur + "%";
+      });
+    }, 120)
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Temporalité de l'acquisition (jour de semaine / semaine du mois /   */
+/*  mois de l'année) — repérer les créneaux les plus performants.      */
+/* ------------------------------------------------------------------ */
+
+// Regroupe les lignes filtrées (toutes années confondues) dans les buckets
+// du mode choisi. Les buckets vides restent dans le résultat (contrairement
+// à tranches7) : un bâton à zéro, par exemple le dimanche, EST l'information
+// recherchée — il ne faut pas le faire disparaître.
+function bucketsTemporalite(lignes, mode) {
+  const ordre = mode === "jour" ? JOURS_SEMAINE_LONGS : mode === "semaine" ? ["Semaine 1", "Semaine 2", "Semaine 3", "Semaine 4"] : MOIS_LONGS;
+
+  const parBucket = {};
+  ordre.forEach((cle) => (parBucket[cle] = { cle, leads: 0, rendezVous: 0, ventes: 0 }));
+
+  lignes.forEach((l) => {
+    if (!l.jour) return;
+    const d = enDate(l.jour);
+    let cle;
+    if (mode === "jour") {
+      cle = JOURS_SEMAINE_LONGS[(d.getDay() + 6) % 7]; // getDay() : 0=dimanche -> on remet Lundi en premier
+    } else if (mode === "semaine") {
+      cle = `Semaine ${Math.min(4, Math.ceil(d.getDate() / 7))}`; // jours 29-31 rattachés à la semaine 4
+    } else {
+      cle = MOIS_LONGS[d.getMonth()];
+    }
+    const b = parBucket[cle];
+    if (!b) return;
+    b.leads += l.leads || 0;
+    b.rendezVous += l.rendezVous || 0;
+    b.ventes += l.ventes || 0;
+  });
+
+  return ordre.map((cle) => parBucket[cle]);
+}
+
+function toggleTemporaliteHtml(modeActuel) {
+  return `
+    <div class="toggle-granularite">
+      <button type="button" class="${modeActuel === "jour" ? "actif" : ""}" data-mode-tempo="jour">Jour de la semaine</button>
+      <button type="button" class="${modeActuel === "semaine" ? "actif" : ""}" data-mode-tempo="semaine">Semaine du mois</button>
+      <button type="button" class="${modeActuel === "mois" ? "actif" : ""}" data-mode-tempo="mois">Mois de l'année</button>
+    </div>`;
+}
+
+function brancherToggleTemporalite(cible, onChange) {
+  cible.querySelectorAll("[data-mode-tempo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      onChange(btn.dataset.modeTempo);
+    });
+  });
+}
+
+function graphiqueTemporalite(lignes) {
+  DERNIERES_LIGNES_TEMPO = lignes;
+
+  const cible = document.getElementById("graph-temporalite");
+  if (!cible) return;
+
+  const mode = GRANULARITE_TEMPO;
+  const blocs = bucketsTemporalite(lignes, mode);
+  const toggle = toggleTemporaliteHtml(mode);
+  const rebrancher = () =>
+    brancherToggleTemporalite(cible, (m) => {
+      GRANULARITE_TEMPO = m;
+      graphiqueTemporalite(DERNIERES_LIGNES_TEMPO);
+    });
+
+  const aucuneActivite = !blocs.some((b) => b.leads || b.rendezVous || b.ventes);
+  if (aucuneActivite) {
+    cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
+    rebrancher();
+    return;
+  }
+
+  const max = Math.max(1, ...blocs.flatMap((b) => [b.leads, b.rendezVous, b.ventes]));
+  const h = (v) => Math.round((v / max) * 100);
+
+  const legende = `
+    <div class="legende-graph">
+      <span><i class="b-temp-leads"></i>Leads</span>
+      <span><i class="b-temp-rdv"></i>RDV bookés</span>
+      <span><i class="b-temp-ventes"></i>Ventes</span>
+    </div>`;
+
+  const colonnes = blocs
+    .map((b) => {
+      const bulle = `<strong>${b.cle}</strong>
+        <span><i class="p-temp-leads"></i>Leads<b>${nombre(b.leads)}</b></span>
+        <span><i class="p-temp-rdv"></i>RDV bookés<b>${nombre(b.rendezVous)}</b></span>
+        <span><i class="p-temp-ventes"></i>Ventes<b>${nombre(b.ventes)}</b></span>`;
+      return `<div class="barre-col"${info(bulle)}>
+        <div class="zone">
+          <div class="groupe-barres">
+            <div class="barre b-temp-leads"  data-hauteur="${h(b.leads)}"></div>
+            <div class="barre b-temp-rdv"    data-hauteur="${h(b.rendezVous)}"></div>
+            <div class="barre b-temp-ventes" data-hauteur="${h(b.ventes)}"></div>
+          </div>
+        </div>
+        <div class="jour">${b.cle}</div>
+      </div>`;
+    })
+    .join("");
+
+  cible.innerHTML = toggle + legende + `<div class="histo-barres">${colonnes}</div>`;
+  brancherInfobulles(cible);
+  rebrancher();
 
   requestAnimationFrame(() =>
     setTimeout(() => {
