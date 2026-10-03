@@ -580,18 +580,25 @@ function entonnoir(cibleId, ETAPES, valeurs, valeursPrec, bases, basesPrec, extr
     })
     .join("");
 
+  // ID de dégradé unique par cible : plusieurs entonnoirs sur la même page
+  // (Performance + Sales Team Closing + Setting) avec le même id de gradient
+  // entrent en collision — le navigateur ne résout alors qu'un seul des deux
+  // <linearGradient>, et les autres entonnoirs se retrouvent avec un
+  // remplissage transparent (silhouette vide à l'intérieur).
+  const idDegrade = `degrade-entonnoir-${cibleId}`;
+
   const morceaux = [
     `<div class="entonnoir-fig">
       <div class="etiquettes">${etiquettes}</div>
       <svg class="entonnoir-svg" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none">
         <defs>
-          <linearGradient id="degrade-entonnoir" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stop-color="rgba(201,166,255,.42)"></stop>
             <stop offset="55%" stop-color="rgba(201,166,255,.24)"></stop>
             <stop offset="100%" stop-color="rgba(230,25,176,.34)"></stop>
           </linearGradient>
         </defs>
-        <path d="${silhouette}" fill="url(#degrade-entonnoir)"
+        <path d="${silhouette}" fill="url(#${idDegrade})"
           stroke="rgba(201,166,255,.42)" stroke-width="1.5"
           vector-effect="non-scaling-stroke"></path>
       </svg>
@@ -2801,17 +2808,6 @@ const salesCallsClosing = () =>
     (c) => c.typeAppel === "Closing" && dansPeriode(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 
-// Setting : leads assignés (jour = date d'assignation, pas de capture) et
-// calls Diagnostic, filtrés période + setter actif.
-const salesLeadsSetting = () =>
-  SALES_LEADS.filter(
-    (l) => dansPeriode({ jour: l.jourAssignation }) && (SALES_SETTER === "tout" || l.setter === SALES_SETTER)
-  );
-const salesCallsDiagnostic = () =>
-  SALES_CALLS.filter(
-    (c) => c.typeAppel === "Diagnostic" && dansPeriode(c) && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
-  );
-
 function salesToggleHtml(noms, actif, attribut) {
   return (
     `<button type="button" class="${actif === "tout" ? "actif" : ""}" data-${attribut}="tout">Tous</button>` +
@@ -2823,13 +2819,237 @@ function brancherSalesToggle(id, noms, getActif, onChoix, rerender) {
   const zone = document.getElementById(id);
   if (!zone) return;
   zone.innerHTML = salesToggleHtml(noms, getActif(), id);
+  // `id` contient des tirets (ex: "sales-closing-filtre") : btn.dataset[id] ne
+  // marche pas (dataset expose la version camelCase, pas la clé kebab-case
+  // brute) et renvoyait toujours undefined — c'était le même bug qu'au
+  // premier jet du toggle Tracking. On relit l'attribut directement.
   zone.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("actif")) return;
-      onChoix(btn.dataset[id]);
+      onChoix(btn.getAttribute("data-" + id));
       rerender();
     });
   });
+}
+
+// Courbe multi-séries générique (aires dégradées + curseur interactif),
+// adaptée de trackCourbe() pour être réutilisable hors Tracking UTM : même
+// rendu visuel, mais cibleId/blocs/series/format/granularité passés en
+// paramètres au lieu de dépendre des globales TRACK_*.
+function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, onGranularite) {
+  const cible = document.getElementById(cibleId);
+  if (!cible) return;
+
+  if (!series.length) {
+    cible.innerHTML = `${toggleGranulariteCourbeHtml(granulariteActuelle)}<div class="vide">Rien à tracer sur cette période.</div>`;
+    brancherToggleGranularite(cible, onGranularite);
+    return;
+  }
+
+  const max = Math.max(1, ...series.flatMap((s) => s.points));
+
+  const L = 1000, H = 300, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 46, M_DROITE = 108;
+  const largeurUtile = L - M_GAUCHE - M_DROITE;
+  const hauteurUtile = H - M_HAUT - M_BAS;
+  const x = (i) => (blocs.length > 1 ? M_GAUCHE + (i * largeurUtile) / (blocs.length - 1) : M_GAUCHE + largeurUtile / 2);
+  const y = (v) => M_HAUT + hauteurUtile - (v / max) * hauteurUtile;
+
+  const grille = [0, 0.25, 0.5, 0.75, 1]
+    .map((t) => {
+      const yy = (M_HAUT + hauteurUtile * (1 - t)).toFixed(1);
+      const valeurAxe = format(Math.round(max * t));
+      return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille" />
+        <text x="${M_GAUCHE - 10}" y="${yy}" class="courbe-axe-y" text-anchor="end" dominant-baseline="middle">${valeurAxe}</text>`;
+    })
+    .join("");
+
+  const PAS_AXE = Math.max(1, Math.ceil(blocs.length / 8));
+  const axeX = blocs
+    .map((b, i) => (i % PAS_AXE === 0 || i === blocs.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${H - 10}" class="courbe-axe" text-anchor="middle">${libellePeriodeEtendu(b, granulariteActuelle)}</text>` : ""))
+    .join("");
+
+  const cheminLisse = (pts) => {
+    const n = pts.length;
+    if (n < 2) return "";
+    if (n === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+
+    const dx = [];
+    const d = [];
+    for (let i = 0; i < n - 1; i++) {
+      dx.push(pts[i + 1][0] - pts[i][0]);
+      d.push((pts[i + 1][1] - pts[i][1]) / (dx[i] || 1));
+    }
+
+    const m = [d[0]];
+    for (let i = 1; i < n - 1; i++) m.push((d[i - 1] + d[i]) / 2);
+    m.push(d[n - 2]);
+
+    for (let i = 0; i < n - 1; i++) {
+      if (d[i] === 0) {
+        m[i] = 0;
+        m[i + 1] = 0;
+        continue;
+      }
+      const a = m[i] / d[i];
+      const b = m[i + 1] / d[i];
+      if (a < 0) m[i] = 0;
+      if (b < 0) m[i + 1] = 0;
+      const s2 = a * a + b * b;
+      if (s2 > 9) {
+        const tau = 3 / Math.sqrt(s2);
+        m[i] = tau * a * d[i];
+        m[i + 1] = tau * b * d[i];
+      }
+    }
+
+    let chemin = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < n - 1; i++) {
+      const c1x = (pts[i][0] + dx[i] / 3).toFixed(1);
+      const c1y = (pts[i][1] + (m[i] * dx[i]) / 3).toFixed(1);
+      const c2x = (pts[i + 1][0] - dx[i] / 3).toFixed(1);
+      const c2y = (pts[i + 1][1] - (m[i + 1] * dx[i]) / 3).toFixed(1);
+      chemin += ` C${c1x},${c1y} ${c2x},${c2y} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+    }
+    return chemin;
+  };
+
+  const pointsParSerie = series.map((s) => s.points.map((v, i) => [Number(x(i).toFixed(1)), Number(y(v).toFixed(1))]));
+  const tracesParSerie = pointsParSerie.map(cheminLisse);
+
+  const degrades = series
+    .map(
+      (s, i) => `<linearGradient id="courbe-degrade-${cibleId}-${i}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${s.couleur}" stop-opacity="0.32" />
+        <stop offset="100%" stop-color="${s.couleur}" stop-opacity="0" />
+      </linearGradient>`
+    )
+    .join("");
+
+  const baseY = (M_HAUT + hauteurUtile).toFixed(1);
+  const aires = series
+    .map((s, i) => {
+      const pts = pointsParSerie[i];
+      const aireD = `${tracesParSerie[i]} L${pts[pts.length - 1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
+      return `<path d="${aireD}" fill="url(#courbe-degrade-${cibleId}-${i})" class="courbe-aire"></path>`;
+    })
+    .join("");
+
+  const lignesSvg = series
+    .map((s, i) => `<path d="${tracesParSerie[i]}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />`)
+    .join("");
+
+  // `secondaires` (optionnel, par série) : un taux complémentaire déjà
+  // formaté en texte (ex: "62 % présence") pour chaque point — affiché à
+  // côté du nom en fin de ligne (dernier point), et pour le point survolé
+  // dans la bulle (voir plus bas).
+  const MAX_CAR_LABEL = 20;
+  const tronqueLabel = (texte) => (texte.length > MAX_CAR_LABEL ? `${texte.slice(0, MAX_CAR_LABEL - 1)}…` : texte);
+  const MIN_ECART_LABEL = 15;
+  const labelsFin = series
+    .map((s, i) => ({ s, yBrut: y(s.points[s.points.length - 1]) }))
+    .sort((a, b) => a.yBrut - b.yBrut)
+    .reduce((acc, cur, i) => {
+      const yPlace = i === 0 ? cur.yBrut : Math.max(cur.yBrut, acc[i - 1].yPlace + MIN_ECART_LABEL);
+      acc.push({ ...cur, yPlace });
+      return acc;
+    }, [])
+    .map(({ s, yPlace }) => {
+      const dernierSecondaire = s.secondaires ? s.secondaires[s.secondaires.length - 1] : null;
+      return `<text x="${(x(blocs.length - 1) + 10).toFixed(1)}" y="${yPlace.toFixed(1)}" class="courbe-label" fill="${s.couleur}" dominant-baseline="middle"><title>${s.nom}</title>${tronqueLabel(s.nom)}${dernierSecondaire ? ` (${dernierSecondaire})` : ""}</text>`;
+    })
+    .join("");
+
+  const pointsCurseur = series
+    .map((s, i) => `<circle class="courbe-curseur-point" data-i="${i}" r="4.5" fill="${s.couleur}" cx="${x(0)}" cy="${y(s.points[0])}" opacity="0"></circle>`)
+    .join("");
+
+  const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}</div>`;
+
+  cible.innerHTML = `
+    ${toggleGranulariteCourbeHtml(granulariteActuelle)}
+    ${legende}
+    <svg class="courbe-svg" viewBox="0 0 ${L} ${H}">
+      <defs>${degrades}</defs>
+      ${grille}
+      ${aires}
+      ${lignesSvg}
+      <line class="courbe-curseur-ligne" x1="${x(0)}" x2="${x(0)}" y1="${M_HAUT}" y2="${M_HAUT + hauteurUtile}" opacity="0"></line>
+      ${pointsCurseur}
+      <rect class="courbe-survol" x="${M_GAUCHE}" y="${M_HAUT}" width="${largeurUtile}" height="${hauteurUtile}" fill="transparent"></rect>
+      ${axeX}
+      ${labelsFin}
+    </svg>`;
+
+  brancherToggleGranularite(cible, onGranularite);
+
+  const svg = cible.querySelector(".courbe-svg");
+  const zoneSurvol = cible.querySelector(".courbe-survol");
+  const ligneCurseur = cible.querySelector(".courbe-curseur-ligne");
+  const pointsCurseurEls = [...cible.querySelectorAll(".courbe-curseur-point")];
+
+  if (!INFOBULLE) {
+    INFOBULLE = document.createElement("div");
+    INFOBULLE.className = "infobulle";
+    document.body.appendChild(INFOBULLE);
+  }
+
+  const placerBulle = (evt) => {
+    const marge = 16;
+    const r = INFOBULLE.getBoundingClientRect();
+    let gauche = evt.clientX + marge;
+    let haut = evt.clientY - r.height - marge;
+    if (gauche + r.width > window.innerWidth - 8) gauche = evt.clientX - r.width - marge;
+    if (haut < 8) haut = evt.clientY + marge;
+    INFOBULLE.style.left = gauche + "px";
+    INFOBULLE.style.top = haut + "px";
+  };
+
+  const survol = (evt) => {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const ratioX = blocs.length > 1 ? (loc.x - M_GAUCHE) / largeurUtile : 0;
+    const index = Math.min(blocs.length - 1, Math.max(0, Math.round(ratioX * (blocs.length - 1))));
+
+    const xi = x(index).toFixed(1);
+    ligneCurseur.setAttribute("x1", xi);
+    ligneCurseur.setAttribute("x2", xi);
+    ligneCurseur.setAttribute("opacity", "1");
+
+    const lignesBulle = series
+      .map((s, i) => ({ s, v: s.points[index], secondaire: s.secondaires ? s.secondaires[index] : null }))
+      .sort((a, b) => b.v - a.v)
+      .map(({ s, v, secondaire }) => `<span><i style="background:${s.couleur}"></i>${s.nom}<b>${format(v)}${secondaire ? ` · ${secondaire}` : ""}</b></span>`)
+      .join("");
+
+    series.forEach((s, i) => {
+      pointsCurseurEls[i].setAttribute("cx", xi);
+      pointsCurseurEls[i].setAttribute("cy", y(s.points[index]).toFixed(1));
+      pointsCurseurEls[i].setAttribute("opacity", "1");
+    });
+
+    INFOBULLE.innerHTML = `<strong>${libellePeriodeEtendu(blocs[index], granulariteActuelle)}</strong>${lignesBulle}`;
+    INFOBULLE.classList.add("on");
+    placerBulle(evt);
+  };
+
+  const quitter = () => {
+    ligneCurseur.setAttribute("opacity", "0");
+    pointsCurseurEls.forEach((p) => p.setAttribute("opacity", "0"));
+    INFOBULLE.classList.remove("on");
+  };
+
+  zoneSurvol.addEventListener("mousemove", survol);
+  zoneSurvol.addEventListener("mouseleave", quitter);
+}
+
+let GRANULARITE_SALES_CLOSING = "semaine";
+
+// Valeur (CA contracté) d'un closer sur un seul bloc de temps.
+function salesValeurBlocCloser(nom, calls, bloc) {
+  const dansBloc = (c) => (c.closer || "Non renseigné") === nom && c.jour >= bloc.debut && c.jour <= bloc.fin;
+  return somme(calls.filter(dansBloc), "montant");
 }
 
 function vueSalesClosing() {
@@ -2921,14 +3141,118 @@ function vueSalesClosing() {
   ].join("");
 
   brancherSurvol(document.getElementById("sales-closing-camemberts"));
+
+  // Évolution du CA contracté par closer dans le temps — top 5, même couleur
+  // que la table/les camemberts ci-dessus pour une lecture cohérente.
+  const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
+  const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
+  const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
+  const seriesCloser = top5Closers.map((nom) => ({
+    nom,
+    couleur: couleurCloser[nom],
+    points: blocsCloser.map((b) => salesValeurBlocCloser(nom, calls, b)),
+  }));
+  courbeMultiSeries("sales-closing-courbe", blocsCloser, seriesCloser, euros, GRANULARITE_SALES_CLOSING, (g) => {
+    GRANULARITE_SALES_CLOSING = g;
+    vueSalesClosing();
+  });
   brancherInfobulles(cible);
+}
+
+// Tous les contacts ayant au moins un call Closing — toute date confondue
+// (pas filtré période) : la conversion d'un Diagnostic en Closing peut
+// arriver après la période affichée, et on veut quand même la compter.
+const salesContactsAvecClosing = () =>
+  new Set(SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null).map((c) => c.contactId));
+
+// Calls Diagnostic d'une famille donnée (1 = base de données/auto-assignation,
+// 2 = rattrapage post-disqualification — voir api/sales-team.js), filtrés
+// période + setter actif.
+const salesCallsDiagFamille = (famille) =>
+  SALES_CALLS.filter(
+    (c) => c.typeAppel === "Diagnostic" && c.famille === famille && dansPeriode(c) && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
+  );
+
+// Rend un bloc Famille (cartes + entonnoir + table + camemberts) pour la
+// famille donnée. `libelleTaux`/`libelleAppels` adaptent le vocabulaire des
+// cartes à la famille (transfo vs rattrapage) sans dupliquer la logique.
+function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux) {
+  const diag = salesCallsDiagFamille(famille);
+  const contactsClosing = salesContactsAvecClosing();
+  const honores = somme(diag, "present");
+  const presence = ratio(honores, diag.length);
+
+  const contactsDiagUniques = new Set(diag.map((c) => c.contactId).filter((id) => id != null));
+  const transformes = [...contactsDiagUniques].filter((id) => contactsClosing.has(id)).length;
+  const taux = ratio(transformes, contactsDiagUniques.size);
+
+  document.getElementById(`${prefixeId}-cartes`).innerHTML = [
+    carte(libelleAppels, nombre(diag.length), "sur la période"),
+    carte("Honorés", nombre(honores), presence === null ? "—" : `${pourcent(presence)} de présence`),
+    carte(libelleTaux, taux === null ? "—" : pourcent(taux), contactsDiagUniques.size ? `${nombre(transformes)} sur ${nombre(contactsDiagUniques.size)}` : "aucun appel sur la période"),
+  ].join("");
+
+  entonnoir(
+    `${prefixeId}-entonnoir`,
+    [
+      { nom: libelleAppels, cle: "diag" },
+      { nom: "Honorés", cle: "honores" },
+      { nom: "Closing booké", cle: "closing" },
+    ],
+    [diag.length, honores, transformes],
+    null,
+    [null, diag.length, honores],
+    null
+  );
+
+  const parSetter = {};
+  diag.forEach((c) => {
+    const n = c.setter || "Non renseigné";
+    if (!parSetter[n]) parSetter[n] = { diag: 0, honores: 0, contacts: new Set() };
+    parSetter[n].diag += 1;
+    parSetter[n].honores += c.present;
+    if (c.contactId != null) parSetter[n].contacts.add(c.contactId);
+  });
+
+  const lignesSetter = Object.entries(parSetter)
+    .map(([nom, p]) => [nom, { ...p, transformes: [...p.contacts].filter((id) => contactsClosing.has(id)).length }])
+    .sort((a, b) => b[1].diag - a[1].diag);
+
+  document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
+    ? `<table>
+        <thead><tr><th>Setter</th><th>${libelleAppels}</th><th>Honorés</th><th>Présence</th><th>Closing booké</th><th>${libelleTaux}</th></tr></thead>
+        <tbody>${lignesSetter
+          .map(
+            ([nom, p]) => `<tr>
+              <td>${nom}</td>
+              ${cellule(p.diag)}
+              ${cellule(p.honores)}
+              <td>${p.diag ? pourcent(p.honores / p.diag) : "—"}</td>
+              ${cellule(p.transformes)}
+              <td>${p.contacts.size ? pourcent(p.transformes / p.contacts.size) : "—"}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
+      </table>`
+    : `<div class="vide">Pas encore d'appel sur cette période.</div>`;
+
+  const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
+  const partsDiag = lignesSetter.filter(([, p]) => p.diag > 0).map(([nom, p]) => [nom, p.diag, couleurSetter[nom]]);
+  const partsTransformes = lignesSetter.filter(([, p]) => p.transformes > 0).map(([nom, p]) => [nom, p.transformes, couleurSetter[nom]]);
+
+  document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
+    disque(`${libelleAppels} par setter`, partsDiag, nombre),
+    disque("Closing booké par setter", partsTransformes, nombre),
+  ].join("");
+
+  brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
 }
 
 function vueSalesSetting() {
   const cible = document.getElementById("vue-sales-setting");
   if (!cible) return;
 
-  const setters = [...new Set(SALES_LEADS.filter((l) => l.setter).map((l) => l.setter))].sort();
+  const setters = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.setter).map((c) => c.setter))].sort();
   brancherSalesToggle(
     "sales-setting-filtre",
     setters,
@@ -2937,73 +3261,9 @@ function vueSalesSetting() {
     vueSalesSetting
   );
 
-  const leads = salesLeadsSetting();
-  const diag = salesCallsDiagnostic();
-  const diagHonores = somme(diag, "present");
-  const presence = ratio(diagHonores, diag.length);
-  const conversion = ratio(diag.length, leads.length);
+  salesRenduFamilleSetting(1, "sales-setting-f1", "Appels Diagnostic", "Taux de transfo en Closing");
+  salesRenduFamilleSetting(2, "sales-setting-f2", "Appels Diagnostic (rattrapage)", "Taux de rattrapage en Closing");
 
-  document.getElementById("sales-setting-cartes").innerHTML = [
-    carte("Leads assignés", nombre(leads.length), "sur la période"),
-    carte("Appels Diagnostic bookés", nombre(diag.length), conversion === null ? "—" : `${pourcent(conversion)} des leads assignés`),
-    carte("Appels Diagnostic honorés", nombre(diagHonores), presence === null ? "—" : `${pourcent(presence)} de présence`),
-  ].join("");
-
-  entonnoir(
-    "sales-setting-entonnoir",
-    [
-      { nom: "Leads assignés", cle: "leads" },
-      { nom: "Diagnostic bookés", cle: "diag" },
-      { nom: "Diagnostic honorés", cle: "honores" },
-    ],
-    [leads.length, diag.length, diagHonores],
-    null,
-    [null, leads.length, diag.length],
-    null
-  );
-
-  const parSetter = {};
-  leads.forEach((l) => {
-    const n = l.setter || "Non renseigné";
-    if (!parSetter[n]) parSetter[n] = { leads: 0, diag: 0, honores: 0 };
-    parSetter[n].leads += 1;
-  });
-  diag.forEach((c) => {
-    const n = c.setter || "Non renseigné";
-    if (!parSetter[n]) parSetter[n] = { leads: 0, diag: 0, honores: 0 };
-    parSetter[n].diag += 1;
-    parSetter[n].honores += c.present;
-  });
-
-  const lignesSetter = Object.entries(parSetter).sort((a, b) => b[1].leads - a[1].leads);
-
-  document.getElementById("sales-setting-table").innerHTML = lignesSetter.length
-    ? `<table>
-        <thead><tr><th>Setter</th><th>Leads assignés</th><th>Diagnostic bookés</th><th>Diagnostic honorés</th><th>Présence</th></tr></thead>
-        <tbody>${lignesSetter
-          .map(
-            ([nom, p]) => `<tr>
-              <td>${nom}</td>
-              ${cellule(p.leads)}
-              ${cellule(p.diag)}
-              ${cellule(p.honores)}
-              <td>${p.diag ? pourcent(p.honores / p.diag) : "—"}</td>
-            </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="vide">Pas encore de lead assigné sur cette période.</div>`;
-
-  const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  const partsLeads = lignesSetter.filter(([, p]) => p.leads > 0).map(([nom, p]) => [nom, p.leads, couleurSetter[nom]]);
-  const partsDiag = lignesSetter.filter(([, p]) => p.diag > 0).map(([nom, p]) => [nom, p.diag, couleurSetter[nom]]);
-
-  document.getElementById("sales-setting-camemberts").innerHTML = [
-    disque("Leads assignés par setter", partsLeads, nombre),
-    disque("Diagnostic bookés par setter", partsDiag, nombre),
-  ].join("");
-
-  brancherSurvol(document.getElementById("sales-setting-camemberts"));
   brancherInfobulles(cible);
 }
 

@@ -4,13 +4,29 @@
 // individuelle de l'équipe de vente :
 //  - Closing : les calls Closing de CALL BOOKED, par Closer (qui décroche R1,
 //    R2... et combien ça rapporte).
-//  - Setting : les leads assignés à un Setter (LEADS.Setter) et les calls
-//    Diagnostic (requalification) qu'ils ont fait aboutir à un rendez-vous
-//    honoré (CALL BOOKED.Setter, Type d'appel = Diagnostic).
+//  - Setting : les leads assignés à un Setter, qui recouvrent deux familles
+//    bien distinctes (décision du 2026-10-04) :
+//      Famille 1 — Base de données : le setter s'assigne un vieux contact
+//      iClosed jamais passé par le funnel (jamais disqualifié), l'appelle
+//      lui-même et enregistre l'issue via le scénario "Issue d'appel
+//      Diagnostic/Setting" (7688084), qui crée une ligne CALL BOOKED
+//      synthétique dont le Booking ID commence par "SETTER-" (pas de vraie
+//      réservation iClosed). Objectif : le taux de transfo direct en appel
+//      de Closing booké.
+//      Famille 2 — Rattrapage : le lead a été disqualifié par le funnel
+//      normal, puis a lui-même réservé un vrai call Diagnostic (Booking ID
+//      standard, pas de préfixe "SETTER-") que le setter traite. Objectif :
+//      le taux de rattrapage, c'est-à-dire la part de ces disqualifiés qui
+//      finissent quand même par booker un call de Closing grâce au setter.
+//    On distingue les deux uniquement par le Booking ID du call Diagnostic
+//    (préfixe "SETTER-" = Famille 1, sinon Famille 2) — c'est le seul signal
+//    stable dans le temps (le Statut du lead change après coup, lui).
 //
 // Lignes brutes renvoyées (comme /api/tracking.js) : l'agrégation par
 // closer/setter et par période se fait côté app.js, pour rester cohérente
-// avec le filtre période global du dashboard.
+// avec le filtre période global du dashboard. iClosed Contact ID est renvoyé
+// sur les leads ET les calls pour permettre de relier un call Diagnostic à un
+// éventuel call Closing du même contact (le "taux de transfo"/"rattrapage").
 //
 // Le jeton Airtable ne quitte jamais le serveur (AIRTABLE_TOKEN, Vercel).
 
@@ -20,6 +36,7 @@ const TABLE_CALL_BOOKED = "tblaY2J8SD0grDEOK";
 
 const CHAMPS_LEADS = {
   fldaUTHkR9vloCz2e: "capteLe",
+  fldPQJPP97FujIbNm: "contactId",
   fldrhu8o1b2Oroz5b: "setter",
   fldE9CLUd3f08MQri: "statut",
   fldsTCF9f3IolFvV1: "dateAssignation",
@@ -27,6 +44,8 @@ const CHAMPS_LEADS = {
 };
 
 const CHAMPS_CALL_BOOKED = {
+  fldhiaObnPFQjPioa: "bookingId",
+  fldLSlGP0yarBWZB8: "contactId",
   fld1oLvpPAWeppnwM: "jourRdvDt", // Date du rendez-vous — jour réel de l'appel
   fldOrfHds1MiMVehg: "prisLe",
   fldFPd5SGaSFfImIE: "typeAppel", // Closing / Diagnostic
@@ -109,6 +128,7 @@ export default async function handler(req, res) {
       .map((l) => ({
         jour: l.capteLe ? String(l.capteLe).slice(0, 10) : null,
         jourAssignation: l.dateAssignation ? String(l.dateAssignation).slice(0, 10) : null,
+        contactId: l.contactId ?? null,
         setter: l.setter,
         statut: l.statut,
         nbCallsBookes: l.nbCallsBookes || 0,
@@ -118,7 +138,12 @@ export default async function handler(req, res) {
       .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic")
       .map((c) => ({
         jour: c.jourRdvDt ? String(c.jourRdvDt).slice(0, 10) : null,
+        contactId: c.contactId ?? null,
         typeAppel: c.typeAppel,
+        // Famille 1 (base de données, auto-assignation) vs Famille 2
+        // (rattrapage post-disqualification) — uniquement pour les calls
+        // Diagnostic ; null pour les calls Closing (pas concernés).
+        famille: c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
         closer: c.closer,
         setter: c.setter,
         statut: c.statut,

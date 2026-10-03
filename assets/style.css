@@ -411,6 +411,67 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 #tracking-cartes .carte:nth-child(5) .chiffre { color: #F6D399; }
 
+/* Accent vif sur les cartes Sales Team Closing (5 cartes : RDV bookés, Taux
+   de présence, Taux de closing, CA contracté, Panier moyen). Setting (3
+   cartes par famille) a son propre bloc plus bas. Même vocabulaire de
+   couleurs que #perf / #tracking-cartes / #direction-cartes. */
+#sales-closing-cartes .carte:nth-child(1) {
+  border-left: 3px solid #4FC3F7;
+  background-image: linear-gradient(135deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+
+#sales-closing-cartes .carte:nth-child(2) {
+  border-left: 3px solid var(--violet-clair);
+  background-image: linear-gradient(135deg, rgba(155, 107, 255, 0.12), rgba(155, 107, 255, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(2) .chiffre { color: #C4A6FF; }
+
+#sales-closing-cartes .carte:nth-child(3) {
+  border-left: 3px solid var(--magenta);
+  background-image: linear-gradient(135deg, rgba(230, 25, 176, 0.12), rgba(230, 25, 176, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(3) .chiffre { color: #F893DA; }
+
+#sales-closing-cartes .carte:nth-child(4) {
+  border-left: 3px solid #5DCAA5;
+  background-image: linear-gradient(135deg, rgba(93, 202, 165, 0.12), rgba(93, 202, 165, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(4) .chiffre { color: #9FE1CB; }
+
+#sales-closing-cartes .carte:nth-child(5) {
+  border-left: 3px solid #F0B95A;
+  background-image: linear-gradient(135deg, rgba(240, 185, 90, 0.12), rgba(240, 185, 90, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(5) .chiffre { color: #F6D399; }
+
+/* Setting — Famille 1 (Base de données) et Famille 2 (Rattrapage), 3 cartes
+   chacune : Appels Diagnostic, Honorés, Taux de transfo/rattrapage. Même
+   vocabulaire de couleurs que le reste du dashboard. */
+#sales-setting-f1-cartes .carte:nth-child(1),
+#sales-setting-f2-cartes .carte:nth-child(1) {
+  border-left: 3px solid #4FC3F7;
+  background-image: linear-gradient(135deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0) 60%);
+}
+#sales-setting-f1-cartes .carte:nth-child(1) .chiffre,
+#sales-setting-f2-cartes .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+
+#sales-setting-f1-cartes .carte:nth-child(2),
+#sales-setting-f2-cartes .carte:nth-child(2) {
+  border-left: 3px solid var(--violet-clair);
+  background-image: linear-gradient(135deg, rgba(155, 107, 255, 0.12), rgba(155, 107, 255, 0) 60%);
+}
+#sales-setting-f1-cartes .carte:nth-child(2) .chiffre,
+#sales-setting-f2-cartes .carte:nth-child(2) .chiffre { color: #C4A6FF; }
+
+#sales-setting-f1-cartes .carte:nth-child(3),
+#sales-setting-f2-cartes .carte:nth-child(3) {
+  border-left: 3px solid #5DCAA5;
+  background-image: linear-gradient(135deg, rgba(93, 202, 165, 0.12), rgba(93, 202, 165, 0) 60%);
+}
+#sales-setting-f1-cartes .carte:nth-child(3) .chiffre,
+#sales-setting-f2-cartes .carte:nth-child(3) .chiffre { color: #9FE1CB; }
+
 /* Accent vif sur les cartes clés de la section Conversion (Performance) :
    Rendez-vous pris et Rendez-vous honorés dans #conv (ETAPES = Leads,
    Rendez-vous pris, RDV conclus, Rendez-vous honorés, Ventes -> positions 2

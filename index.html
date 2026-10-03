@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=22">
+<link rel="stylesheet" href="/assets/style.css?v=24">
 </head>
 <body>
 
@@ -276,6 +276,10 @@
     <p class="sous-titre rv">RDV bookés → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
     <div class="glass entonnoir rv" id="sales-closing-entonnoir"></div>
 
+    <h3 class="sous-section">Évolution</h3>
+    <p class="sous-titre rv">CA contracté par closer dans le temps — le top 5 sur la période.</p>
+    <div class="glass courbe-carte rv" id="sales-closing-courbe"></div>
+
     <h3 class="sous-section">Par closer</h3>
     <p class="sous-titre rv">Le classement se lit sur le CA contracté ; les autres colonnes donnent le détail.</p>
     <div class="glass cadre-table rv" id="sales-closing-table"></div>
@@ -288,30 +292,50 @@
   <section class="vue" id="vue-sales-setting">
     <div class="titre-vue">
       <h1>Sales Team — Setting</h1>
-      <p class="sous-titre">Qui travaille les leads assignés, et ce que ça produit en rendez-vous.</p>
+      <p class="sous-titre">Deux métiers différents sous le même nom : travailler la base existante, et rattraper les disqualifiés.</p>
     </div>
 
     <p class="convention rv">
-      <strong>Un lead compte le jour où il a été assigné au setter</strong>,
-      pas le jour où il est entré dans la base iClosed — c'est le travail du
-      setter qu'on mesure ici. Les calls Diagnostic comptent le jour du
-      rendez-vous. Le filtre période global s'applique ; le toggle ci-dessous
-      ne fait que restreindre à un setter.
+      <strong>Famille 1 — Base de données :</strong> le setter s'auto-assigne un
+      vieux contact iClosed jamais passé par le funnel et l'appelle directement
+      — l'objectif est le <strong>taux de transfo en appel de Closing</strong>.
+      <strong>Famille 2 — Rattrapage :</strong> le lead a été disqualifié par le
+      funnel normal puis a réservé lui-même un vrai call Diagnostic — l'objectif
+      est le <strong>taux de rattrapage</strong>, c'est-à-dire la part de ces
+      disqualifiés qui finissent quand même par booker un Closing grâce au
+      setter. Un call compte le jour du rendez-vous Diagnostic ; le Closing
+      associé est cherché sans limite de date (la conversion peut arriver après
+      la période affichée). Le filtre période global s'applique au Diagnostic ;
+      le toggle ci-dessous restreint les deux familles à un setter.
     </p>
 
     <div class="toggle-granularite" id="sales-setting-filtre"></div>
 
-    <div id="sales-setting-cartes" class="cartes"></div>
+    <h2 class="section">Famille 1 — Base de données</h2>
+    <p class="sous-titre rv">Contacts jamais passés par le funnel, travaillés directement par le setter.</p>
+    <div id="sales-setting-f1-cartes" class="cartes"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
-    <p class="sous-titre rv">Leads assignés → appels Diagnostic bookés → honorés, pour le périmètre sélectionné. Approximation en volume (pas un suivi lead par lead).</p>
-    <div class="glass entonnoir rv" id="sales-setting-entonnoir"></div>
+    <div class="glass entonnoir rv" id="sales-setting-f1-entonnoir"></div>
 
     <h3 class="sous-section">Par setter</h3>
-    <div class="glass cadre-table rv" id="sales-setting-table"></div>
+    <div class="glass cadre-table rv" id="sales-setting-f1-table"></div>
 
     <h3 class="sous-section">Répartition</h3>
-    <div class="camemberts" id="sales-setting-camemberts"></div>
+    <div class="camemberts" id="sales-setting-f1-camemberts"></div>
+
+    <h2 class="section">Famille 2 — Rattrapage</h2>
+    <p class="sous-titre rv">Disqualifiés par le funnel, recontactés par le setter via un vrai call Diagnostic réservé.</p>
+    <div id="sales-setting-f2-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Entonnoir</h3>
+    <div class="glass entonnoir rv" id="sales-setting-f2-entonnoir"></div>
+
+    <h3 class="sous-section">Par setter</h3>
+    <div class="glass cadre-table rv" id="sales-setting-f2-table"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="sales-setting-f2-camemberts"></div>
   </section>
 
   <!-- ---------- Direction — Tableau de bord ---------- -->
@@ -380,6 +404,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=36"></script>
+<script src="/assets/app.js?v=38"></script>
 </body>
 </html>
