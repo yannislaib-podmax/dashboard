@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=26">
+<link rel="stylesheet" href="/assets/style.css?v=27">
 </head>
 <body>
 
@@ -273,18 +273,18 @@
     <div id="sales-closing-cartes" class="cartes"></div>
     <div class="cartes cartes-etroit" id="sales-closing-cartes-etroit"></div>
 
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur closer en haut. Change la métrique pour reclasser sur un autre indicateur — même métrique que la courbe d'évolution plus bas.</p>
+    <div class="toggle-granularite" id="sales-closing-metrique"></div>
+    <div class="glass classement rv" id="sales-closing-classement"></div>
+
     <h3 class="sous-section">Entonnoir</h3>
     <p class="sous-titre rv">RDV bookés → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
     <div class="glass entonnoir rv" id="sales-closing-entonnoir"></div>
 
     <h3 class="sous-section">Évolution</h3>
-    <p class="sous-titre rv">Change la métrique pour voir l'évolution par closer sur un autre indicateur, taux de présence/closing inclus.</p>
-    <div class="toggle-granularite" id="sales-closing-metrique"></div>
+    <p class="sous-titre rv">Le top 5 des closers dans le temps, sur la même métrique que le classement ci-dessus.</p>
     <div class="glass courbe-carte rv" id="sales-closing-courbe"></div>
-
-    <h3 class="sous-section">Par closer</h3>
-    <p class="sous-titre rv">Le classement se lit sur le CA contracté ; les autres colonnes donnent le détail.</p>
-    <div class="glass cadre-table rv" id="sales-closing-table"></div>
 
     <h3 class="sous-section">Répartition</h3>
     <div class="camemberts" id="sales-closing-camemberts"></div>
@@ -317,6 +317,11 @@
     <p class="sous-titre rv">Contacts jamais passés par le funnel, travaillés directement par le setter.</p>
     <div id="sales-setting-f1-cartes" class="cartes"></div>
 
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur setter en haut. Change la métrique pour reclasser sur un autre indicateur.</p>
+    <div class="toggle-granularite" id="sales-setting-f1-metrique"></div>
+    <div class="glass classement rv" id="sales-setting-f1-classement"></div>
+
     <h3 class="sous-section">Entonnoir</h3>
     <div class="glass entonnoir rv" id="sales-setting-f1-entonnoir"></div>
 
@@ -329,6 +334,11 @@
     <h2 class="section">Famille 2 — Rattrapage</h2>
     <p class="sous-titre rv">Disqualifiés par le funnel, recontactés par le setter via un vrai call Diagnostic réservé.</p>
     <div id="sales-setting-f2-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur setter en haut. Change la métrique pour reclasser sur un autre indicateur.</p>
+    <div class="toggle-granularite" id="sales-setting-f2-metrique"></div>
+    <div class="glass classement rv" id="sales-setting-f2-classement"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <div class="glass entonnoir rv" id="sales-setting-f2-entonnoir"></div>
@@ -406,6 +416,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=41"></script>
+<script src="/assets/app.js?v=42"></script>
 </body>
 </html>

@@ -411,12 +411,23 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 }
 #tracking-cartes .carte:nth-child(5) .chiffre { color: #F6D399; }
 
-/* Accent vif sur les cartes Sales Team Closing — seulement la plus
-   importante (CA contracté, position 5 sur RDV bookés / RDV conclus / RDV
-   honorés / Ventes / CA contracté / Panier moyen) : demande du 2026-10-04,
-   pas besoin de mettre toute les cartes en couleur vive. Le détail (taux
-   d'annulation/présence/closing) vit dans la rangée cartes-etroit juste en
-   dessous. */
+/* Accent vif sur les cartes Sales Team Closing — RDV bookés (1), RDV
+   honorés (3) et CA contracté (5) sur RDV bookés / RDV conclus / RDV
+   honorés / Ventes / CA contracté : les 3 jalons qui comptent le plus dans
+   le funnel + le résultat final. Le détail (taux d'annulation/présence/
+   closing/panier) vit dans la rangée cartes-etroit juste en dessous. */
+#sales-closing-cartes .carte:nth-child(1) {
+  border-left: 3px solid #4FC3F7;
+  background-image: linear-gradient(135deg, rgba(79, 195, 247, 0.10), rgba(79, 195, 247, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+
+#sales-closing-cartes .carte:nth-child(3) {
+  border-left: 3px solid var(--violet-clair);
+  background-image: linear-gradient(135deg, rgba(155, 107, 255, 0.12), rgba(155, 107, 255, 0) 60%);
+}
+#sales-closing-cartes .carte:nth-child(3) .chiffre { color: #C4A6FF; }
+
 #sales-closing-cartes .carte:nth-child(5) {
   border-left: 3px solid #5DCAA5;
   background-image: linear-gradient(135deg, rgba(93, 202, 165, 0.12), rgba(93, 202, 165, 0) 60%);
@@ -424,8 +435,9 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
 #sales-closing-cartes .carte:nth-child(5) .chiffre { color: #9FE1CB; }
 
 /* Rangée cartes-etroit sous les cartes d'en-tête Closing (Taux d'annulation,
-   Taux de présence, Taux de closing) — même traitement que #qualite en
-   Performance (positions 2 et 3 colorées, la 1re = annulation reste neutre). */
+   Taux de présence, Taux de closing, Panier moyen) — même traitement que
+   #qualite en Performance (positions 2 et 3 colorées, la 1re = annulation et
+   la 4e = panier moyen restent neutres). */
 #sales-closing-cartes-etroit .carte:nth-child(2) {
   border-left: 3px solid var(--violet-clair);
   background-image: linear-gradient(135deg, rgba(155, 107, 255, 0.12), rgba(155, 107, 255, 0) 60%);

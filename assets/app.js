@@ -3092,18 +3092,21 @@ function salesStatsBlocCloser(nom, calls, bloc) {
   };
 }
 
-function salesMetriqueToggleHtml(id, actif) {
-  return Object.entries(SALES_METRIQUES)
+// `metriquesObj` générique (pas figé sur SALES_METRIQUES) pour pouvoir
+// réutiliser le même toggle sur Closing (SALES_METRIQUES) et sur chaque
+// famille Setting (jeu de métriques propre au vocabulaire transfo/rattrapage).
+function salesMetriqueToggleHtml(id, metriquesObj, actif) {
+  return Object.entries(metriquesObj)
     .map(([cle, def]) => `<button type="button" class="${actif === cle ? "actif" : ""}" data-${id}="${cle}">${def.libelleCourt}</button>`)
     .join("");
 }
 
 // Même correctif que brancherSalesToggle : `id` contient des tirets, donc on
 // lit l'attribut brut plutôt que btn.dataset[id].
-function brancherSalesMetrique(id, getActif, onChoix, rerender) {
+function brancherSalesMetrique(id, metriquesObj, getActif, onChoix, rerender) {
   const zone = document.getElementById(id);
   if (!zone) return;
-  zone.innerHTML = salesMetriqueToggleHtml(id, getActif());
+  zone.innerHTML = salesMetriqueToggleHtml(id, metriquesObj, getActif());
   zone.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("actif")) return;
@@ -3111,6 +3114,45 @@ function brancherSalesMetrique(id, getActif, onChoix, rerender) {
       rerender();
     });
   });
+}
+
+// Classement générique (closer ou setter) — même principe que
+// trackClassement (Tracking UTM) : barre proportionnelle au max, valeur +
+// taux secondaire de la métrique active, bulle de détail au survol. `entries`
+// est un tableau [nom, statsObj] (déjà agrégé par nom, pas encore trié).
+function salesRenduClassement(cibleId, entries, metriquesObj, metriqueActive, bulleFn) {
+  const cible = document.getElementById(cibleId);
+  if (!cible) return;
+
+  const def = metriquesObj[metriqueActive];
+  const classe = entries
+    .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v), v])
+    .filter(([, val]) => val > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!classe.length) {
+    cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
+    return;
+  }
+
+  const max = classe[0][1];
+
+  cible.innerHTML = classe
+    .map(
+      ([nom, val, secondaire, v], i) => `
+      <div class="classement-ligne"${info(bulleFn(nom, v))}>
+        <span class="classement-rang">${i + 1}</span>
+        <span class="classement-nom">${nom}</span>
+        <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
+        <div class="classement-chiffres">
+          <span class="classement-valeur">${def.format(val)}</span>
+          ${secondaire ? `<span class="classement-secondaire">${secondaire}</span>` : ""}
+        </div>
+      </div>`
+    )
+    .join("");
+
+  brancherInfobulles(cible);
 }
 
 // Agrégat complet (volumes + taux) d'un jeu de calls Closing — factorisé pour
@@ -3174,12 +3216,12 @@ function vueSalesClosing() {
     carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
     carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
-    carte("Panier moyen", panier === null ? "—" : euros(panier), "par vente", panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null),
   ].join("");
 
-  // Cartes-etroit — même traitement que #qualite en Performance : taux
-  // d'annulation (base = tous les RDV pris), présence (base = conclus) et
-  // closing (base = honorés), comparés à la période précédente en points.
+  // Cartes-etroit — même traitement que #qualite en Performance (taux
+  // d'annulation/présence/closing), + Panier moyen à côté : c'est aussi un
+  // ratio (CA / ventes), pas un volume, donc sa place est ici plutôt que
+  // dans les cartes d'en-tête.
   document.getElementById("sales-closing-cartes-etroit").innerHTML = [
     carte(
       "Taux d'annulation",
@@ -3198,6 +3240,12 @@ function vueSalesClosing() {
       s.closing === null ? "—" : pourcent(s.closing),
       honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}`,
       s.closing !== null && sPrec && sPrec.closing !== null ? ecartPoints(s.closing, sPrec.closing) : null
+    ),
+    carte(
+      "Panier moyen",
+      panier === null ? "—" : euros(panier),
+      "par vente",
+      panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
     ),
   ].join("");
 
@@ -3229,26 +3277,27 @@ function vueSalesClosing() {
 
   const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
 
-  document.getElementById("sales-closing-table").innerHTML = lignesCloser.length
-    ? `<table>
-        <thead><tr><th>Closer</th><th>RDV bookés</th><th>Honorés</th><th>Présence</th><th>Ventes</th><th>Closing</th><th>CA contracté</th><th>Panier moyen</th></tr></thead>
-        <tbody>${lignesCloser
-          .map(
-            ([nom, p]) => `<tr>
-              <td>${nom}</td>
-              ${cellule(p.rdv)}
-              ${cellule(p.honores)}
-              <td>${p.conclus ? pourcent(p.honores / p.conclus) : "—"}</td>
-              ${cellule(p.ventes)}
-              <td>${p.honores ? pourcent(p.ventes / p.honores) : "—"}</td>
-              ${cellule(p.ca, euros)}
-              <td>${p.ventes ? euros(p.ca / p.ventes) : "—"}</td>
-            </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="vide">Pas encore de call Closing sur cette période.</div>`;
+  // Classement — le meilleur closer en haut, juste sous les cartes d'en-tête
+  // (même principe que le classement UTM de Tracking) : toggle Call booké/
+  // Call présent/Ventes/CA, même métrique que la courbe d'évolution plus bas.
+  brancherSalesMetrique(
+    "sales-closing-metrique",
+    SALES_METRIQUES,
+    () => SALES_CLOSING_METRIQUE,
+    (v) => (SALES_CLOSING_METRIQUE = v),
+    vueSalesClosing
+  );
+  const bulleCloser = (nom, v) => `
+    <strong>${nom}</strong>
+    <span>RDV bookés<b>${nombre(v.rdv)}</b></span>
+    <span>RDV honorés<b>${nombre(v.honores)}</b></span>
+    <span>Ventes<b>${nombre(v.ventes)}</b></span>
+    <span>CA contracté<b>${euros(v.ca)}</b></span>
+    ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
+  salesRenduClassement("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
 
+  // Le tableau "Par closer" est remplacé par le classement ci-dessus (même
+  // info, mieux hiérarchisée) — demande du 2026-10-04.
   const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
@@ -3264,14 +3313,8 @@ function vueSalesClosing() {
   // couleur que la table/les camemberts ci-dessus pour une lecture cohérente.
   // Toggle Call booké/Call présent/Ventes/CA (comme le classement Tracking) :
   // le taux secondaire (présence/closing) s'affiche dans la bulle et en bout
-  // de ligne via courbeMultiSeries.
-  brancherSalesMetrique(
-    "sales-closing-metrique",
-    () => SALES_CLOSING_METRIQUE,
-    (v) => (SALES_CLOSING_METRIQUE = v),
-    vueSalesClosing
-  );
-
+  // de ligne via courbeMultiSeries. Le toggle lui-même a déjà été branché
+  // plus haut (il pilote aussi le classement).
   const metriqueDef = SALES_METRIQUES[SALES_CLOSING_METRIQUE];
   const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
   const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
@@ -3323,6 +3366,11 @@ function salesCallsDiagFamillePrecedents(famille) {
     (c) => c.typeAppel === "Diagnostic" && c.famille === famille && c.jour && c.jour >= a && c.jour <= b && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
   );
 }
+
+// Métrique active du classement "par setter" — une entrée par famille (1/2),
+// vocabulaire partagé (diag/honores/transformes) mais libellés adaptés au
+// moment de la lecture (voir metriquesSetting dans salesRenduFamilleSetting).
+let SALES_SETTING_METRIQUE = { 1: "transformes", 2: "transformes" };
 
 // Rend un bloc Famille (cartes + entonnoir + table + camemberts) pour la
 // famille donnée. `libelleTaux`/`libelleAppels` adaptent le vocabulaire des
@@ -3379,6 +3427,40 @@ function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux
   const lignesSetter = Object.entries(parSetter)
     .map(([nom, p]) => [nom, { ...p, transformes: [...p.contacts].filter((id) => contactsClosing.has(id)).length }])
     .sort((a, b) => b[1].diag - a[1].diag);
+
+  // Classement — le meilleur setter en haut, juste sous les cartes d'en-tête
+  // de cette famille (même principe que Closing). Vocabulaire du taux final
+  // adapté à la famille (transfo vs rattrapage).
+  const libelleTauxCourt = famille === 1 ? "transfo" : "rattrapage";
+  const metriquesSetting = {
+    diag: { libelleCourt: libelleAppels, valeur: (v) => v.diag, format: nombre, secondaire: () => null },
+    honores: {
+      libelleCourt: "Honorés",
+      valeur: (v) => v.honores,
+      format: nombre,
+      secondaire: (v) => (v.diag > 0 ? `${Math.round((v.honores / v.diag) * 100)} % présence` : null),
+    },
+    transformes: {
+      libelleCourt: "Closing booké",
+      valeur: (v) => v.transformes,
+      format: nombre,
+      secondaire: (v) => (v.contacts.size > 0 ? `${Math.round((v.transformes / v.contacts.size) * 100)} % ${libelleTauxCourt}` : null),
+    },
+  };
+  brancherSalesMetrique(
+    `${prefixeId}-metrique`,
+    metriquesSetting,
+    () => SALES_SETTING_METRIQUE[famille],
+    (v) => (SALES_SETTING_METRIQUE[famille] = v),
+    () => salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux)
+  );
+  const bulleSetter = (nom, v) => `
+    <strong>${nom}</strong>
+    <span>${libelleAppels}<b>${nombre(v.diag)}</b></span>
+    <span>Honorés<b>${nombre(v.honores)}</b></span>
+    <span>Closing booké<b>${nombre(v.transformes)}</b></span>
+    ${v.contacts.size > 0 ? `<span class="bulle-pied">${Math.round((v.transformes / v.contacts.size) * 100)} % de ${libelleTauxCourt} · ${v.diag > 0 ? Math.round((v.honores / v.diag) * 100) : 0} % de présence</span>` : ""}`;
+  salesRenduClassement(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SALES_SETTING_METRIQUE[famille], bulleSetter);
 
   document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
     ? `<table>
