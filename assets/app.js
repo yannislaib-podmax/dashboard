@@ -3191,6 +3191,91 @@ function salesCallsClosingPrecedentes() {
   );
 }
 
+// Agrégat R1 vs R2+ pour la section "Relation R1 / R2" — même population de
+// calls Closing que le reste de l'onglet (`calls` dans vueSalesClosing : tous
+// rangs confondus, période + closer actif déjà appliqués), juste éclatée par
+// rang pour comparer le 1er call à la relance.
+function salesStatsR1R2(calls) {
+  const r1 = calls.filter((c) => c.rangR === 1);
+  const r2 = calls.filter((c) => c.rangR > 1);
+  const conclusR1 = somme(r1, "conclu");
+  const conclusR2 = somme(r2, "conclu");
+  const honoresR1 = somme(r1, "present");
+  const honoresR2 = somme(r2, "present");
+  return {
+    nbR1: r1.length,
+    nbR2: r2.length,
+    tauxRelance: ratio(r2.length, r1.length),
+    presenceR1: ratio(honoresR1, conclusR1),
+    presenceR2: ratio(honoresR2, conclusR2),
+    closingR1: ratio(somme(r1, "vente"), honoresR1),
+    closingR2: ratio(somme(r2, "vente"), honoresR2),
+  };
+}
+
+// Rendu "Relation R1/R2" : un donut pour le chiffre qui frappe (la part de R1
+// qui repart en relance) + deux paires de barres pour comparer présence et
+// closing entre le 1er call et la relance — même vocabulaire de couleur que
+// le reste du dashboard (bleu = R1, magenta = relance).
+function salesGraphR1R2(cibleId, s) {
+  const cible = document.getElementById(cibleId);
+  if (!cible) return;
+
+  if (s.nbR1 === 0 && s.nbR2 === 0) {
+    cible.innerHTML = `<div class="vide">Pas encore de call Closing sur cette période.</div>`;
+    return;
+  }
+
+  const RAYON = 64;
+  const CIRCONFERENCE = 2 * Math.PI * RAYON;
+  const taux = s.tauxRelance || 0;
+  const arc = (taux * CIRCONFERENCE).toFixed(1);
+  const reste = (CIRCONFERENCE - taux * CIRCONFERENCE).toFixed(1);
+  const idDegrade = `degrade-r1r2-${cibleId}`;
+
+  const barre = (val, classe) => `
+    <div class="r1r2-barre-ligne">
+      <div class="r1r2-piste-barre"><div class="r1r2-barre ${classe}" style="width:${val === null ? 0 : Math.max(2, Math.round(val * 100))}%"></div></div>
+      <span class="r1r2-valeur">${val === null ? "—" : pourcent(val)}</span>
+    </div>`;
+
+  cible.innerHTML = `
+    <div class="r1r2-wrap">
+      <div class="r1r2-donut">
+        <svg viewBox="0 0 160 160">
+          <defs>
+            <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4FC3F7" />
+              <stop offset="100%" stop-color="#E619B0" />
+            </linearGradient>
+          </defs>
+          <circle class="r1r2-piste" cx="80" cy="80" r="${RAYON}"></circle>
+          <circle class="r1r2-arc" cx="80" cy="80" r="${RAYON}" stroke="url(#${idDegrade})" stroke-dasharray="${arc} ${reste}"></circle>
+        </svg>
+        <div class="r1r2-donut-centre">
+          <span class="r1r2-donut-chiffre">${s.tauxRelance === null ? "—" : pourcent(s.tauxRelance)}</span>
+          <span class="r1r2-donut-label">des R1 repartent en R2</span>
+        </div>
+      </div>
+      <div class="r1r2-compare">
+        <div class="r1r2-legende">
+          <span><i class="r1"></i>R1 — 1er call (${nombre(s.nbR1)})</span>
+          <span><i class="r2"></i>R2+ — relance (${nombre(s.nbR2)})</span>
+        </div>
+        <div class="r1r2-metrique">
+          <div class="r1r2-metrique-titre">Taux de présence</div>
+          ${barre(s.presenceR1, "r1")}
+          ${barre(s.presenceR2, "r2")}
+        </div>
+        <div class="r1r2-metrique">
+          <div class="r1r2-metrique-titre">Taux de closing</div>
+          ${barre(s.closingR1, "r1")}
+          ${barre(s.closingR2, "r2")}
+        </div>
+      </div>
+    </div>`;
+}
+
 function vueSalesClosing() {
   const cible = document.getElementById("vue-sales-closing");
   if (!cible) return;
@@ -3308,6 +3393,9 @@ function vueSalesClosing() {
   ].join("");
 
   brancherSurvol(document.getElementById("sales-closing-camemberts"));
+
+  // Relation R1/R2 — déjà filtré période + closer actif via `calls` plus haut.
+  salesGraphR1R2("sales-closing-r1r2", salesStatsR1R2(calls));
 
   // Évolution de la métrique active par closer dans le temps — top 5, même
   // couleur que la table/les camemberts ci-dessus pour une lecture cohérente.
