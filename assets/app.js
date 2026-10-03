@@ -3170,6 +3170,8 @@ function vueSalesClosing() {
 
   document.getElementById("sales-closing-cartes").innerHTML = [
     carte("RDV bookés", nombre(rdv), "calls Closing sur la période", sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
+    carte("RDV conclus", nombre(conclus), "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
+    carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
     carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
     carte("Panier moyen", panier === null ? "—" : euros(panier), "par vente", panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null),
@@ -3288,6 +3290,13 @@ function vueSalesClosing() {
     vueSalesClosing();
   });
   brancherInfobulles(cible);
+
+  // Les cartes/entonnoir/table/camemberts ci-dessus viennent d'être reconstruits
+  // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
+  // l'IntersectionObserver d'apparitions() (qui n'observe qu'une fois, au
+  // premier rendu de la vue). Sans ce ré-armement, ils restent invisibles
+  // après un clic sur le toggle closer ou métrique — même bug que Tracking.
+  requestAnimationFrame(() => apparitions(cible));
 }
 
 // Tous les contacts ayant au moins un call Closing — toute date confondue
@@ -3418,6 +3427,12 @@ function vueSalesSetting() {
   salesRenduFamilleSetting(2, "sales-setting-f2", "Appels Diagnostic (rattrapage)", "Taux de rattrapage en Closing");
 
   brancherInfobulles(cible);
+
+  // Même ré-armement que vueSalesClosing : les deux blocs famille viennent
+  // d'être reconstruits (innerHTML), leurs ".rv" ne sont jamais observés par
+  // apparitions() sans ce requestAnimationFrame — sinon invisibles après un
+  // clic sur le toggle setter.
+  requestAnimationFrame(() => apparitions(cible));
 }
 
 /* ------------------------------------------------------------------ */
