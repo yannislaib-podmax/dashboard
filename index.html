@@ -265,13 +265,14 @@
       <strong>Chaque call compte le jour du rendez-vous.</strong>
       Les calls Diagnostic (requalification) n'apparaissent pas ici — voir
       l'onglet Setting. Le filtre période global s'applique ; le toggle
-      closer ci-dessous ne fait que restreindre à un closer. Les cartes
-      de volume (RDV, ventes, CA) comptent tous les rangs R (R1 + relances) :
-      c'est le business réel. Les taux, le classement et l'évolution, eux,
-      se calculent par défaut sur les <strong>R1 uniquement</strong> (premier
-      call sur le lead) via le toggle R1/Tous ci-dessous — sinon un lead
-      relancé plusieurs fois gonflerait artificiellement le volume et
-      brouillerait la vraie performance d'acquisition.
+      closer restreint à un closer. <strong>Tout l'onglet</strong> — cartes,
+      taux, classement, entonnoir, répartition et évolution — se calcule par
+      défaut sur les <strong>R1 uniquement</strong> (premier call sur chaque
+      lead), via le toggle R1/Tous ci-dessous : sinon un lead relancé
+      plusieurs fois gonflerait le volume et brouillerait la vraie
+      performance d'acquisition. Seule la section Relation R1/R2 tout en bas
+      ignore ce toggle, puisqu'elle compare justement les deux rangs entre
+      eux.
     </p>
 
     <div class="toggle-granularite" id="sales-closing-filtre"></div>
@@ -432,6 +433,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=45"></script>
+<script src="/assets/app.js?v=46"></script>
 </body>
 </html>

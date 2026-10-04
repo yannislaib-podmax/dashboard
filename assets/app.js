@@ -3378,25 +3378,26 @@ function vueSalesClosing() {
     vueSalesClosing
   );
 
-  // `calls` : tous rangs confondus — sert au business réel (cartes de
-  // volume, camemberts) et à la section Relation R1/R2 (qui éclate elle-même
-  // par rang). `callsPerf` : restreint au périmètre choisi par le toggle
-  // R1/Tous ci-dessus — sert aux métriques de PERFORMANCE (taux, classement,
-  // courbe), pour ne pas laisser un lead relancé plusieurs fois gonfler le
-  // volume de performance (décision du 2026-10-04).
-  const calls = salesCallsClosing();
-  const callsPerf = SALES_CLOSING_RANG === "r1" ? calls.filter((c) => c.rangR === 1) : calls;
-  const callsPrec = salesCallsClosingPrecedentes();
-  const callsPrecPerf = callsPrec ? (SALES_CLOSING_RANG === "r1" ? callsPrec.filter((c) => c.rangR === 1) : callsPrec) : null;
+  // `callsTousRangs` : tous rangs confondus, jamais filtré par le toggle —
+  // sert UNIQUEMENT à la section Relation R1/R2 plus bas, qui a besoin des
+  // deux rangs en même temps pour comparer R1 à la relance. `calls` :
+  // restreint au périmètre choisi par le toggle R1/Tous ci-dessus — sert à
+  // TOUT le reste de l'onglet (cartes, taux, classement, entonnoir,
+  // camemberts, courbe), pour que les chiffres restent cohérents entre eux
+  // quel que soit le réglage (demande utilisateur du 2026-10-04 : des cartes
+  // "business" qui ne suivaient pas le toggle rendaient la lecture
+  // incohérente).
+  const callsTousRangs = salesCallsClosing();
+  const calls = SALES_CLOSING_RANG === "r1" ? callsTousRangs.filter((c) => c.rangR === 1) : callsTousRangs;
+  const callsPrecTousRangs = salesCallsClosingPrecedentes();
+  const callsPrec = callsPrecTousRangs ? (SALES_CLOSING_RANG === "r1" ? callsPrecTousRangs.filter((c) => c.rangR === 1) : callsPrecTousRangs) : null;
   const s = salesStatsCallsClosing(calls);
   const sPrec = callsPrec ? salesStatsCallsClosing(callsPrec) : null;
-  const sPerf = salesStatsCallsClosing(callsPerf);
-  const sPrecPerf = callsPrecPerf ? salesStatsCallsClosing(callsPrecPerf) : null;
   const suffixeRang = SALES_CLOSING_RANG === "r1" ? " · R1 uniquement" : " · tous rangs";
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   document.getElementById("sales-closing-cartes").innerHTML = [
-    carte("RDV bookés", nombre(rdv), "calls Closing sur la période", sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
+    carte("RDV bookés", nombre(rdv), `calls Closing sur la période${suffixeRang}`, sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
     carte("RDV conclus", nombre(conclus), "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
     carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
@@ -3406,35 +3407,31 @@ function vueSalesClosing() {
   // Cartes-etroit — même traitement que #qualite en Performance (taux
   // d'annulation/présence/closing), + Panier moyen à côté : c'est aussi un
   // ratio (CA / ventes), pas un volume, donc sa place est ici plutôt que
-  // dans les cartes d'en-tête.
-  // Taux d'annulation/présence/closing : calculés sur `sPerf` (périmètre
-  // R1/Tous choisi via le toggle), pas sur `s` (tous rangs) — sinon un lead
-  // relancé plusieurs fois gonfle le volume et fausse le taux de performance.
-  // Panier moyen reste sur `s`/tous rangs : c'est un chiffre de business
-  // réel (CA / ventes), pas une mesure de performance d'acquisition.
+  // dans les cartes d'en-tête. Tout le bloc suit le toggle R1/Tous comme le
+  // reste de l'onglet.
   document.getElementById("sales-closing-cartes-etroit").innerHTML = [
     carte(
       "Taux d'annulation",
-      sPerf.rdv === 0 ? "—" : pourcent(sPerf.annulation),
-      (sPerf.rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(sPerf.rdv)} rendez-vous pris`) + suffixeRang,
-      sPerf.annulation !== null && sPrecPerf && sPrecPerf.annulation !== null ? ecartPoints(sPerf.annulation, sPrecPerf.annulation, true) : null
+      rdv === 0 ? "—" : pourcent(s.annulation),
+      (rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdv)} rendez-vous pris`) + suffixeRang,
+      s.annulation !== null && sPrec && sPrec.annulation !== null ? ecartPoints(s.annulation, sPrec.annulation, true) : null
     ),
     carte(
       "Taux de présence",
-      sPerf.presence === null ? "—" : pourcent(sPerf.presence),
-      (sPerf.conclus === 0 ? "aucun call conclu sur la période" : `sur ${nombre(sPerf.conclus)} conclu${sPerf.conclus > 1 ? "s" : ""}`) + suffixeRang,
-      sPerf.presence !== null && sPrecPerf && sPrecPerf.presence !== null ? ecartPoints(sPerf.presence, sPrecPerf.presence) : null
+      s.presence === null ? "—" : pourcent(s.presence),
+      (conclus === 0 ? "aucun call conclu sur la période" : `sur ${nombre(conclus)} conclu${conclus > 1 ? "s" : ""}`) + suffixeRang,
+      s.presence !== null && sPrec && sPrec.presence !== null ? ecartPoints(s.presence, sPrec.presence) : null
     ),
     carte(
       "Taux de closing",
-      sPerf.closing === null ? "—" : pourcent(sPerf.closing),
-      (sPerf.honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(sPerf.honores)} honoré${sPerf.honores > 1 ? "s" : ""}`) + suffixeRang,
-      sPerf.closing !== null && sPrecPerf && sPrecPerf.closing !== null ? ecartPoints(sPerf.closing, sPrecPerf.closing) : null
+      s.closing === null ? "—" : pourcent(s.closing),
+      (honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}`) + suffixeRang,
+      s.closing !== null && sPrec && sPrec.closing !== null ? ecartPoints(s.closing, sPrec.closing) : null
     ),
     carte(
       "Panier moyen",
       panier === null ? "—" : euros(panier),
-      "par vente · tous rangs",
+      `par vente${suffixeRang}`,
       panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
     ),
   ].join("");
@@ -3453,9 +3450,9 @@ function vueSalesClosing() {
     null
   );
 
-  // Agrégat par closer sur TOUS les rangs — sert au business réel
-  // (camemberts : répartition du volume/CA total, relances comprises) et à
-  // la palette de couleurs (stable quel que soit le toggle R1/Tous).
+  // Agrégat par closer — suit le toggle R1/Tous comme tout le reste
+  // (classement, camemberts, courbe) pour que les chiffres restent
+  // cohérents entre les sections de l'onglet.
   const parCloser = {};
   calls.forEach((c) => {
     const n = c.closer || "Non renseigné";
@@ -3469,28 +3466,9 @@ function vueSalesClosing() {
   });
   const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
 
-  // Agrégat par closer sur le périmètre R1/Tous actif — sert au classement
-  // ET à la courbe d'évolution (métriques de PERFORMANCE, cf. `callsPerf`
-  // plus haut).
-  const parCloserPerf = {};
-  callsPerf.forEach((c) => {
-    const n = c.closer || "Non renseigné";
-    if (!parCloserPerf[n]) parCloserPerf[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 };
-    const p = parCloserPerf[n];
-    p.rdv += 1;
-    p.conclus += c.conclu;
-    p.honores += c.present;
-    p.ventes += c.vente;
-    p.ca += c.montant;
-  });
-  const lignesCloserPerf = Object.entries(parCloserPerf).sort((a, b) => b[1].ca - a[1].ca);
-
   // Classement — le meilleur closer en haut, juste sous les cartes d'en-tête
   // (même principe que le classement UTM de Tracking) : toggle Call booké/
   // Call présent/Ventes/CA, même métrique que la courbe d'évolution plus bas.
-  // Calculé sur `lignesCloserPerf` (périmètre R1/Tous) : un closer qui
-  // multiplie les relances ne doit pas paraître plus actif qu'un autre sur
-  // ce classement de performance.
   brancherSalesMetrique(
     "sales-closing-metrique",
     SALES_METRIQUES,
@@ -3505,25 +3483,25 @@ function vueSalesClosing() {
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
     ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
-  salesRenduClassement("sales-closing-classement", lignesCloserPerf, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
+  salesRenduClassement("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
 
   // Le tableau "Par closer" est remplacé par le classement ci-dessus (même
   // info, mieux hiérarchisée) — demande du 2026-10-04.
-  // Camemberts : volume TOTAL par closer (tous rangs), c'est le business réel
-  // — couleurs basées sur `lignesCloser` (stable, indépendant du toggle).
   const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
 
   document.getElementById("sales-closing-camemberts").innerHTML = [
-    disque("RDV bookés par closer", partsRdv, nombre),
-    disque("CA contracté par closer", partsCa, euros),
+    disque(`RDV bookés par closer${suffixeRang}`, partsRdv, nombre),
+    disque(`CA contracté par closer${suffixeRang}`, partsCa, euros),
   ].join("");
 
   brancherSurvol(document.getElementById("sales-closing-camemberts"));
 
-  // Relation R1/R2 — déjà filtré période + closer actif via `calls` plus haut.
-  salesGraphR1R2("sales-closing-r1r2", salesStatsR1R2(calls));
+  // Relation R1/R2 — seule section qui ignore volontairement le toggle
+  // R1/Tous (elle a besoin des deux rangs en même temps pour comparer R1 à
+  // la relance) : utilise `callsTousRangs`, pas `calls`.
+  salesGraphR1R2("sales-closing-r1r2", salesStatsR1R2(callsTousRangs));
 
   // Évolution de la métrique active par closer dans le temps — top 5, même
   // couleur que la table/les camemberts ci-dessus pour une lecture cohérente.
@@ -3532,11 +3510,11 @@ function vueSalesClosing() {
   // de ligne via courbeMultiSeries. Le toggle lui-même a déjà été branché
   // plus haut (il pilote aussi le classement).
   const metriqueDef = SALES_METRIQUES[SALES_CLOSING_METRIQUE];
-  const top5Closers = lignesCloserPerf.slice(0, 5).map(([nom]) => nom);
-  const joursCalls = callsPerf.map((c) => c.jour).filter(Boolean).sort();
+  const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
+  const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
   const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
   const seriesCloser = top5Closers.map((nom) => {
-    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, callsPerf, b));
+    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, calls, b));
     return {
       nom,
       couleur: couleurCloser[nom],
