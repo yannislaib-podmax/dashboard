@@ -17,7 +17,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=29">
+<link rel="stylesheet" href="/assets/style.css?v=30">
 </head>
 <body>
 
@@ -265,16 +265,23 @@
       <strong>Chaque call compte le jour du rendez-vous.</strong>
       Les calls Diagnostic (requalification) n'apparaissent pas ici — voir
       l'onglet Setting. Le filtre période global s'applique ; le toggle
-      ci-dessous ne fait que restreindre à un closer.
+      closer ci-dessous ne fait que restreindre à un closer. Les cartes
+      de volume (RDV, ventes, CA) comptent tous les rangs R (R1 + relances) :
+      c'est le business réel. Les taux, le classement et l'évolution, eux,
+      se calculent par défaut sur les <strong>R1 uniquement</strong> (premier
+      call sur le lead) via le toggle R1/Tous ci-dessous — sinon un lead
+      relancé plusieurs fois gonflerait artificiellement le volume et
+      brouillerait la vraie performance d'acquisition.
     </p>
 
     <div class="toggle-granularite" id="sales-closing-filtre"></div>
+    <div class="toggle-granularite" id="sales-closing-rang"></div>
 
     <div id="sales-closing-cartes" class="cartes"></div>
     <div class="cartes cartes-etroit" id="sales-closing-cartes-etroit"></div>
 
     <h3 class="sous-section">Classement</h3>
-    <p class="sous-titre rv">Le meilleur closer en haut. Change la métrique pour reclasser sur un autre indicateur — même métrique que la courbe d'évolution plus bas.</p>
+    <p class="sous-titre rv">Le meilleur closer en haut (sur le périmètre R1/Tous choisi ci-dessus). Change la métrique pour reclasser sur un autre indicateur — même métrique que la courbe d'évolution plus bas.</p>
     <div class="toggle-granularite" id="sales-closing-metrique"></div>
     <div class="glass classement rv" id="sales-closing-classement"></div>
 
@@ -425,6 +432,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=44"></script>
+<script src="/assets/app.js?v=45"></script>
 </body>
 </html>

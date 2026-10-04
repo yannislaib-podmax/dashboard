@@ -2801,6 +2801,14 @@ let SALES_LEADS = [];
 let SALES_CALLS = [];
 let SALES_CLOSER = "tout";
 let SALES_SETTER = "tout";
+// Périmètre de rang R pour les métriques de PERFORMANCE de Closing (taux,
+// classement, courbe) — "r1" (par défaut) isole le 1er call sur chaque lead,
+// comme Tracking le fait déjà pour ses KPI d'acquisition (rangR === 1) ; un
+// lead relancé plusieurs fois ne doit pas gonfler le volume de performance.
+// Les cartes de volume (RDV/ventes/CA) et les camemberts restent sur TOUS
+// les rangs quel que soit ce réglage : c'est le business réel, relances
+// comprises — décision du 2026-10-04 (demande utilisateur).
+let SALES_CLOSING_RANG = "r1";
 
 // Closing : calls Closing de CALL BOOKED, filtrés période + closer actif.
 const salesCallsClosing = () =>
@@ -2823,6 +2831,29 @@ function brancherSalesToggle(id, noms, getActif, onChoix, rerender) {
   // marche pas (dataset expose la version camelCase, pas la clé kebab-case
   // brute) et renvoyait toujours undefined — c'était le même bug qu'au
   // premier jet du toggle Tracking. On relit l'attribut directement.
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      onChoix(btn.getAttribute("data-" + id));
+      rerender();
+    });
+  });
+}
+
+// Toggle R1 uniquement / Tous les rangs — restreint les métriques de
+// PERFORMANCE de Closing (taux, classement, courbe) au 1er call sur chaque
+// lead par défaut. Même correctif d'attribut brut que brancherSalesToggle.
+function salesRangToggleHtml(id, actif) {
+  return (
+    `<button type="button" class="${actif === "r1" ? "actif" : ""}" data-${id}="r1">R1 uniquement</button>` +
+    `<button type="button" class="${actif === "tous" ? "actif" : ""}" data-${id}="tous">Tous les rangs</button>`
+  );
+}
+
+function brancherSalesRangToggle(id, getActif, onChoix, rerender) {
+  const zone = document.getElementById(id);
+  if (!zone) return;
+  zone.innerHTML = salesRangToggleHtml(id, getActif());
   zone.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("actif")) return;
@@ -3285,19 +3316,23 @@ function salesGraphR1R2(cibleId, s) {
 
   cible.innerHTML = `
     <div class="r1r2-wrap">
-      <div class="r1r2-donut"${info(bulleDonut)}>
-        <svg viewBox="0 0 160 160">
-          <defs>
-            <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#4FC3F7" />
-              <stop offset="100%" stop-color="#E619B0" />
-            </linearGradient>
-          </defs>
-          <circle class="r1r2-piste" cx="80" cy="80" r="${RAYON}"></circle>
-          <circle class="r1r2-arc" cx="80" cy="80" r="${RAYON}" stroke="url(#${idDegrade})" stroke-dasharray="${arc} ${reste}"></circle>
-        </svg>
-        <div class="r1r2-donut-centre">
-          <span class="r1r2-donut-chiffre">${s.tauxRelance === null ? "—" : pourcent(s.tauxRelance)}</span>
+      <div class="r1r2-donut-bloc">
+        <div class="r1r2-donut"${info(bulleDonut)}>
+          <svg viewBox="0 0 160 160">
+            <defs>
+              <linearGradient id="${idDegrade}" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4FC3F7" />
+                <stop offset="100%" stop-color="#E619B0" />
+              </linearGradient>
+            </defs>
+            <circle class="r1r2-piste" cx="80" cy="80" r="${RAYON}"></circle>
+            <circle class="r1r2-arc" cx="80" cy="80" r="${RAYON}" stroke="url(#${idDegrade})" stroke-dasharray="${arc} ${reste}"></circle>
+          </svg>
+          <div class="r1r2-donut-centre">
+            <span class="r1r2-donut-chiffre">${s.tauxRelance === null ? "—" : pourcent(s.tauxRelance)}</span>
+          </div>
+        </div>
+        <div class="r1r2-donut-legende"${info(bulleDonut)}>
           <span class="r1r2-donut-label">des R1 présents repartent en R2</span>
           <span class="r1r2-donut-fraction">${nombre(s.nbR1PresentsQuiRepartent)} sur ${nombre(s.nbR1Presents)}</span>
         </div>
@@ -3336,11 +3371,28 @@ function vueSalesClosing() {
     (v) => (SALES_CLOSER = v),
     vueSalesClosing
   );
+  brancherSalesRangToggle(
+    "sales-closing-rang",
+    () => SALES_CLOSING_RANG,
+    (v) => (SALES_CLOSING_RANG = v),
+    vueSalesClosing
+  );
 
+  // `calls` : tous rangs confondus — sert au business réel (cartes de
+  // volume, camemberts) et à la section Relation R1/R2 (qui éclate elle-même
+  // par rang). `callsPerf` : restreint au périmètre choisi par le toggle
+  // R1/Tous ci-dessus — sert aux métriques de PERFORMANCE (taux, classement,
+  // courbe), pour ne pas laisser un lead relancé plusieurs fois gonfler le
+  // volume de performance (décision du 2026-10-04).
   const calls = salesCallsClosing();
+  const callsPerf = SALES_CLOSING_RANG === "r1" ? calls.filter((c) => c.rangR === 1) : calls;
   const callsPrec = salesCallsClosingPrecedentes();
+  const callsPrecPerf = callsPrec ? (SALES_CLOSING_RANG === "r1" ? callsPrec.filter((c) => c.rangR === 1) : callsPrec) : null;
   const s = salesStatsCallsClosing(calls);
   const sPrec = callsPrec ? salesStatsCallsClosing(callsPrec) : null;
+  const sPerf = salesStatsCallsClosing(callsPerf);
+  const sPrecPerf = callsPrecPerf ? salesStatsCallsClosing(callsPrecPerf) : null;
+  const suffixeRang = SALES_CLOSING_RANG === "r1" ? " · R1 uniquement" : " · tous rangs";
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   document.getElementById("sales-closing-cartes").innerHTML = [
@@ -3355,29 +3407,34 @@ function vueSalesClosing() {
   // d'annulation/présence/closing), + Panier moyen à côté : c'est aussi un
   // ratio (CA / ventes), pas un volume, donc sa place est ici plutôt que
   // dans les cartes d'en-tête.
+  // Taux d'annulation/présence/closing : calculés sur `sPerf` (périmètre
+  // R1/Tous choisi via le toggle), pas sur `s` (tous rangs) — sinon un lead
+  // relancé plusieurs fois gonfle le volume et fausse le taux de performance.
+  // Panier moyen reste sur `s`/tous rangs : c'est un chiffre de business
+  // réel (CA / ventes), pas une mesure de performance d'acquisition.
   document.getElementById("sales-closing-cartes-etroit").innerHTML = [
     carte(
       "Taux d'annulation",
-      rdv === 0 ? "—" : pourcent(s.annulation),
-      rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdv)} rendez-vous pris`,
-      s.annulation !== null && sPrec && sPrec.annulation !== null ? ecartPoints(s.annulation, sPrec.annulation, true) : null
+      sPerf.rdv === 0 ? "—" : pourcent(sPerf.annulation),
+      (sPerf.rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(sPerf.rdv)} rendez-vous pris`) + suffixeRang,
+      sPerf.annulation !== null && sPrecPerf && sPrecPerf.annulation !== null ? ecartPoints(sPerf.annulation, sPrecPerf.annulation, true) : null
     ),
     carte(
       "Taux de présence",
-      s.presence === null ? "—" : pourcent(s.presence),
-      conclus === 0 ? "aucun call conclu sur la période" : `sur ${nombre(conclus)} conclu${conclus > 1 ? "s" : ""}`,
-      s.presence !== null && sPrec && sPrec.presence !== null ? ecartPoints(s.presence, sPrec.presence) : null
+      sPerf.presence === null ? "—" : pourcent(sPerf.presence),
+      (sPerf.conclus === 0 ? "aucun call conclu sur la période" : `sur ${nombre(sPerf.conclus)} conclu${sPerf.conclus > 1 ? "s" : ""}`) + suffixeRang,
+      sPerf.presence !== null && sPrecPerf && sPrecPerf.presence !== null ? ecartPoints(sPerf.presence, sPrecPerf.presence) : null
     ),
     carte(
       "Taux de closing",
-      s.closing === null ? "—" : pourcent(s.closing),
-      honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}`,
-      s.closing !== null && sPrec && sPrec.closing !== null ? ecartPoints(s.closing, sPrec.closing) : null
+      sPerf.closing === null ? "—" : pourcent(sPerf.closing),
+      (sPerf.honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(sPerf.honores)} honoré${sPerf.honores > 1 ? "s" : ""}`) + suffixeRang,
+      sPerf.closing !== null && sPrecPerf && sPrecPerf.closing !== null ? ecartPoints(sPerf.closing, sPrecPerf.closing) : null
     ),
     carte(
       "Panier moyen",
       panier === null ? "—" : euros(panier),
-      "par vente",
+      "par vente · tous rangs",
       panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
     ),
   ].join("");
@@ -3396,6 +3453,9 @@ function vueSalesClosing() {
     null
   );
 
+  // Agrégat par closer sur TOUS les rangs — sert au business réel
+  // (camemberts : répartition du volume/CA total, relances comprises) et à
+  // la palette de couleurs (stable quel que soit le toggle R1/Tous).
   const parCloser = {};
   calls.forEach((c) => {
     const n = c.closer || "Non renseigné";
@@ -3407,12 +3467,30 @@ function vueSalesClosing() {
     p.ventes += c.vente;
     p.ca += c.montant;
   });
-
   const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
+
+  // Agrégat par closer sur le périmètre R1/Tous actif — sert au classement
+  // ET à la courbe d'évolution (métriques de PERFORMANCE, cf. `callsPerf`
+  // plus haut).
+  const parCloserPerf = {};
+  callsPerf.forEach((c) => {
+    const n = c.closer || "Non renseigné";
+    if (!parCloserPerf[n]) parCloserPerf[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 };
+    const p = parCloserPerf[n];
+    p.rdv += 1;
+    p.conclus += c.conclu;
+    p.honores += c.present;
+    p.ventes += c.vente;
+    p.ca += c.montant;
+  });
+  const lignesCloserPerf = Object.entries(parCloserPerf).sort((a, b) => b[1].ca - a[1].ca);
 
   // Classement — le meilleur closer en haut, juste sous les cartes d'en-tête
   // (même principe que le classement UTM de Tracking) : toggle Call booké/
   // Call présent/Ventes/CA, même métrique que la courbe d'évolution plus bas.
+  // Calculé sur `lignesCloserPerf` (périmètre R1/Tous) : un closer qui
+  // multiplie les relances ne doit pas paraître plus actif qu'un autre sur
+  // ce classement de performance.
   brancherSalesMetrique(
     "sales-closing-metrique",
     SALES_METRIQUES,
@@ -3421,16 +3499,18 @@ function vueSalesClosing() {
     vueSalesClosing
   );
   const bulleCloser = (nom, v) => `
-    <strong>${nom}</strong>
+    <strong>${nom}${suffixeRang}</strong>
     <span>RDV bookés<b>${nombre(v.rdv)}</b></span>
     <span>RDV honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
     ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
-  salesRenduClassement("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
+  salesRenduClassement("sales-closing-classement", lignesCloserPerf, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
 
   // Le tableau "Par closer" est remplacé par le classement ci-dessus (même
   // info, mieux hiérarchisée) — demande du 2026-10-04.
+  // Camemberts : volume TOTAL par closer (tous rangs), c'est le business réel
+  // — couleurs basées sur `lignesCloser` (stable, indépendant du toggle).
   const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
@@ -3452,11 +3532,11 @@ function vueSalesClosing() {
   // de ligne via courbeMultiSeries. Le toggle lui-même a déjà été branché
   // plus haut (il pilote aussi le classement).
   const metriqueDef = SALES_METRIQUES[SALES_CLOSING_METRIQUE];
-  const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
-  const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
+  const top5Closers = lignesCloserPerf.slice(0, 5).map(([nom]) => nom);
+  const joursCalls = callsPerf.map((c) => c.jour).filter(Boolean).sort();
   const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
   const seriesCloser = top5Closers.map((nom) => {
-    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, calls, b));
+    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, callsPerf, b));
     return {
       nom,
       couleur: couleurCloser[nom],
