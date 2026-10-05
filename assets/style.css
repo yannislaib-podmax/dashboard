@@ -1792,14 +1792,28 @@ tr.total td {
   .podium .podium-coupe { animation: none !important; }
 }
 
-/* Valeur client (LTV) : amber, vert, violet, bleu. */
-#perf-ltv .carte:nth-child(1) { border-left: 3px solid var(--ambre); background-image: linear-gradient(135deg, rgba(240,185,90,.12), rgba(240,185,90,0) 60%); }
+/* Valeur client (LTV) : 2 lignes de 3 cartes, lecture de gauche à droite. */
+.cartes-ltv { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { .cartes-ltv { grid-template-columns: 1fr; } }
+#perf-ltv .carte, #perf-ltv-rentab .carte { border-left-width: 3px; }
+#perf-ltv .carte:nth-child(1) { border-left-color: var(--ambre); background-image: linear-gradient(135deg, rgba(240,185,90,.12), rgba(240,185,90,0) 60%); }
 #perf-ltv .carte:nth-child(1) .chiffre { color: #F6CF8A; }
-#perf-ltv .carte:nth-child(2) { border-left: 3px solid var(--magenta); background-image: linear-gradient(135deg, rgba(230,25,176,.12), rgba(230,25,176,0) 60%); }
-#perf-ltv .carte:nth-child(2) .chiffre { color: #F893DA; }
-#perf-ltv .carte:nth-child(3) { border-left: 3px solid var(--vert); background-image: linear-gradient(135deg, rgba(111,211,163,.12), rgba(111,211,163,0) 60%); }
-#perf-ltv .carte:nth-child(3) .chiffre { color: #9BE5C0; }
-#perf-ltv .carte:nth-child(4) { border-left: 3px solid #4FC3F7; background-image: linear-gradient(135deg, rgba(79,195,247,.10), rgba(79,195,247,0) 60%); }
-#perf-ltv .carte:nth-child(4) .chiffre { color: #7DD3FC; }
-#perf-ltv .carte:nth-child(n+5) { border-left: 3px solid var(--violet-clair); background-image: linear-gradient(135deg, rgba(155,107,255,.12), rgba(155,107,255,0) 60%); }
-#perf-ltv .carte:nth-child(n+5) .chiffre { color: #C4A6FF; }
+#perf-ltv .carte:nth-child(2) { border-left-color: var(--vert); background-image: linear-gradient(135deg, rgba(111,211,163,.12), rgba(111,211,163,0) 60%); }
+#perf-ltv .carte:nth-child(2) .chiffre { color: #9BE5C0; }
+#perf-ltv .carte:nth-child(3) { border-left-color: var(--violet-clair); background-image: linear-gradient(135deg, rgba(155,107,255,.12), rgba(155,107,255,0) 60%); }
+#perf-ltv .carte:nth-child(3) .chiffre { color: #C4A6FF; }
+#perf-ltv-rentab .carte:nth-child(1) { border-left-color: var(--magenta); background-image: linear-gradient(135deg, rgba(230,25,176,.12), rgba(230,25,176,0) 60%); }
+#perf-ltv-rentab .carte:nth-child(1) .chiffre { color: #F893DA; }
+#perf-ltv-rentab .carte:nth-child(2) { border-left-color: var(--vert); background-image: linear-gradient(135deg, rgba(111,211,163,.12), rgba(111,211,163,0) 60%); }
+#perf-ltv-rentab .carte:nth-child(2) .chiffre { color: #9BE5C0; }
+#perf-ltv-rentab .carte:nth-child(3) { border-left-color: #4FC3F7; background-image: linear-gradient(135deg, rgba(79,195,247,.10), rgba(79,195,247,0) 60%); }
+#perf-ltv-rentab .carte:nth-child(3) .chiffre { color: #7DD3FC; }
+
+/* Barre empilée : 1er achat en bas, renouvellements au-dessus. */
+.barre.pile { display: flex; flex-direction: column; overflow: hidden; background: none; }
+.barre.pile > div { min-height: 0; }
+.barre.pile .b-contracte { border-radius: 0 0 3px 3px; }
+.barre.pile .b-renouv { border-radius: 7px 7px 0 0; }
+.b-renouv { background: linear-gradient(180deg, var(--ambre), rgba(240, 185, 90, .35)); }
+.p-renouv { background: var(--ambre); }
+.note-graph { margin: 0 0 14px; font-size: 12px; color: var(--txt3); }

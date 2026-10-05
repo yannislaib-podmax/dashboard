@@ -20,7 +20,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=36">
+<link rel="stylesheet" href="/assets/style.css?v=38">
 </head>
 <body>
 
@@ -133,13 +133,14 @@
     <div id="perf-couts" class="cartes cartes-cout"></div>
     <div id="perf-couts-media" class="cartes cartes-cout"></div>
 
+    <h3 class="sous-section">Dépense et valeur des clients acquis</h3>
+    <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente. La dépense face à ce que les clients acquis ont rapporté : 1er achat, puis renouvellements.</p>
+    <div class="glass histo rv" id="graph-ca"></div>
+
     <h3 class="sous-section">Valeur client (LTV)</h3>
     <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
-    <div id="perf-ltv" class="cartes"></div>
-
-    <h3 class="sous-section">Dépense et chiffre d'affaires</h3>
-    <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente.</p>
-    <div class="glass histo rv" id="graph-ca"></div>
+    <div id="perf-ltv" class="cartes cartes-ltv"></div>
+    <div id="perf-ltv-rentab" class="cartes cartes-ltv cartes-cout"></div>
 
     <h3 class="sous-section">Répartition par canal</h3>
     <p class="sous-titre rv">Où part l'argent, ce qu'il produit. L'écart entre le premier et le second disque est le signal à surveiller.</p>
@@ -460,6 +461,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=57"></script>
+<script src="/assets/app.js?v=60"></script>
 </body>
 </html>

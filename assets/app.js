@@ -661,12 +661,15 @@ function tranches7(lignes, granularite) {
   return blocs
     .map((b) => {
       const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
-      return { ...b, depense: somme(dedans, "depense"), contracte: somme(dedans, caChamp()) };
+      const premier = somme(dedans, "contracte1er");
+      const encaisse = somme(dedans, "encaisseTous");
+      // Renouvellements = ce que ces clients ont payé en plus de leur 1er achat.
+      return { ...b, depense: somme(dedans, "depense"), contracte: premier, renouv: Math.max(0, encaisse - premier), total: Math.max(premier, encaisse) };
     })
     // On n'affiche une tranche que si elle a une dépense ou un CA à montrer :
     // des colonnes vides à hauteur minimale poussaient le graphique hors de
     // son cadre quand la période couvrait beaucoup de semaines/mois inactifs.
-    .filter((b) => b.depense > 0 || b.contracte > 0);
+    .filter((b) => b.depense > 0 || b.total > 0);
 }
 
 function graphiqueCa(lignes) {
@@ -688,29 +691,37 @@ function graphiqueCa(lignes) {
     return;
   }
 
-  const max = Math.max(1, ...blocs.flatMap((b) => [b.depense, b.contracte]));
+  const max = Math.max(1, ...blocs.flatMap((b) => [b.depense, b.total]));
   const h = (v) => Math.round((v / max) * 100);
 
   const legende = `
     <div class="legende-graph">
       <span><i class="b-depense"></i>Dépense pub</span>
-      <span><i class="b-contracte"></i>${caLibelle()}</span>
-    </div>`;
+      <span><i class="b-contracte"></i>1er achat des clients acquis</span>
+      <span><i class="b-renouv"></i>Renouvellements (LTV à date)</span>
+    </div>
+    <p class="note-graph">Chaque période montre ce que les clients <em>acquis cette période</em> ont payé à date : les périodes récentes sont plus basses, les clients n'ont pas encore renouvelé.</p>`;
 
   const colonnes = blocs
     .map((b) => {
-      const roas = b.depense > 0 ? (b.contracte / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
+      const roas1 = b.depense > 0 ? (b.contracte / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
+      const roasT = b.depense > 0 ? (b.total / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
       const libelle = libellePeriode(b, granularite);
       const bulle = `<strong>${libelle}</strong>
         <span><i class="p-depense"></i>Dépense pub<b>${euros(b.depense)}</b></span>
-        <span><i class="p-contracte"></i>${caLibelle()}<b>${euros(b.contracte)}</b></span>
-        <span class="bulle-pied">ROAS<b>${roas}</b></span>`;
+        <span><i class="p-contracte"></i>1er achat<b>${euros(b.contracte)}</b></span>
+        <span><i class="p-renouv"></i>Renouvellements<b>${euros(b.renouv)}</b></span>
+        <span class="bulle-pied">ROAS 1er achat<b>${roas1}</b></span>
+        <span class="bulle-pied">ROAS tous contrats<b>${roasT}</b></span>`;
       return `<div class="barre-col"${info(bulle)}>
-        <div class="valeur">${roas}</div>
+        <div class="valeur">${roasT}</div>
         <div class="zone">
           <div class="groupe-barres">
-            <div class="barre b-depense"   data-hauteur="${h(b.depense)}"></div>
-            <div class="barre b-contracte" data-hauteur="${h(b.contracte)}"></div>
+            <div class="barre b-depense" data-hauteur="${h(b.depense)}"></div>
+            <div class="barre pile" data-hauteur="${h(b.total)}">
+              <div class="b-renouv" style="flex:${b.renouv}"></div>
+              <div class="b-contracte" style="flex:${b.contracte}"></div>
+            </div>
           </div>
         </div>
         <div class="jour">${libelle}</div>
@@ -1115,14 +1126,16 @@ function vueEnsemble(lignes, precedentes) {
   ].join("");
 
   const sansLtv = nbClients === 0 ? "aucun client rattaché sur la période" : null;
+  // Ligne 1 : ce que rapporte un client. Ligne 2 : ce que ça donne face à la dépense.
   document.getElementById("perf-ltv").innerHTML = [
     carte("CA encaissé (tous contrats)", enEuros(val("encaisse")), sansLtv || "tout ce que ces clients ont payé à date", ecart("encaisse")),
-    carte("ROAS tous contrats", enRoas(val("roasTous")), sansDepense || "encaissé total / dépense pub", ecart("roasTous")),
     carte("LTV moyenne par client", enEuros(val("ltv")), sansLtv || "encaissé à date, par client acquis", ecart("ltv")),
-    carte("Coût par client", enEuros(val("coutClient")), sansLtv || sansDepense, ecart("coutClient")),
-    carte("Marge par client", enEuros(val("margeClient")), sansLtv || sansDepense || "LTV à date moins coût d'acquisition", ecart("margeClient")),
     carte("LTV / 1er achat", enRoas(val("multipleLtv")), sansLtv || "combien de fois le 1er contrat est dépassé", ecart("multipleLtv")),
-    carte("LTV / coût par client", enRoas(val("ltvSurCout")), sansLtv || sansDepense || "au-dessus de 1 ×, chaque client rapporte plus qu'il n'a coûté", ecart("ltvSurCout")),
+  ].join("");
+  document.getElementById("perf-ltv-rentab").innerHTML = [
+    carte("ROAS tous contrats", enRoas(val("roasTous")), sansDepense || "encaissé total / dépense pub", ecart("roasTous")),
+    carte("Marge par client", enEuros(val("margeClient")), sansLtv || sansDepense || "LTV à date moins coût par client", ecart("margeClient")),
+    carte("LTV / coût par client", enRoas(val("ltvSurCout")), sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté", ecart("ltvSurCout")),
   ].join("");
 
   document.getElementById("perf-couts").innerHTML = [
