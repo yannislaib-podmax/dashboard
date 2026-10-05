@@ -1824,3 +1824,19 @@ tr.total td {
 #perf-ltv-cycle .carte:nth-child(2) .chiffre { color: #F6CF8A; }
 #perf-ltv-cycle .carte:nth-child(3) { border-left: 3px solid var(--magenta); background-image: linear-gradient(135deg, rgba(230,25,176,.12), rgba(230,25,176,0) 60%); }
 #perf-ltv-cycle .carte:nth-child(3) .chiffre { color: #F893DA; }
+
+/* Cartes de coûts : accents vifs (lisibles au premier coup d'oeil). */
+#perf-couts .carte:nth-child(1) { border-left: 3px solid #4FC3F7; background-image: linear-gradient(135deg, rgba(79,195,247,.13), rgba(79,195,247,0) 60%); }
+#perf-couts .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+#perf-couts .carte:nth-child(2) { border-left: 3px solid #9B6BFF; background-image: linear-gradient(135deg, rgba(155,107,255,.13), rgba(155,107,255,0) 60%); }
+#perf-couts .carte:nth-child(2) .chiffre { color: #C4A6FF; }
+#perf-couts .carte:nth-child(3) { border-left: 3px solid #E619B0; background-image: linear-gradient(135deg, rgba(230,25,176,.13), rgba(230,25,176,0) 60%); }
+#perf-couts .carte:nth-child(3) .chiffre { color: #F893DA; }
+#perf-couts .carte:nth-child(4) { border-left: 3px solid #F0B95A; background-image: linear-gradient(135deg, rgba(240,185,90,.13), rgba(240,185,90,0) 60%); }
+#perf-couts .carte:nth-child(4) .chiffre { color: #F6CF8A; }
+#perf-couts-media .carte:nth-child(1) { border-left: 3px solid #4FC3F7; background-image: linear-gradient(135deg, rgba(79,195,247,.13), rgba(79,195,247,0) 60%); }
+#perf-couts-media .carte:nth-child(1) .chiffre { color: #7DD3FC; }
+#perf-couts-media .carte:nth-child(2) { border-left: 3px solid #9B6BFF; background-image: linear-gradient(135deg, rgba(155,107,255,.13), rgba(155,107,255,0) 60%); }
+#perf-couts-media .carte:nth-child(2) .chiffre { color: #C4A6FF; }
+#perf-couts-media .carte:nth-child(3) { border-left: 3px solid #E619B0; background-image: linear-gradient(135deg, rgba(230,25,176,.13), rgba(230,25,176,0) 60%); }
+#perf-couts-media .carte:nth-child(3) .chiffre { color: #F893DA; }
