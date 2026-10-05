@@ -75,6 +75,13 @@ const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
 const CHAMP_LEAD_CLIENT = "fld4U3Hv6uYDDdgv8"; // LEADS -> CLIENTS
 const CHAMP_LEAD_ACQUISITION = "fld82tuFABxz6WElu"; // LEADS -> ACQUISITION
 const CHAMP_CONTRAT_CLIENT = "fldm0apf8f0JU1AIF"; // CONTRATS -> CLIENTS
+// PAIEMENTS : sert aux cohortes (encaisse mois par mois depuis l'acquisition).
+const TABLE_PAIEMENTS = "tblUodmImuM0egrdk";
+const CHAMP_PAIEMENT_CLIENT = "fldp86WBeIMehdpPo"; // PAIEMENTS -> CLIENTS
+const CHAMPS_PAIEMENTS = {
+  fldo1n4fRI9ZoLGeN: "montantRecu",
+  fldQTgnGDxV0v9wpr: "datePaiement",
+};
 const CHAMPS_CONTRATS = {
   fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
   fldlhedw3iJNyAITQ: "dateSignature",
@@ -167,7 +174,7 @@ function recalculerDepuisCallBooked(callsBooked) {
 //                   1er contrat ; l'abonnement Media Buying pris en option ce
 //                   jour-la est exclu s'il existe une prestation)
 //  - encaisseTous : encaisse sur TOUS les contrats du client (a date)
-function recalculerParClient(callsBooked, leads, contrats) {
+function recalculerParClient(callsBooked, leads, contrats, lignesAcquisition = [], paiements = []) {
   // lead -> ligne ACQUISITION du call Closing R1
   const ligneParLeadViaCall = {};
   for (const c of callsBooked) {
@@ -187,7 +194,21 @@ function recalculerParClient(callsBooked, leads, contrats) {
     }
   }
 
+  // client -> paiements recus (dates + montants), pour les cohortes
+  const paiementsParClient = {};
+  for (const pa of paiements) {
+    if (!pa.datePaiement || !(pa.montantRecu > 0)) continue;
+    for (const idClient of pa[CHAMP_PAIEMENT_CLIENT] || []) {
+      (paiementsParClient[idClient] = paiementsParClient[idClient] || []).push({
+        jour: String(pa.datePaiement).slice(0, 10),
+        montant: pa.montantRecu,
+      });
+    }
+  }
+  const ligneParId = Object.fromEntries(lignesAcquisition.map((l) => [l._id, l]));
+
   const parIdAcquisition = {};
+  const detail = [];
   const clientsDejaVus = new Set();
 
   for (const lead of leads) {
@@ -212,9 +233,19 @@ function recalculerParClient(callsBooked, leads, contrats) {
     p.clients += 1;
     p.contracte1er += premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
     p.encaisseTous += mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
+
+    const l = ligneParId[idLigne] || {};
+    detail.push({
+      jour: l.jour ? String(l.jour).slice(0, 10) : null,
+      canal: l.canal || null,
+      produit: l.produit || null,
+      // nombre de prestations (hors abonnement) : >= 2 = client qui a renouvele
+      prestations: mesContrats.filter((k) => k.typeContrat !== "Abonnement").length,
+      paiements: paiementsParClient[idClient] || [],
+    });
   }
 
-  return parIdAcquisition;
+  return { parIdAcquisition, detail };
 }
 
 export default async function handler(req, res) {
@@ -228,15 +259,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [lignesAcquisition, callsBooked, leads, contrats] = await Promise.all([
+    const [lignesAcquisition, callsBooked, leads, contrats, paiements] = await Promise.all([
       lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
       lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION, CHAMP_LIEN_LEAD]),
       lireTable(token, TABLE_LEADS, {}, [CHAMP_LEAD_CLIENT, CHAMP_LEAD_ACQUISITION]),
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, [CHAMP_CONTRAT_CLIENT]),
+      lireTable(token, TABLE_PAIEMENTS, CHAMPS_PAIEMENTS, [CHAMP_PAIEMENT_CLIENT]),
     ]);
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
-    const parClient = recalculerParClient(callsBooked, leads, contrats);
+    const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, lignesAcquisition, paiements);
     const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 };
     const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
@@ -271,6 +303,7 @@ export default async function handler(req, res) {
       genereLe: new Date().toISOString(),
       nbLignes: lignes.length,
       lignes,
+      clientsDetail,
     });
   } catch (erreur) {
     return res.status(502).json({ erreur: String(erreur.message || erreur) });

@@ -1087,6 +1087,127 @@ function brancherSurvol(cible) {
 /*  Vue d'ensemble                                                     */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Cohortes : l'encaissé des clients acquis, mois après mois          */
+/* ------------------------------------------------------------------ */
+
+// Cohorte = mois d'acquisition (jour de la ligne ACQUISITION du client).
+// Pour chaque cohorte : encaissé cumulé aux mois M0, M+1, M+2... rapporté à la
+// dépense pub de ce même mois (= ROAS cumulé). La courbe "toutes cohortes" ne
+// compare chaque mois qu'aux cohortes assez anciennes pour l'avoir vécu : sans
+// ça, les cohortes récentes tireraient la courbe vers le bas.
+const moisIndex = (cle) => Number(cle.slice(0, 4)) * 12 + Number(cle.slice(5, 7)) - 1;
+
+function calculerCohortes(lignes) {
+  const clients = parCanalEtProduit(CLIENTS_DETAIL.filter((c) => c.jour && dansPeriode(c)));
+  const aujourdhui = new Date();
+  const moisCourant = aujourdhui.getFullYear() * 12 + aujourdhui.getMonth();
+
+  const parCohorte = {};
+  const cohorte = (cle) =>
+    (parCohorte[cle] = parCohorte[cle] || { cle, clients: 0, renouvele: 0, depense: 0, flux: {} });
+
+  lignes.forEach((l) => {
+    if (l.jour && l.depense > 0) cohorte(l.jour.slice(0, 7)).depense += l.depense;
+  });
+
+  clients.forEach((c) => {
+    const k = cohorte(c.jour.slice(0, 7));
+    k.clients += 1;
+    if (c.prestations >= 2) k.renouvele += 1;
+    c.paiements.forEach((p) => {
+      const m = Math.max(0, moisIndex(p.jour) - moisIndex(c.jour));
+      k.flux[m] = (k.flux[m] || 0) + p.montant;
+    });
+  });
+
+  // Seules les cohortes avec une dépense connue sont comparables.
+  const cohortes = Object.values(parCohorte)
+    .filter((k) => k.depense > 0)
+    .sort((x, y) => x.cle.localeCompare(y.cle))
+    .map((k) => {
+      const age = moisCourant - moisIndex(k.cle);
+      const cumul = [];
+      let somme = 0;
+      for (let m = 0; m <= age; m++) {
+        somme += k.flux[m] || 0;
+        cumul.push(somme);
+      }
+      return { ...k, age, cumul, roas: cumul.map((v) => v / k.depense) };
+    });
+
+  const ageMax = cohortes.reduce((mx, k) => Math.max(mx, k.age), 0);
+  const global = [];
+  for (let m = 0; m <= ageMax; m++) {
+    const ok = cohortes.filter((k) => k.age >= m);
+    const dep = ok.reduce((s, k) => s + k.depense, 0);
+    if (!dep) break;
+    global.push(ok.reduce((s, k) => s + k.cumul[m], 0) / dep);
+  }
+
+  const idxPayback = global.findIndex((v) => v >= 1);
+  const nbClients = clients.length;
+  const renouveles = clients.filter((c) => c.prestations >= 2).length;
+
+  return {
+    cohortes,
+    global,
+    payback: idxPayback, // -1 = pas encore rentabilisé
+    roasM3: global.length > 3 ? global[3] : null,
+    nbClients,
+    tauxRenouv: nbClients > 0 ? renouveles / nbClients : null,
+  };
+}
+
+function courbeCohortes(cible, co) {
+  if (!co.cohortes.length || !co.global.length) {
+    cible.innerHTML = `<div class="vide">Pas encore assez de données : il faut des clients acquis avec une dépense pub renseignée sur le même mois.</div>`;
+    return;
+  }
+
+  const recentes = co.cohortes.slice(-6);
+  const L = 1000, H = 300, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 46, M_DROITE = 40;
+  const nMois = Math.max(1, co.global.length - 1);
+  const max = Math.max(1.25, ...co.global, ...recentes.flatMap((k) => k.roas));
+  const x = (m) => M_GAUCHE + (m * (L - M_GAUCHE - M_DROITE)) / nMois;
+  const y = (v) => M_HAUT + (H - M_HAUT - M_BAS) * (1 - v / max);
+  const chemin = (vals) => vals.map((v, m) => `${m ? "L" : "M"}${x(m).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const fmt = (v) => v.toFixed(2).replace(".", ",") + " ×";
+
+  const grille = [0, 0.25, 0.5, 0.75, 1]
+    .map((t) => {
+      const yy = y(max * t).toFixed(1);
+      return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille"/>
+        <text x="${M_GAUCHE - 10}" y="${yy}" class="courbe-axe-y" text-anchor="end" dominant-baseline="middle">${(max * t).toFixed(1).replace(".", ",")}×</text>`;
+    })
+    .join("");
+
+  const axeX = co.global
+    .map((_, m) => `<text x="${x(m).toFixed(1)}" y="${H - 10}" class="courbe-axe" text-anchor="middle">${m === 0 ? "M0" : "M+" + m}</text>`)
+    .join("");
+
+  const couleurs = Object.fromEntries(recentes.map((k, i) => [k.cle, PALETTE[i % PALETTE.length]]));
+  const lignesCohortes = recentes
+    .map((k) => `<path d="${chemin(k.roas)}" fill="none" stroke="${couleurs[k.cle]}" stroke-width="2" stroke-opacity=".8" class="courbe-ligne"><title>Cohorte ${libelleMois(k.cle)} : ${k.clients} client${k.clients > 1 ? "s" : ""}, ${fmt(k.roas[k.roas.length - 1])} à date</title></path>`)
+    .join("");
+
+  const ligneGlobale = `<path d="${chemin(co.global)}" fill="none" stroke="#fff" stroke-width="3.5" class="courbe-ligne"/>` +
+    co.global.map((v, m) => `<circle cx="${x(m).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4.5" fill="#fff"><title>M${m ? "+" + m : "0"} : ${fmt(v)} (toutes cohortes assez anciennes)</title></circle>`).join("");
+
+  const seuil = `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${y(1).toFixed(1)}" y2="${y(1).toFixed(1)}" stroke="var(--vert)" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="${L - M_DROITE}" y="${(y(1) - 7).toFixed(1)}" text-anchor="end" fill="var(--vert)" font-size="12">rentabilisé</text>`;
+
+  const legende = `<div class="legende-graph">
+      <span><i style="background:#fff"></i>Toutes cohortes</span>
+      ${recentes.map((k) => `<span><i style="background:${couleurs[k.cle]}"></i>${libelleMois(k.cle)}</span>`).join("")}
+    </div>`;
+
+  cible.innerHTML = legende + `<svg viewBox="0 0 ${L} ${H}" class="courbe-svg" role="img" aria-label="ROAS cumulé par mois depuis l'acquisition">${grille}${seuil}${lignesCohortes}${ligneGlobale}${axeX}</svg>
+    <p class="note-graph">Ligne blanche : toutes les cohortes, en ne comparant chaque mois qu'aux cohortes assez anciennes pour l'avoir vécu. Sous la ligne verte, la dépense n'est pas encore remboursée.</p>`;
+}
+
+const libelleMois = (cle) => `${MOIS_LONGS[Number(cle.slice(5, 7)) - 1].slice(0, 4).toLowerCase()}. ${cle.slice(2, 4)}`;
+
 function vueEnsemble(lignes, precedentes) {
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
@@ -1137,6 +1258,20 @@ function vueEnsemble(lignes, precedentes) {
     carte("Marge par client", enEuros(val("margeClient")), sansLtv || sansDepense || "LTV à date moins coût par client", ecart("margeClient")),
     carte("LTV / coût par client", enRoas(val("ltvSurCout")), sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté", ecart("ltvSurCout")),
   ].join("");
+
+  const co = calculerCohortes(lignes);
+  const sansCohorte = co.nbClients === 0 ? "aucun client rattaché sur la période" : null;
+  document.getElementById("perf-ltv-cycle").innerHTML = [
+    carte("Taux de renouvellement", co.tauxRenouv === null ? "—" : pourcent(co.tauxRenouv), sansCohorte || "clients avec au moins 2 prestations", null),
+    carte(
+      "Délai de rentabilité",
+      co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore",
+      co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données",
+      null
+    ),
+    carte("ROAS à M+3", co.roasM3 === null ? "—" : enRoas(co.roasM3), co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense", null),
+  ].join("");
+  courbeCohortes(document.getElementById("perf-cohortes"), co);
 
   document.getElementById("perf-couts").innerHTML = [
     modeClient
@@ -2886,6 +3021,7 @@ function brancherTracking() {
 /* ------------------------------------------------------------------ */
 
 let SALES_LEADS = [];
+let CLIENTS_DETAIL = [];
 let SALES_CALLS = [];
 let SALES_CLOSER = "tout";
 let SALES_SETTER = "tout";
@@ -3927,6 +4063,7 @@ async function charger() {
     if (!reponse.ok) throw new Error(donnees.erreur || `Erreur ${reponse.status}`);
 
     TOUTES = donnees.lignes.map((l) => ({ ...l, source: deriverSource(l.canal) }));
+    CLIENTS_DETAIL = (donnees.clientsDetail || []).map((c) => ({ ...c, source: deriverSource(c.canal) }));
     fixerCouleurs();
 
     // Le pilotage quotidien reste vide si /api/pilotage-quotidien échoue —
