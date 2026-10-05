@@ -1840,3 +1840,18 @@ tr.total td {
 #perf-couts-media .carte:nth-child(2) .chiffre { color: #C4A6FF; }
 #perf-couts-media .carte:nth-child(3) { border-left: 3px solid #E619B0; background-image: linear-gradient(135deg, rgba(230,25,176,.13), rgba(230,25,176,0) 60%); }
 #perf-couts-media .carte:nth-child(3) .chiffre { color: #F893DA; }
+
+/* Toutes les cartes du dash : accent vif par défaut, en cycle de 6 couleurs.
+   Les règles propres à un bloc (#perf, #direction-cartes, ...) restent prioritaires. */
+.cartes .carte:nth-child(6n+1) { border-left: 3px solid #4FC3F7; background-image: linear-gradient(135deg, rgba(79,195,247,.12), rgba(79,195,247,0) 60%); }
+.cartes .carte:nth-child(6n+1) .chiffre { color: #7DD3FC; }
+.cartes .carte:nth-child(6n+2) { border-left: 3px solid #9B6BFF; background-image: linear-gradient(135deg, rgba(155,107,255,.12), rgba(155,107,255,0) 60%); }
+.cartes .carte:nth-child(6n+2) .chiffre { color: #C4A6FF; }
+.cartes .carte:nth-child(6n+3) { border-left: 3px solid #E619B0; background-image: linear-gradient(135deg, rgba(230,25,176,.12), rgba(230,25,176,0) 60%); }
+.cartes .carte:nth-child(6n+3) .chiffre { color: #F893DA; }
+.cartes .carte:nth-child(6n+4) { border-left: 3px solid #6FD3A3; background-image: linear-gradient(135deg, rgba(111,211,163,.12), rgba(111,211,163,0) 60%); }
+.cartes .carte:nth-child(6n+4) .chiffre { color: #9BE5C0; }
+.cartes .carte:nth-child(6n+5) { border-left: 3px solid #F0B95A; background-image: linear-gradient(135deg, rgba(240,185,90,.12), rgba(240,185,90,0) 60%); }
+.cartes .carte:nth-child(6n+5) .chiffre { color: #F6CF8A; }
+.cartes .carte:nth-child(6n) { border-left: 3px solid #7FE3E3; background-image: linear-gradient(135deg, rgba(127,227,227,.12), rgba(127,227,227,0) 60%); }
+.cartes .carte:nth-child(6n) .chiffre { color: #A8F0F0; }
