@@ -59,6 +59,7 @@
     <div class="groupe" data-groupe="sales">
       <button type="button">Sales Team <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
+        <a href="#sales-classement" data-vue="sales-classement">Classement</a>
         <a href="#sales-closing" data-vue="sales-closing">Closing</a>
         <a href="#sales-setting" data-vue="sales-setting">Setting</a>
       </div></div>
@@ -126,6 +127,13 @@
       lisent comme des <strong>volumes quotidiens</strong> : les taux plus bas
       se lisent en tendance sur une semaine ou un mois, jamais au jour le jour.
     </p>
+
+    <div class="toggle-granularite" id="ca-mode">
+      <button type="button" class="actif" data-mode="call">Par appel</button>
+      <button type="button" data-mode="premier">1er achat client</button>
+      <button type="button" data-mode="tous">Tous contrats</button>
+    </div>
+    <p class="sous-titre rv" id="ca-mode-note"></p>
 
     <h2 class="section">Performance</h2>
     <p class="sous-titre rv">Ce que l'argent dépensé a rapporté, et ce que coûte chaque étape.</p>
@@ -274,6 +282,50 @@
     <div class="glass cadre-table rv" id="tracking-rapport-r"></div>
   </section>
 
+  <!-- ---------- Sales Team — Classement ---------- -->
+  <section class="vue" id="vue-sales-classement">
+    <div class="titre-vue">
+      <h1>Sales Team — Classement</h1>
+      <p class="sous-titre">Qui vend le plus, qui rapporte le plus : closers, chefs de projet et setters.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Le CA vient des contrats signés (Airtable), pas de l'outcome
+      iClosed</strong> : il ne dépend donc pas d'une saisie du closer. Un 1er
+      contrat est une vente à un nouveau client ; un renouvellement est une
+      vente à un client existant (souvent faite par un chef de projet). Les
+      abonnements Media Buying sont exclus (pas de montant total). Les onglets
+      Closing et Setting, eux, restent basés sur les outcomes iClosed.
+    </p>
+
+    <h2 class="section">Closing et renouvellements</h2>
+    <div id="sales-class-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Classement des vendeurs</h3>
+    <p class="sous-titre rv">Choisis le périmètre (tous les contrats, uniquement les premiers, ou uniquement les renouvellements) et la métrique.</p>
+    <div class="toggle-granularite" id="sales-class-perimetre"></div>
+    <div class="toggle-granularite" id="sales-class-metrique"></div>
+    <div class="glass classement rv" id="sales-class-classement"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="sales-class-camemberts"></div>
+
+    <h3 class="sous-section">Évolution</h3>
+    <p class="sous-titre rv">Le top 5 des vendeurs dans le temps, sur la métrique choisie.</p>
+    <div class="glass courbe-carte rv" id="sales-class-courbe"></div>
+
+    <h2 class="section">Setting</h2>
+    <p class="sous-titre rv">Appels Diagnostic des setters, toutes familles confondues (base de données et rattrapage), et les Closing bookés qui en découlent. Aucun contrat n'est rattaché à un setter pour l'instant.</p>
+    <div id="sales-class-setting-cartes" class="cartes cartes-etroit"></div>
+
+    <h3 class="sous-section">Classement des setters</h3>
+    <div class="toggle-granularite" id="sales-class-setting-metrique"></div>
+    <div class="glass classement rv" id="sales-class-setting-classement"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="sales-class-setting-camemberts"></div>
+  </section>
+
   <!-- ---------- Sales Team — Closing ---------- -->
   <section class="vue" id="vue-sales-closing">
     <div class="titre-vue">
@@ -325,17 +377,6 @@
       closer en haut de page.
     </p>
     <div class="glass r1r2 rv" id="sales-closing-r1r2"></div>
-
-    <h3 class="sous-section">Contrats signés</h3>
-    <p class="sous-titre rv">
-      Le CA vient des contrats signés (Airtable), pas de l'outcome iClosed :
-      il ne dépend donc pas d'une saisie du closer. Un 1er contrat est une
-      vente à un nouveau client ; un renouvellement ou un additionnel est une
-      vente à un client existant. Les abonnements Media Buying sont exclus
-      (pas de montant total). Le toggle R1/Tous ne s'applique pas ici.
-    </p>
-    <div id="sales-contrats-cartes" class="cartes cartes-etroit"></div>
-    <div class="glass rv" id="sales-contrats-closers" style="padding:20px 24px"></div>
   </section>
 
   <!-- ---------- Sales Team — Setting ---------- -->
@@ -464,6 +505,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=50"></script>
+<script src="/assets/app.js?v=52"></script>
 </body>
 </html>
