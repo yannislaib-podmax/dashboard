@@ -62,6 +62,22 @@ const CHAMPS_CALL_BOOKED = {
   fldwA9cRx6qHqForP: "vente", // formule 0/1
 };
 
+// Contrats signes (decision 2026-10-05) : le CA par closer vient de CONTRATS
+// (la vraie source), pas de l'outcome iClosed que le closer doit saisir a la
+// main. "Type d'achat" distingue le 1er contrat (NOUVEAU) des renouvellements
+// / additionnels ; la Source "Renouvellement" = vente faite par un chef de projet.
+const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
+const CHAMPS_CONTRATS = {
+  fldCzfvguNxkUzm83: "idContrat",
+  fldlhedw3iJNyAITQ: "dateSignature",
+  fldfDATKrrUGmTTFV: "closer",
+  fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
+  fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL
+  fldVnmoVHveqMrfXl: "source",
+  fldyJLMnj69dcqh6s: "canal",
+  fldz1nshv9SfQLn04: "montantTotal",
+};
+
 function valeur(brut) {
   if (brut === undefined || brut === null) return null;
   if (Array.isArray(brut)) {
@@ -118,10 +134,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [leadsBrut, callsBrut] = await Promise.all([
+    const [leadsBrut, callsBrut, contratsBrut] = await Promise.all([
       lireTable(token, TABLE_LEADS, CHAMPS_LEADS),
       lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED),
+      lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS),
     ]);
+
+    // Les abonnements (Media Buying, 1 200 EUR/mois) n'ont pas de montant
+    // total : ils sont exclus du CA signe par closer.
+    const contrats = contratsBrut
+      .filter((k) => k.dateSignature && k.typeContrat !== "Abonnement")
+      .map((k) => ({
+        jour: String(k.dateSignature).slice(0, 10),
+        closer: k.closer || "Non renseigné",
+        typeAchat: k.typeAchat || null,
+        renouvellement: k.source === "Renouvellement",
+        canal: k.canal,
+        montant: k.montantTotal || 0,
+      }));
 
     const leads = leadsBrut
       .filter((l) => l.setter) // un lead jamais assigné à un setter n'a rien à faire ici
@@ -165,6 +195,7 @@ export default async function handler(req, res) {
       nbCalls: calls.length,
       leads,
       calls,
+      contrats,
     });
   } catch (erreur) {
     return res.status(502).json({ erreur: String(erreur.message || erreur) });

@@ -63,6 +63,24 @@ const CHAMPS_CALL_BOOKED = {
 };
 
 const CHAMP_LIEN_ACQUISITION = "fld5Wqq8cb4vPqWW2"; // "Dépense média" — lien CALL BOOKED -> ACQUISITION
+const CHAMP_LIEN_LEAD = "fldHbTh0TKkb2IECE"; // lien CALL BOOKED -> LEADS
+
+// Acquisition PAR CLIENT (decision 2026-10-05) : l'acquisition sert a obtenir un
+// client, pas un contrat. Chemin : CONTRATS -> CLIENTS <- LEADS (champ "Client",
+// ecrit par l'Intake Tally) -> ligne ACQUISITION. La ligne retenue est celle du
+// call Closing R1 du lead (meme ligne que ses RDV, donc ventes et RDV restent
+// alignes) ; a defaut, la ligne ACQUISITION du lead lui-meme.
+const TABLE_LEADS = "tblFfUo3I4ihrQmzr";
+const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
+const CHAMP_LEAD_CLIENT = "fld4U3Hv6uYDDdgv8"; // LEADS -> CLIENTS
+const CHAMP_LEAD_ACQUISITION = "fld82tuFABxz6WElu"; // LEADS -> ACQUISITION
+const CHAMP_CONTRAT_CLIENT = "fldm0apf8f0JU1AIF"; // CONTRATS -> CLIENTS
+const CHAMPS_CONTRATS = {
+  fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
+  fldlhedw3iJNyAITQ: "dateSignature",
+  fldz1nshv9SfQLn04: "montantTotal",
+  fldcExyrANUkkgBP5: "montantRecu", // rollup : total encaisse sur ce contrat
+};
 
 // Un select Airtable arrive sous forme d'objet { id, name, color } ; un
 // multipleSelects arrive en tableau d'objets ; un nombre arrive brut ; un
@@ -143,6 +161,62 @@ function recalculerDepuisCallBooked(callsBooked) {
   return parIdAcquisition;
 }
 
+// Acquisition par client. Renvoie, par ID de ligne ACQUISITION :
+//  - clients      : nombre de clients (avec au moins un contrat) issus de ce lead
+//  - contracte1er : contracte du PREMIER achat (contrats signes a la date du
+//                   1er contrat ; l'abonnement Media Buying pris en option ce
+//                   jour-la est exclu s'il existe une prestation)
+//  - encaisseTous : encaisse sur TOUS les contrats du client (a date)
+function recalculerParClient(callsBooked, leads, contrats) {
+  // lead -> ligne ACQUISITION du call Closing R1
+  const ligneParLeadViaCall = {};
+  for (const c of callsBooked) {
+    if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
+    const idsAcq = c[CHAMP_LIEN_ACQUISITION] || [];
+    if (!idsAcq.length) continue;
+    for (const idLead of c[CHAMP_LIEN_LEAD] || []) {
+      if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = idsAcq[0];
+    }
+  }
+
+  // client -> contrats
+  const contratsParClient = {};
+  for (const k of contrats) {
+    for (const idClient of k[CHAMP_CONTRAT_CLIENT] || []) {
+      (contratsParClient[idClient] = contratsParClient[idClient] || []).push(k);
+    }
+  }
+
+  const parIdAcquisition = {};
+  const clientsDejaVus = new Set();
+
+  for (const lead of leads) {
+    const idsClient = lead[CHAMP_LEAD_CLIENT] || [];
+    if (!idsClient.length) continue;
+    const idClient = idsClient[0];
+    if (clientsDejaVus.has(idClient)) continue; // un client = un seul lead d'origine
+    const mesContrats = contratsParClient[idClient] || [];
+    if (!mesContrats.length) continue;
+
+    const idLigne = ligneParLeadViaCall[lead._id] || (lead[CHAMP_LEAD_ACQUISITION] || [])[0];
+    if (!idLigne) continue;
+    clientsDejaVus.add(idClient);
+
+    const dates = mesContrats.map((k) => String(k.dateSignature || "")).filter(Boolean).sort();
+    const d0 = dates[0] || "";
+    const duJour = mesContrats.filter((k) => String(k.dateSignature || "") === d0);
+    const prestations = duJour.filter((k) => k.typeContrat !== "Abonnement");
+    const premier = prestations.length ? prestations : duJour;
+
+    const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || { clients: 0, contracte1er: 0, encaisseTous: 0 });
+    p.clients += 1;
+    p.contracte1er += premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
+    p.encaisseTous += mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
+  }
+
+  return parIdAcquisition;
+}
+
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
 
@@ -154,16 +228,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [lignesAcquisition, callsBooked] = await Promise.all([
+    const [lignesAcquisition, callsBooked, leads, contrats] = await Promise.all([
       lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
-      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION]),
+      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION, CHAMP_LIEN_LEAD]),
+      lireTable(token, TABLE_LEADS, {}, [CHAMP_LEAD_CLIENT, CHAMP_LEAD_ACQUISITION]),
+      lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, [CHAMP_CONTRAT_CLIENT]),
     ]);
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
+    const parClient = recalculerParClient(callsBooked, leads, contrats);
     const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 };
+    const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
     const lignes = lignesAcquisition.map((ligne) => {
       const r = recalcul[ligne._id] || vide;
+      const cl = parClient[ligne._id] || videClient;
       const { _id, ...reste } = ligne;
       return {
         ...reste,
@@ -177,6 +256,10 @@ export default async function handler(req, res) {
         ventes: r.ventes,
         contracte: r.contracte,
         annules: r.annules,
+        // Acquisition par client (additif : les champs ci-dessus ne changent pas)
+        clients: cl.clients,
+        contracte1er: cl.contracte1er,
+        encaisseTous: cl.encaisseTous,
       };
     });
 
