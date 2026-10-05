@@ -50,7 +50,6 @@
     <div class="groupe ouvert" data-groupe="acquisition">
       <button type="button">Acquisition <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
-        <a href="#resume"     data-vue="resume">Synthèse</a>
         <a href="#ensemble"   data-vue="ensemble"   class="actif">Performance pub</a>
         <a href="#conversion" data-vue="conversion">Conversion</a>
         <a href="#tracking"  data-vue="tracking">Tracking UTM</a>
@@ -112,40 +111,6 @@
 
     <span class="filtre-note" id="filtre-note"></span>
   </div>
-
-  <!-- ---------- Résumé (acquisition par client) ---------- -->
-  <section class="vue" id="vue-resume">
-    <div class="titre-vue">
-      <h1>Synthèse</h1>
-      <p class="sous-titre">L'essentiel de l'acquisition, par client acquis.</p>
-    </div>
-
-    <p class="convention rv">
-      <strong>L'acquisition sert à obtenir un client, pas un contrat.</strong>
-      Chaque client est rattaché au lead qui l'a amené. « 1er achat » mesure ce
-      que coûte un nouveau client (CA contracté de son premier achat) ; « Tous
-      contrats » mesure ce qu'il a rapporté depuis (CA encaissé, à date).
-      Les clients d'avant le formulaire Tally n'en font pas partie.
-    </p>
-
-    <div class="toggle-granularite" id="resume-mode">
-      <button type="button" class="actif" data-mode="premier">1er achat</button>
-      <button type="button" data-mode="tous">Tous contrats</button>
-    </div>
-
-    <div id="resume-cartes" class="cartes"></div>
-
-    <h3 class="sous-section">Dépense et CA par client</h3>
-    <p class="sous-titre rv">Par semaine ou par mois. Le CA suit le mode choisi ci-dessus.</p>
-    <div class="glass histo rv" id="resume-graph"></div>
-
-    <h3 class="sous-section">Canaux</h3>
-    <p class="sous-titre rv">Classés par ROAS, selon le mode choisi.</p>
-    <div class="glass rv" id="resume-canaux" style="padding:20px 24px"></div>
-
-    <h3 class="sous-section">À surveiller</h3>
-    <div class="glass rv" id="resume-alertes" style="padding:20px 24px"></div>
-  </section>
 
   <!-- ---------- Vue d'ensemble ---------- -->
   <section class="vue active" id="vue-ensemble">
@@ -499,6 +464,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=49"></script>
+<script src="/assets/app.js?v=50"></script>
 </body>
 </html>

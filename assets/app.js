@@ -257,7 +257,7 @@ const lignesFiltrees = () => parCanalEtProduit(TOUTES.filter(dansPeriode));
 
 let COMPARAISON = "precedente";
 
-const BAISSE_EST_BONNE = new Set(["coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc", "dirResiliations"]);
+const BAISSE_EST_BONNE = new Set(["coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc", "dirResiliations"]);
 const SANS_JUGEMENT = new Set(["depense"]);
 
 const SEUIL_STABLE_PCT = 5;
@@ -1832,7 +1832,6 @@ function rendre() {
   const lignes = lignesFiltrees();
   const precedentes = lignesPrecedentes();
 
-  vueResume(lignes, precedentes);
   vueEnsemble(lignes, precedentes);
   vueConversion(lignes, precedentes);
   simulateur(lignes);
@@ -3797,181 +3796,6 @@ function vueSalesContrats() {
     : `<div style="color:var(--txt3)">Aucun contrat signé sur la période.</div>`;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Résumé — acquisition par client (1er achat / tous contrats)        */
-/* ------------------------------------------------------------------ */
-
-let RESUME_MODE = "premier"; // "premier" | "tous"
-let GRANULARITE_RESUME = "mois";
-let DERNIERES_LIGNES_RESUME = [];
-
-const resumeChampCa = () => (RESUME_MODE === "premier" ? "contracte1er" : "encaisseTous");
-const resumeLibelleCa = () => (RESUME_MODE === "premier" ? "CA du 1er achat" : "CA encaissé (tous contrats)");
-
-function resumeTranches(lignes, granularite) {
-  const jours = lignes.map((l) => l.jour).filter(Boolean).sort();
-  if (!jours.length) return [];
-  const champ = resumeChampCa();
-  return decoupagePeriodes(jours, granularite)
-    .map((b) => {
-      const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
-      return { ...b, depense: somme(dedans, "depense"), ca: somme(dedans, champ) };
-    })
-    .filter((b) => b.depense > 0 || b.ca > 0);
-}
-
-function resumeGraphique(lignes) {
-  DERNIERES_LIGNES_RESUME = lignes;
-  const cible = document.getElementById("resume-graph");
-  if (!cible) return;
-
-  const rebrancher = () =>
-    brancherToggleGranularite(cible, (g) => {
-      GRANULARITE_RESUME = g;
-      resumeGraphique(DERNIERES_LIGNES_RESUME);
-    });
-
-  const blocs = resumeTranches(lignes, GRANULARITE_RESUME);
-  const toggle = toggleGranulariteHtml(GRANULARITE_RESUME);
-
-  if (!blocs.length) {
-    cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
-    rebrancher();
-    return;
-  }
-
-  const max = Math.max(1, ...blocs.flatMap((b) => [b.depense, b.ca]));
-  const h = (v) => Math.round((v / max) * 100);
-  const libelleCa = resumeLibelleCa();
-
-  const legende = `
-    <div class="legende-graph">
-      <span><i class="b-depense"></i>Dépense pub</span>
-      <span><i class="b-contracte"></i>${libelleCa}</span>
-    </div>`;
-
-  const colonnes = blocs
-    .map((b) => {
-      const roas = b.depense > 0 ? (b.ca / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
-      const libelle = libellePeriode(b, GRANULARITE_RESUME);
-      const bulle = `<strong>${libelle}</strong>
-        <span><i class="p-depense"></i>Dépense pub<b>${euros(b.depense)}</b></span>
-        <span><i class="p-contracte"></i>${libelleCa}<b>${euros(b.ca)}</b></span>
-        <span class="bulle-pied">ROAS<b>${roas}</b></span>`;
-      return `<div class="barre-col"${info(bulle)}>
-        <div class="valeur">${roas}</div>
-        <div class="zone">
-          <div class="groupe-barres">
-            <div class="barre b-depense"   data-hauteur="${h(b.depense)}"></div>
-            <div class="barre b-contracte" data-hauteur="${h(b.ca)}"></div>
-          </div>
-        </div>
-        <div class="jour">${libelle}</div>
-      </div>`;
-    })
-    .join("");
-
-  cible.innerHTML = toggle + legende + `<div class="histo-barres">${colonnes}</div>`;
-  brancherInfobulles(cible);
-  rebrancher();
-
-  requestAnimationFrame(() =>
-    setTimeout(() => {
-      cible.querySelectorAll(".barre").forEach((b) => {
-        b.style.height = b.dataset.hauteur + "%";
-      });
-    }, 120)
-  );
-}
-
-function vueResume(lignes, precedentes) {
-  const champ = resumeChampCa();
-  const enEuros = (v) => (v === null ? "—" : euros(v));
-  const enRoas = (v) => (v === null ? "—" : v.toFixed(2).replace(".", ",") + " ×");
-
-  const mesures = (l) => {
-    const depense = somme(l, "depense");
-    const clients = somme(l, "clients");
-    const ca = somme(l, champ);
-    return { depense, clients, ca, coutClient: ratio(depense, clients), roas: ratio(ca, depense) };
-  };
-
-  const m = mesures(lignes);
-  const p = precedentes ? mesures(precedentes) : null;
-  const ecart = (cle) => (p ? ecartDe(m[cle], p[cle], cle) : null);
-
-  const sansClient = m.clients === 0 ? "aucun client rattaché sur la période" : null;
-  const sansDepense = m.depense === 0 ? "dépense non saisie" : null;
-
-  document.getElementById("resume-cartes").innerHTML = [
-    carte("Dépense pub", euros(m.depense), m.depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
-    carte("Nouveaux clients", nombre(m.clients), sansClient, ecart("clients")),
-    carte("Coût par client", enEuros(m.coutClient), sansClient || sansDepense, ecart("coutClient")),
-    carte(resumeLibelleCa(), enEuros(m.ca), RESUME_MODE === "premier" ? "contracté, au premier achat" : "encaissé à date, tous contrats", ecart("ca")),
-    carte("ROAS", enRoas(m.roas), sansDepense || (RESUME_MODE === "premier" ? "sur le premier achat" : "sur tout ce que le client a payé"), ecart("roas")),
-  ].join("");
-
-  // Les boutons du toggle reflètent le mode courant (au cas où rendre() est rappelé).
-  document.querySelectorAll("#resume-mode button").forEach((b) => b.classList.toggle("actif", b.dataset.mode === RESUME_MODE));
-
-  resumeGraphique(lignes);
-
-  // Classement des canaux par ROAS.
-  const parCanal = {};
-  for (const l of lignes) {
-    const k = l.canal || "Non renseigné";
-    const c = (parCanal[k] = parCanal[k] || { depense: 0, ca: 0, clients: 0 });
-    c.depense += l.depense || 0;
-    c.ca += l[champ] || 0;
-    c.clients += l.clients || 0;
-  }
-  const canaux = Object.entries(parCanal)
-    .map(([nom, c]) => ({ nom, ...c, roas: ratio(c.ca, c.depense) }))
-    .filter((c) => c.depense > 0 || c.clients > 0)
-    .sort((a, b) => (b.roas ?? -1) - (a.roas ?? -1));
-
-  const maxRoas = Math.max(0.0001, ...canaux.map((c) => c.roas || 0));
-  document.getElementById("resume-canaux").innerHTML = canaux.length
-    ? canaux
-        .map(
-          (c) => `<div style="display:grid;grid-template-columns:140px 1fr 90px 110px;gap:14px;align-items:center;padding:7px 0">
-            <div>${c.nom}</div>
-            <div style="background:rgba(255,255,255,.06);border-radius:99px;height:8px;overflow:hidden"><div style="width:${Math.round(((c.roas || 0) / maxRoas) * 100)}%;height:100%;background:var(--accent,#9B6BFF);border-radius:99px"></div></div>
-            <div style="text-align:right;font-weight:600">${enRoas(c.roas)}</div>
-            <div style="text-align:right;color:var(--txt3)">${nombre(c.clients)} client${c.clients > 1 ? "s" : ""}</div>
-          </div>`
-        )
-        .join("")
-    : `<div style="color:var(--txt3)">Pas encore de données.</div>`;
-
-  // À surveiller : ce qui peut fausser la lecture.
-  const alertes = [];
-  const ventesIclosed = somme(lignes, "ventes");
-  if (ventesIclosed > m.clients) {
-    const ecartVentes = ventesIclosed - m.clients;
-    alertes.push(`${nombre(ecartVentes)} vente${ecartVentes > 1 ? "s" : ""} comptée${ecartVentes > 1 ? "s" : ""} dans iClosed sans client rattaché (vente saisie par l'ancien Intake, ou formulaire Tally pas encore rempli).`);
-  }
-  const rdvAVenir = somme(lignes, "rendezVous") - somme(lignes, "rendezVousConclus");
-  if (rdvAVenir > 0) {
-    alertes.push(`${nombre(rdvAVenir)} RDV de la période encore à venir : le coût par client va baisser si certains signent.`);
-  }
-  document.getElementById("resume-alertes").innerHTML = alertes.length
-    ? alertes.map((a) => `<p style="margin:0 0 8px">${a}</p>`).join("")
-    : `<div style="color:var(--txt3)">Rien à signaler.</div>`;
-}
-
-function brancherResume() {
-  const cible = document.getElementById("resume-mode");
-  if (!cible) return;
-  cible.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.mode === RESUME_MODE) return;
-      RESUME_MODE = btn.dataset.mode;
-      vueResume(lignesFiltrees(), lignesPrecedentes());
-    });
-  });
-}
-
 async function charger() {
   try {
     const reponse = await fetch("/api/acquisition");
@@ -4042,7 +3866,6 @@ async function charger() {
     brancherPeriode();
     brancherCanalProduit();
     brancherTracking();
-    brancherResume();
     rendre();
 
     const heure = new Date(donnees.genereLe).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
