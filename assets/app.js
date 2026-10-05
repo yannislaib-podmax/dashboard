@@ -3818,6 +3818,121 @@ const statsContratsVendeur = (liste) => {
   return par;
 };
 
+// Podium animé (Classement) : coupe au-dessus du n°1, marches qui montent,
+// confettis, valeurs qui comptent. Rang 4+ en lignes classiques dessous.
+const PODIUM_COULEURS = ["#F5C451", "#D5DBE6", "#D89A6A"]; // or, argent, bronze
+
+function salesRenduPodium(cibleId, entries, metriquesObj, metriqueActive, bulleFn) {
+  const cible = document.getElementById(cibleId);
+  if (!cible) return;
+
+  const def = metriquesObj[metriqueActive];
+  const classe = entries
+    .map(([nom, v]) => ({ nom, val: def.valeur(v), sec: def.secondaire(v), v }))
+    .filter((e) => e.val > 0)
+    .sort((x, y) => y.val - x.val);
+
+  if (!classe.length) {
+    cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
+    return;
+  }
+
+  const initiales = (n) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0].toUpperCase()).join("");
+  const hauteurs = [100, 72, 54];
+  const delais = [0.95, 0.35, 0.65]; // le n°1 monte en dernier
+  const ordre = [1, 0, 2].filter((i) => classe[i]); // visuel : 2e, 1er, 3e
+
+  const coupe = `
+    <div class="podium-coupe">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="or-${cibleId}" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFF3B0"/><stop offset=".45" stop-color="#F5C451"/><stop offset="1" stop-color="#B9791A"/>
+          </linearGradient>
+        </defs>
+        <path d="M18 6h28v14c0 9-6 16-14 17-8-1-14-8-14-17z" fill="url(#or-${cibleId})"/>
+        <path d="M18 10H8c0 9 4 15 11 16M46 10h10c0 9-4 15-11 16" fill="none" stroke="url(#or-${cibleId})" stroke-width="3.2" stroke-linecap="round"/>
+        <rect x="28" y="37" width="8" height="10" fill="url(#or-${cibleId})"/>
+        <path d="M20 56c0-5 5-9 12-9s12 4 12 9z" fill="url(#or-${cibleId})"/>
+        <path d="M24 10v10c0 5 2 9 5 11" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M32 14l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7z" fill="#fff" fill-opacity=".85"/>
+      </svg>
+      <i class="etoile e1"></i><i class="etoile e2"></i><i class="etoile e3"></i>
+    </div>`;
+
+  const confettis = Array.from({ length: 22 }, (_, i) => {
+    const c = ["#F5C451", "#E619B0", "#C9A6FF", "#6FD3A3", "#7FE3E3", "#fff"][i % 6];
+    const x = 10 + ((i * 37) % 80);
+    const d = (1.5 + (i % 7) * 0.12).toFixed(2);
+    const t = (2.2 + (i % 5) * 0.35).toFixed(2);
+    const r = (i % 2 ? 1 : -1) * (180 + i * 23);
+    return `<s style="left:${x}%;background:${c};animation-delay:${d}s;animation-duration:${t}s;--r:${r}deg"></s>`;
+  }).join("");
+
+  const colonnes = ordre
+    .map((i) => {
+      const e = classe[i];
+      const col = PODIUM_COULEURS[i];
+      return `
+      <div class="podium-col p${i + 1}" style="--c:${col};--d:${delais[i]}s;--h:${hauteurs[i]}%"${info(bulleFn(e.nom, e.v))}>
+        <div class="podium-perso">
+          ${i === 0 ? coupe : ""}
+          <div class="podium-avatar"><span>${initiales(e.nom)}</span></div>
+          <div class="podium-nom">${e.nom}</div>
+          <div class="podium-valeur" data-val="${e.val}">${def.format(e.val)}</div>
+          ${e.sec ? `<div class="podium-sec">${e.sec}</div>` : ""}
+        </div>
+        <div class="podium-marche"><b>${i + 1}</b></div>
+      </div>`;
+    })
+    .join("");
+
+  const reste = classe.slice(3);
+  const max = classe[0].val;
+  const lignes = reste
+    .map(
+      (e, k) => `
+      <div class="classement-ligne"${info(bulleFn(e.nom, e.v))}>
+        <span class="classement-rang">${k + 4}</span>
+        <span class="classement-nom">${e.nom}</span>
+        <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((e.val / max) * 100))}%"></div></div>
+        <div class="classement-chiffres">
+          <span class="classement-valeur">${def.format(e.val)}</span>
+          ${e.sec ? `<span class="classement-secondaire">${e.sec}</span>` : ""}
+        </div>
+      </div>`
+    )
+    .join("");
+
+  cible.innerHTML = `
+    <div class="podium rv">
+      <div class="podium-halo"></div>
+      <div class="podium-confettis">${confettis}</div>
+      <div class="podium-scene">${colonnes}</div>
+      <div class="podium-sol"></div>
+    </div>
+    ${lignes ? `<div class="podium-reste">${lignes}</div>` : ""}`;
+
+  // Compteur : les valeurs montent de 0 à leur total quand le n°1 arrive.
+  const doux = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!doux) {
+    cible.querySelectorAll(".podium-valeur").forEach((el) => {
+      const cibleVal = Number(el.dataset.val);
+      const debut = performance.now() + 700;
+      el.textContent = def.format(0);
+      const pas = (t) => {
+        const p = Math.min(1, Math.max(0, (t - debut) / 1400));
+        el.textContent = def.format(Math.round(cibleVal * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) requestAnimationFrame(pas);
+      };
+      requestAnimationFrame(pas);
+    });
+  }
+
+  brancherInfobulles(cible);
+}
+
+
 function vueSalesClassement() {
   const cible = document.getElementById("vue-sales-classement");
   if (!cible) return;
@@ -3854,7 +3969,7 @@ function vueSalesClassement() {
     <span>Contrats<b>${nombre(v.n)}</b></span>
     <span>CA signé<b>${euros(v.ca)}</b></span>
     ${v.n > 0 ? `<span class="bulle-pied">${euros(v.ca / v.n)} de panier moyen</span>` : ""}`;
-  salesRenduClassement("sales-class-classement", entries, SALES_CLASS_METRIQUES, SALES_CLASS_METRIQUE, bulle);
+  salesRenduPodium("sales-class-classement", entries, SALES_CLASS_METRIQUES, SALES_CLASS_METRIQUE, bulle);
 
   const couleur = Object.fromEntries(entries.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById("sales-class-camemberts").innerHTML = [
@@ -3941,7 +4056,7 @@ function vueSalesClassementSetting() {
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Closing bookés<b>${nombre(v.transformes)}</b></span>
     ${v.contacts.size > 0 ? `<span class="bulle-pied">${Math.round((v.transformes / v.contacts.size) * 100)} % de transfo</span>` : ""}`;
-  salesRenduClassement("sales-class-setting-classement", entries, metriques, SALES_CLASS_SETTING_METRIQUE, bulle);
+  salesRenduPodium("sales-class-setting-classement", entries, metriques, SALES_CLASS_SETTING_METRIQUE, bulle);
 
   const couleur = Object.fromEntries(entries.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById("sales-class-setting-camemberts").innerHTML = [
