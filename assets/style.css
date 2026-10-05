@@ -1595,15 +1595,52 @@ tr.total td {
   main { margin-left: 0; padding: 90px 18px 90px; }
   body::before { inset: 0 0 auto 0; }
 
+  /* Cause du "menu inutilisable" : le fond sombre (z-index 25) passait AU-DESSUS
+     du tiroir (z-index 20) et interceptait chaque tap, donc impossible de
+     toucher un lien. Le tiroir passe au-dessus du fond. */
   aside.rail {
+    z-index: 50;
+    width: min(86vw, 330px);
+    background: rgba(18, 11, 32, 0.97);
     transform: translateX(-100%);
     box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
     transition: transform .32s cubic-bezier(.22,.61,.36,1);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    overscroll-behavior: contain;
   }
   aside.rail.ouvert-mobile { transform: none; }
 
+  .topbar-mobile {
+    height: calc(60px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+  .burger { width: 44px; height: 44px; }
+  .rail-fond { z-index: 45; }
+
   .rail-marque { padding: 20px 16px; }
-  .rail-fermer { display: block; }
+  .rail-fermer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  /* Cibles tactiles app-native : >= 48px, texte lisible, pas de survol. */
+  .groupe > button { min-height: 52px; padding: 14px 16px; font-size: 16px; }
+  .groupe > button:hover { background: none; }
+  .sous a { min-height: 48px; display: flex; align-items: center; padding: 12px 16px 12px 40px; font-size: 15.5px; }
+  .sous a::before { left: 20px; }
+  .sous a:hover { background: none; }
+  .sous a:active, .groupe > button:active { background: var(--verre); }
+  .rail-nav { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .rail-pied { padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+
+  .burger, .rail-fermer, .groupe > button, .sous a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  main { padding-top: calc(84px + env(safe-area-inset-top)); }
 
   body.menu-ouvert .rail-fond {
     display: block;

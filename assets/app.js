@@ -1751,6 +1751,10 @@ function brancherNavigation() {
 /* ---------- Menu burger (mobile) ---------- */
 
 function ouvrirMenuMobile() {
+  // Déplie le groupe de la vue active pour que le lien courant soit visible
+  // sans tap supplémentaire.
+  const actif = document.querySelector(".sous a.actif");
+  if (actif) actif.closest(".groupe")?.classList.add("ouvert");
   document.getElementById("rail").classList.add("ouvert-mobile");
   document.getElementById("burger").setAttribute("aria-expanded", "true");
   document.body.classList.add("menu-ouvert");
@@ -1774,6 +1778,26 @@ function brancherMenuMobile() {
   });
   fermer.addEventListener("click", fermerMenuMobile);
   fond.addEventListener("click", fermerMenuMobile);
+  document.addEventListener("keydown", (e) => e.key === "Escape" && fermerMenuMobile());
+
+  // Geste natif : glisser le tiroir vers la gauche pour le fermer, glisser
+  // depuis le bord gauche de l'écran pour l'ouvrir.
+  let x0 = null, y0 = null;
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY;
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (x0 === null || window.innerWidth > 900) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    const ouvert = document.getElementById("rail").classList.contains("ouvert-mobile");
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (ouvert && dx < 0) fermerMenuMobile();
+      else if (!ouvert && dx > 0 && x0 < 24) ouvrirMenuMobile();
+    }
+    x0 = null;
+  }, { passive: true });
 
   window.addEventListener("resize", () => {
     if (window.innerWidth > 900) fermerMenuMobile();
