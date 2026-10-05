@@ -1855,3 +1855,10 @@ tr.total td {
 .cartes .carte:nth-child(6n+5) .chiffre { color: #F6CF8A; }
 .cartes .carte:nth-child(6n) { border-left: 3px solid #7FE3E3; background-image: linear-gradient(135deg, rgba(127,227,227,.12), rgba(127,227,227,0) 60%); }
 .cartes .carte:nth-child(6n) .chiffre { color: #A8F0F0; }
+
+/* Couleur de carte pilotée par app.js (colorerCartes) : prioritaire sur toutes les règles par bloc. */
+.carte[data-acc] {
+  border-left: 3px solid var(--ac) !important;
+  background-image: linear-gradient(135deg, rgba(var(--ac-rgb), .12), rgba(var(--ac-rgb), 0) 60%) !important;
+}
+.carte[data-acc] .chiffre { color: var(--ac-t) !important; }

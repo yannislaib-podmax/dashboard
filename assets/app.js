@@ -4139,3 +4139,44 @@ async function charger() {
 }
 
 charger();
+
+/* ------------------------------------------------------------------ */
+/*  Couleurs des cartes : une suite continue par vue, pour qu'aucune    */
+/*  carte n'ait la même couleur que sa voisine (ni à côté, ni en       */
+/*  dessous) — sinon les cartes empilées forment des colonnes de       */
+/*  couleur qui laissent croire à un lien entre des KPI indépendants.  */
+/* ------------------------------------------------------------------ */
+
+const COULEURS_CARTES = [
+  ["#4FC3F7", "79,195,247", "#7DD3FC"],
+  ["#9B6BFF", "155,107,255", "#C4A6FF"],
+  ["#E619B0", "230,25,176", "#F893DA"],
+  ["#6FD3A3", "111,211,163", "#9BE5C0"],
+  ["#F0B95A", "240,185,90", "#F6CF8A"],
+  ["#7FE3E3", "127,227,227", "#A8F0F0"],
+  ["#FF8A65", "255,138,101", "#FFB59E"],
+  ["#7C8CFF", "124,140,255", "#AEB8FF"],
+];
+
+function colorerCartes() {
+  document.querySelectorAll(".vue").forEach((vue) => {
+    vue.querySelectorAll(".carte").forEach((c, i) => {
+      const [b, rgb, t] = COULEURS_CARTES[i % COULEURS_CARTES.length];
+      c.dataset.acc = "1";
+      c.style.setProperty("--ac", b);
+      c.style.setProperty("--ac-rgb", rgb);
+      c.style.setProperty("--ac-t", t);
+    });
+  });
+}
+
+let colorationPrevue = false;
+new MutationObserver(() => {
+  if (colorationPrevue) return;
+  colorationPrevue = true;
+  requestAnimationFrame(() => {
+    colorationPrevue = false;
+    colorerCartes();
+  });
+}).observe(document.body, { childList: true, subtree: true });
+colorerCartes();
