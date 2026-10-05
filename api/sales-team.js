@@ -59,22 +59,18 @@ const CHAMPS_CALL_BOOKED = {
   fldChsnbeVQFDCmjy: "produit",
   fldS2brPeHHyuCRf3: "present", // formule 0/1
   fldHub4Sw3d9ZiEzC: "conclu", // formule 0/1 (Honoré ou No-show)
-  fldwA9cRx6qHqForP: "vente", // formule 0/1
+  fldwA9cRx6qHqForP: "vente", // formule 0/1 (iClosed, plus utilisee : voir contrats)
+  fldszCN4DEDuhjCzh: "contrats", // lien -> CONTRATS (ids), source unique des ventes et du CA
 };
 
-// Contrats signes (decision 2026-10-05) : le CA par closer vient de CONTRATS
-// (la vraie source), pas de l'outcome iClosed que le closer doit saisir a la
-// main. "Type d'achat" distingue le 1er contrat (NOUVEAU) des renouvellements
-// / additionnels ; la Source "Renouvellement" = vente faite par un chef de projet.
+// Ventes et CA (decision 2026-10-05) : une seule source, les CONTRATS. Un call
+// est une vente s'il est rattache (lien CALL BOOKED -> CONTRATS) a un contrat
+// signe, et son CA est le montant de ce contrat. iClosed ne sert plus qu'a
+// compter les calls, la presence et les no-shows. Les abonnements (Media
+// Buying, pas de montant total) ne comptent ni comme vente ni comme CA.
 const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
 const CHAMPS_CONTRATS = {
-  fldCzfvguNxkUzm83: "idContrat",
-  fldlhedw3iJNyAITQ: "dateSignature",
-  fldfDATKrrUGmTTFV: "closer",
   fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
-  fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL
-  fldVnmoVHveqMrfXl: "source",
-  fldyJLMnj69dcqh6s: "canal",
   fldz1nshv9SfQLn04: "montantTotal",
 };
 
@@ -110,7 +106,7 @@ async function lireTable(token, tableId, champs) {
     const donnees = await reponse.json();
 
     for (const enr of donnees.records) {
-      const ligne = {};
+      const ligne = { _id: enr.id };
       for (const [id, nom] of Object.entries(champs)) {
         ligne[nom] = valeur(enr.fields[id]);
       }
@@ -140,18 +136,16 @@ export default async function handler(req, res) {
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS),
     ]);
 
-    // Les abonnements (Media Buying, 1 200 EUR/mois) n'ont pas de montant
-    // total : ils sont exclus du CA signe par closer.
-    const contrats = contratsBrut
-      .filter((k) => k.dateSignature && k.typeContrat !== "Abonnement")
-      .map((k) => ({
-        jour: String(k.dateSignature).slice(0, 10),
-        closer: k.closer || "Non renseigné",
-        typeAchat: k.typeAchat || null,
-        renouvellement: k.source === "Renouvellement",
-        canal: k.canal,
-        montant: k.montantTotal || 0,
-      }));
+    // Montant par contrat (abonnements exclus : pas de montant total).
+    const montantContrat = new Map(
+      contratsBrut.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
+    );
+
+    // Contrats lies a un call, hors abonnements.
+    const liensContrats = (c) =>
+      String(c.contrats || "")
+        .split(", ")
+        .filter((id) => montantContrat.has(id));
 
     const leads = leadsBrut
       .filter((l) => l.setter) // un lead jamais assigné à un setter n'a rien à faire ici
@@ -179,12 +173,12 @@ export default async function handler(req, res) {
         statut: c.statut,
         issue: c.issue,
         rangR: c.rangR,
-        montant: c.montant || 0,
+        montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
         canal: c.canal,
         produit: c.produit,
         present: c.present || 0,
         conclu: c.conclu || 0,
-        vente: c.vente || 0,
+        vente: liensContrats(c).length > 0 ? 1 : 0,
       }));
 
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
@@ -195,7 +189,6 @@ export default async function handler(req, res) {
       nbCalls: calls.length,
       leads,
       calls,
-      contrats,
     });
   } catch (erreur) {
     return res.status(502).json({ erreur: String(erreur.message || erreur) });

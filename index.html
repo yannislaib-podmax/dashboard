@@ -20,7 +20,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=32">
+<link rel="stylesheet" href="/assets/style.css?v=36">
 </head>
 <body>
 
@@ -59,7 +59,6 @@
     <div class="groupe" data-groupe="sales">
       <button type="button">Sales Team <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
-        <a href="#sales-classement" data-vue="sales-classement">Classement</a>
         <a href="#sales-closing" data-vue="sales-closing">Closing</a>
         <a href="#sales-setting" data-vue="sales-setting">Setting</a>
       </div></div>
@@ -128,18 +127,15 @@
       se lisent en tendance sur une semaine ou un mois, jamais au jour le jour.
     </p>
 
-    <div class="toggle-granularite" id="ca-mode">
-      <button type="button" class="actif" data-mode="call">Par appel</button>
-      <button type="button" data-mode="premier">1er achat client</button>
-      <button type="button" data-mode="tous">Tous contrats</button>
-    </div>
-    <p class="sous-titre rv" id="ca-mode-note"></p>
-
     <h2 class="section">Performance</h2>
-    <p class="sous-titre rv">Ce que l'argent dépensé a rapporté, et ce que coûte chaque étape.</p>
+    <p class="sous-titre rv">Ce que l'argent dépensé a rapporté, et ce que coûte chaque étape. Le CA est celui du <strong>1er achat de chaque nouveau client</strong> (contrats Airtable), les ventes d'avant le formulaire Tally n'y figurent pas.</p>
     <div id="perf" class="cartes"></div>
     <div id="perf-couts" class="cartes cartes-cout"></div>
     <div id="perf-couts-media" class="cartes cartes-cout"></div>
+
+    <h3 class="sous-section">Valeur client (LTV)</h3>
+    <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
+    <div id="perf-ltv" class="cartes"></div>
 
     <h3 class="sous-section">Dépense et chiffre d'affaires</h3>
     <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente.</p>
@@ -282,51 +278,6 @@
     <div class="glass cadre-table rv" id="tracking-rapport-r"></div>
   </section>
 
-  <!-- ---------- Sales Team — Classement ---------- -->
-  <section class="vue" id="vue-sales-classement">
-    <div class="titre-vue">
-      <h1>Sales Team — Classement</h1>
-      <p class="sous-titre">Qui vend le plus, qui rapporte le plus : closers, chefs de projet et setters.</p>
-    </div>
-
-    <p class="convention rv">
-      <strong>Le CA vient des contrats signés (Airtable), pas de l'outcome
-      iClosed</strong> : il ne dépend donc pas d'une saisie du closer. Un 1er
-      contrat est une vente à un nouveau client ; un renouvellement est une
-      vente à un client existant (souvent faite par un chef de projet). Les
-      abonnements Media Buying sont exclus (pas de montant total). Les onglets
-      Closing et Setting, eux, restent basés sur les outcomes iClosed.
-    </p>
-
-    <h2 class="section">Closing et renouvellements</h2>
-    <div id="sales-class-cartes" class="cartes"></div>
-
-    <h3 class="sous-section">Classement des vendeurs</h3>
-    <p class="sous-titre rv">Choisis le périmètre (tous les contrats, uniquement les premiers, ou uniquement les renouvellements) et la métrique.</p>
-    <div class="toggle-granularite" id="sales-class-perimetre"></div>
-    <div class="toggle-granularite" id="sales-class-metrique"></div>
-    <div class="glass classement podium-carte rv" id="sales-class-classement"></div>
-
-    <h3 class="sous-section">Répartition</h3>
-    <div class="camemberts" id="sales-class-camemberts"></div>
-
-    <h3 class="sous-section">Évolution</h3>
-    <p class="sous-titre rv">Le top 5 des vendeurs dans le temps, sur la métrique choisie.</p>
-    <div class="glass courbe-carte rv" id="sales-class-courbe"></div>
-
-    <h2 class="section">Setting</h2>
-    <p class="sous-titre rv">Appels Diagnostic des setters, toutes familles confondues (base de données et rattrapage), et les Closing bookés qui en découlent. Aucun contrat n'est rattaché à un setter pour l'instant.</p>
-    <div id="sales-class-setting-cartes" class="cartes cartes-etroit"></div>
-
-    <h3 class="sous-section">Classement des setters</h3>
-    <div class="toggle-granularite" id="sales-class-setting-metrique"></div>
-    <div class="glass classement podium-carte rv" id="sales-class-setting-classement"></div>
-
-    <h3 class="sous-section">Répartition</h3>
-    <div class="camemberts" id="sales-class-setting-camemberts"></div>
-  </section>
-
-  <!-- ---------- Sales Team — Closing ---------- -->
   <section class="vue" id="vue-sales-closing">
     <div class="titre-vue">
       <h1>Sales Team — Closing</h1>
@@ -335,6 +286,10 @@
 
     <p class="convention rv">
       <strong>Chaque call compte le jour du rendez-vous.</strong>
+      <strong>Une vente est un call rattaché à un contrat signé</strong> et
+      son CA est le montant de ce contrat (les renouvellements et abonnements
+      n'y figurent pas) ; iClosed ne sert qu'à compter calls, présences et
+      no-shows.
       Les calls Diagnostic (requalification) n'apparaissent pas ici — voir
       l'onglet Setting. Le filtre période global s'applique ; le toggle
       closer restreint à un closer. <strong>Tout l'onglet</strong> — cartes,
@@ -356,7 +311,7 @@
     <h3 class="sous-section">Classement</h3>
     <p class="sous-titre rv">Le meilleur closer en haut (sur le périmètre R1/Tous choisi ci-dessus). Change la métrique pour reclasser sur un autre indicateur — même métrique que la courbe d'évolution plus bas.</p>
     <div class="toggle-granularite" id="sales-closing-metrique"></div>
-    <div class="glass classement rv" id="sales-closing-classement"></div>
+    <div class="glass classement podium-carte rv" id="sales-closing-classement"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <p class="sous-titre rv">RDV bookés → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
@@ -409,7 +364,7 @@
     <h3 class="sous-section">Classement</h3>
     <p class="sous-titre rv">Le meilleur setter en haut. Change la métrique pour reclasser sur un autre indicateur.</p>
     <div class="toggle-granularite" id="sales-setting-f1-metrique"></div>
-    <div class="glass classement rv" id="sales-setting-f1-classement"></div>
+    <div class="glass classement podium-carte rv" id="sales-setting-f1-classement"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <div class="glass entonnoir rv" id="sales-setting-f1-entonnoir"></div>
@@ -427,7 +382,7 @@
     <h3 class="sous-section">Classement</h3>
     <p class="sous-titre rv">Le meilleur setter en haut. Change la métrique pour reclasser sur un autre indicateur.</p>
     <div class="toggle-granularite" id="sales-setting-f2-metrique"></div>
-    <div class="glass classement rv" id="sales-setting-f2-classement"></div>
+    <div class="glass classement podium-carte rv" id="sales-setting-f2-classement"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <div class="glass entonnoir rv" id="sales-setting-f2-entonnoir"></div>
@@ -505,6 +460,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=53"></script>
+<script src="/assets/app.js?v=57"></script>
 </body>
 </html>

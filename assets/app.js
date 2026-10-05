@@ -43,7 +43,7 @@ const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0)
 //  - "call"    : CA des ventes saisies dans iClosed au call (historique) ;
 //  - "premier" : CA du 1er achat de chaque client acquis (contrats Airtable) ;
 //  - "tous"    : CA encaissé sur tous les contrats de ces clients, à date.
-let CA_MODE = "call";
+let CA_MODE = "premier";
 const CA_MODES = {
   call: { champ: "contracte", libelle: "CA contracté", note: "CA contracté des ventes rattachées au call, tel que saisi dans iClosed." },
   premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable). Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
@@ -339,6 +339,18 @@ const INDICATEURS = {
   contracte: (l) => somme(l, caChamp()),
   roas: (l) => ratio(somme(l, caChamp()), somme(l, "depense")),
   clients: (l) => somme(l, "clients"),
+  encaisse: (l) => somme(l, "encaisseTous"),
+  roasTous: (l) => ratio(somme(l, "encaisseTous"), somme(l, "depense")),
+  ltv: (l) => ratio(somme(l, "encaisseTous"), somme(l, "clients")),
+  // LTV / coût d'acquisition : > 1 = chaque client rapporte plus qu'il n'a coûté.
+  // Marge par client : ce qu'il a rapporté à date moins ce qu'il a coûté à acquérir.
+  margeClient: (l) => {
+    const n = somme(l, "clients");
+    return n > 0 ? (somme(l, "encaisseTous") - somme(l, "depense")) / n : null;
+  },
+  // Combien de fois le 1er achat est dépassé par la valeur à date du client.
+  multipleLtv: (l) => ratio(somme(l, "encaisseTous"), somme(l, "contracte1er")),
+  ltvSurCout: (l) => ratio(ratio(somme(l, "encaisseTous"), somme(l, "clients")), ratio(somme(l, "depense"), somme(l, "clients"))),
   coutClient: (l) => ratio(somme(l, "depense"), somme(l, "clients")),
   coutVente: (l) => ratio(somme(l, "depense"), somme(l, "ventes")),
   coutAppel: (l) => ratio(somme(l, "depense"), somme(l, "honores")),
@@ -1095,15 +1107,22 @@ function vueEnsemble(lignes, precedentes) {
   const nbClients = val("clients");
   const sansClient = modeClient && nbClients === 0 ? "aucun client rattaché sur la période" : null;
 
-  document.querySelectorAll("#ca-mode button").forEach((b) => b.classList.toggle("actif", b.dataset.mode === CA_MODE));
-  const noteMode = document.getElementById("ca-mode-note");
-  if (noteMode) noteMode.textContent = CA_MODES[CA_MODE].note;
-
   document.getElementById("perf").innerHTML = [
     carte("Dépense pub", euros(depense), depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
     carte(caLibelle(), enEuros(val("contracte")), sansClient, ecart("contracte")),
     carte("ROAS", enRoas(val("roas")), sansDepense || "le chiffre de pilotage", ecart("roas")),
-    ...(modeClient ? [carte("Nouveaux clients", nombre(nbClients), null, ecart("clients"))] : []),
+    carte("Nouveaux clients", nombre(nbClients), null, ecart("clients")),
+  ].join("");
+
+  const sansLtv = nbClients === 0 ? "aucun client rattaché sur la période" : null;
+  document.getElementById("perf-ltv").innerHTML = [
+    carte("CA encaissé (tous contrats)", enEuros(val("encaisse")), sansLtv || "tout ce que ces clients ont payé à date", ecart("encaisse")),
+    carte("ROAS tous contrats", enRoas(val("roasTous")), sansDepense || "encaissé total / dépense pub", ecart("roasTous")),
+    carte("LTV moyenne par client", enEuros(val("ltv")), sansLtv || "encaissé à date, par client acquis", ecart("ltv")),
+    carte("Coût par client", enEuros(val("coutClient")), sansLtv || sansDepense, ecart("coutClient")),
+    carte("Marge par client", enEuros(val("margeClient")), sansLtv || sansDepense || "LTV à date moins coût d'acquisition", ecart("margeClient")),
+    carte("LTV / 1er achat", enRoas(val("multipleLtv")), sansLtv || "combien de fois le 1er contrat est dépassé", ecart("multipleLtv")),
+    carte("LTV / coût par client", enRoas(val("ltvSurCout")), sansLtv || sansDepense || "au-dessus de 1 ×, chaque client rapporte plus qu'il n'a coûté", ecart("ltvSurCout")),
   ].join("");
 
   document.getElementById("perf-couts").innerHTML = [
@@ -1868,7 +1887,6 @@ function rendre() {
   vueTracking();
   vueSalesClosing();
   vueSalesSetting();
-  vueSalesClassement();
 
   const active = document.querySelector(".vue.active");
   if (active) {
@@ -2856,7 +2874,6 @@ function brancherTracking() {
 
 let SALES_LEADS = [];
 let SALES_CALLS = [];
-let SALES_CONTRATS = [];
 let SALES_CLOSER = "tout";
 let SALES_SETTER = "tout";
 // Périmètre de rang R pour les métriques de PERFORMANCE de Closing (taux,
@@ -3541,7 +3558,7 @@ function vueSalesClosing() {
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
     ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
-  salesRenduClassement("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
+  salesRenduPodium("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
 
   // Le tableau "Par closer" est remplacé par le classement ci-dessus (même
   // info, mieux hiérarchisée) — demande du 2026-10-04.
@@ -3712,7 +3729,7 @@ function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Closing booké<b>${nombre(v.transformes)}</b></span>
     ${v.contacts.size > 0 ? `<span class="bulle-pied">${Math.round((v.transformes / v.contacts.size) * 100)} % de ${libelleTauxCourt} · ${v.diag > 0 ? Math.round((v.honores / v.diag) * 100) : 0} % de présence</span>` : ""}`;
-  salesRenduClassement(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SALES_SETTING_METRIQUE[famille], bulleSetter);
+  salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SALES_SETTING_METRIQUE[famille], bulleSetter);
 
   document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
     ? `<table>
@@ -3772,51 +3789,8 @@ function vueSalesSetting() {
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
-/*  Sales Team — Classement (contrats signés + setting)                */
+/*  Sales Team — podium (Closing et Setting)                           */
 /* ------------------------------------------------------------------ */
-//
-// Closing : basé sur les CONTRATS signés (Airtable), pas sur l'outcome iClosed.
-// Setting : basé sur les appels Diagnostic et les Closing bookés qui en
-// découlent (aucun contrat n'est rattaché à un setter pour l'instant).
-// Les onglets Closing et Setting, eux, restent basés sur les outcomes iClosed.
-
-let SALES_CLASS_PERIMETRE = "tous"; // "tous" | "premier" | "renouv"
-let SALES_CLASS_METRIQUE = "ca"; // "ca" | "contrats"
-let SALES_CLASS_SETTING_METRIQUE = "transformes";
-let GRANULARITE_SALES_CLASSEMENT = "mois";
-
-const estPremierContrat = (k) => !k.renouvellement && k.typeAchat === "NOUVEAU";
-
-const SALES_CLASS_PERIMETRES = {
-  tous: { libelleCourt: "Tous contrats" },
-  premier: { libelleCourt: "1ers contrats" },
-  renouv: { libelleCourt: "Renouvellements" },
-};
-
-const SALES_CLASS_METRIQUES = {
-  ca: {
-    libelleCourt: "CA signé",
-    valeur: (v) => v.ca,
-    format: euros,
-    secondaire: (v) => (v.n > 0 ? `${nombre(v.n)} contrat${v.n > 1 ? "s" : ""}` : null),
-  },
-  contrats: {
-    libelleCourt: "Contrats",
-    valeur: (v) => v.n,
-    format: nombre,
-    secondaire: (v) => (v.n > 0 ? `${euros(v.ca / v.n)} de panier` : null),
-  },
-};
-
-const statsContratsVendeur = (liste) => {
-  const par = {};
-  for (const k of liste) {
-    const v = (par[k.closer] = par[k.closer] || { n: 0, ca: 0 });
-    v.n += 1;
-    v.ca += k.montant;
-  }
-  return par;
-};
 
 // Podium animé (Classement) : coupe au-dessus du n°1, marches qui montent,
 // confettis, valeurs qui comptent. Rang 4+ en lignes classiques dessous.
@@ -3933,151 +3907,6 @@ function salesRenduPodium(cibleId, entries, metriquesObj, metriqueActive, bulleF
 }
 
 
-function vueSalesClassement() {
-  const cible = document.getElementById("vue-sales-classement");
-  if (!cible) return;
-
-  const somMontant = (l) => l.reduce((s, k) => s + k.montant, 0);
-  const dedans = SALES_CONTRATS.filter(dansPeriode);
-  const plage = plagePrecedente();
-  const prec = plage ? SALES_CONTRATS.filter((k) => k.jour >= plage[0] && k.jour <= plage[1]) : null;
-
-  const premiers = dedans.filter(estPremierContrat);
-  const renouvs = dedans.filter((k) => !estPremierContrat(k));
-  const premiersPrec = prec ? prec.filter(estPremierContrat) : null;
-  const renouvsPrec = prec ? prec.filter((k) => !estPremierContrat(k)) : null;
-  const ec = (a, b, cle) => (prec ? ecartDe(a, b, cle) : null);
-
-  document.getElementById("sales-class-cartes").innerHTML = [
-    carte("CA signé", euros(somMontant(dedans)), `${nombre(dedans.length)} contrat${dedans.length > 1 ? "s" : ""}`, ec(somMontant(dedans), prec && somMontant(prec), "salesCa")),
-    carte("1ers contrats", nombre(premiers.length), `${euros(somMontant(premiers))} · nouveaux clients`, ec(premiers.length, premiersPrec && premiersPrec.length, "salesVentes")),
-    carte("Renouvellements", nombre(renouvs.length), `${euros(somMontant(renouvs))} · clients existants`, ec(renouvs.length, renouvsPrec && renouvsPrec.length, "salesVentes")),
-    carte("Panier moyen", dedans.length ? euros(somMontant(dedans) / dedans.length) : "—", "par contrat signé", null),
-  ].join("");
-
-  brancherSalesMetrique("sales-class-perimetre", SALES_CLASS_PERIMETRES, () => SALES_CLASS_PERIMETRE, (v) => (SALES_CLASS_PERIMETRE = v), vueSalesClassement);
-  brancherSalesMetrique("sales-class-metrique", SALES_CLASS_METRIQUES, () => SALES_CLASS_METRIQUE, (v) => (SALES_CLASS_METRIQUE = v), vueSalesClassement);
-
-  const liste = SALES_CLASS_PERIMETRE === "premier" ? premiers : SALES_CLASS_PERIMETRE === "renouv" ? renouvs : dedans;
-  const parVendeur = statsContratsVendeur(liste);
-  const entries = Object.entries(parVendeur).sort((a, b) => b[1].ca - a[1].ca);
-  const suffixe = ` · ${SALES_CLASS_PERIMETRES[SALES_CLASS_PERIMETRE].libelleCourt.toLowerCase()}`;
-  const def = SALES_CLASS_METRIQUES[SALES_CLASS_METRIQUE];
-
-  const bulle = (nom, v) => `
-    <strong>${nom}${suffixe}</strong>
-    <span>Contrats<b>${nombre(v.n)}</b></span>
-    <span>CA signé<b>${euros(v.ca)}</b></span>
-    ${v.n > 0 ? `<span class="bulle-pied">${euros(v.ca / v.n)} de panier moyen</span>` : ""}`;
-  salesRenduPodium("sales-class-classement", entries, SALES_CLASS_METRIQUES, SALES_CLASS_METRIQUE, bulle);
-
-  const couleur = Object.fromEntries(entries.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  document.getElementById("sales-class-camemberts").innerHTML = [
-    disque(`CA signé par vendeur${suffixe}`, entries.filter(([, v]) => v.ca > 0).map(([nom, v]) => [nom, v.ca, couleur[nom]]), euros),
-    disque(`Contrats par vendeur${suffixe}`, entries.filter(([, v]) => v.n > 0).map(([nom, v]) => [nom, v.n, couleur[nom]]), nombre),
-  ].join("");
-  brancherSurvol(document.getElementById("sales-class-camemberts"));
-
-  // Évolution : top 5 vendeurs sur la métrique active.
-  const top5 = entries.slice(0, 5).map(([nom]) => nom);
-  const jours = liste.map((k) => k.jour).filter(Boolean).sort();
-  const blocs = decoupagePeriodesEtendu(jours, GRANULARITE_SALES_CLASSEMENT);
-  const series = top5.map((nom) => {
-    const stats = blocs.map((b) => {
-      const d = liste.filter((k) => k.closer === nom && k.jour >= b.debut && k.jour <= b.fin);
-      return { n: d.length, ca: somMontant(d) };
-    });
-    return { nom, couleur: couleur[nom], points: stats.map((s) => def.valeur(s)), secondaires: stats.map((s) => def.secondaire(s)) };
-  });
-  courbeMultiSeries("sales-class-courbe", blocs, series, def.format, GRANULARITE_SALES_CLASSEMENT, (g) => {
-    GRANULARITE_SALES_CLASSEMENT = g;
-    vueSalesClassement();
-  });
-
-  vueSalesClassementSetting();
-  brancherInfobulles(cible);
-  requestAnimationFrame(() => apparitions(cible));
-}
-
-// Setting : toutes familles confondues (base de données + rattrapage).
-function vueSalesClassementSetting() {
-  const diag = [...salesCallsDiagFamille(1), ...salesCallsDiagFamille(2)].filter(() => true);
-  const contactsClosing = salesContactsAvecClosing();
-  const honores = somme(diag, "present");
-  const contacts = new Set(diag.map((c) => c.contactId).filter((id) => id != null));
-  const transformes = [...contacts].filter((id) => contactsClosing.has(id)).length;
-  const plage = plagePrecedente();
-  let diagPrec = null;
-  let transfoPrec = null;
-  if (plage) {
-    diagPrec = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.jour && c.jour >= plage[0] && c.jour <= plage[1]);
-    const cp = new Set(diagPrec.map((c) => c.contactId).filter((id) => id != null));
-    transfoPrec = [...cp].filter((id) => contactsClosing.has(id)).length;
-  }
-
-  document.getElementById("sales-class-setting-cartes").innerHTML = [
-    carte("Appels Diagnostic", nombre(diag.length), "bases de données + rattrapage", diagPrec ? ecartDe(diag.length, diagPrec.length, "salesDiag") : null),
-    carte("Honorés", nombre(honores), diag.length ? `${pourcent(honores / diag.length)} de présence` : "—", null),
-    carte("Closing bookés", nombre(transformes), contacts.size ? `${pourcent(transformes / contacts.size)} des contacts appelés` : "—", diagPrec ? ecartDe(transformes, transfoPrec, "salesVentes") : null),
-  ].join("");
-
-  const par = {};
-  diag.forEach((c) => {
-    const n = c.setter || "Non renseigné";
-    const p = (par[n] = par[n] || { diag: 0, honores: 0, contacts: new Set() });
-    p.diag += 1;
-    p.honores += c.present;
-    if (c.contactId != null) p.contacts.add(c.contactId);
-  });
-  const entries = Object.entries(par)
-    .map(([nom, p]) => [nom, { ...p, transformes: [...p.contacts].filter((id) => contactsClosing.has(id)).length }])
-    .sort((a, b) => b[1].transformes - a[1].transformes || b[1].diag - a[1].diag);
-
-  const metriques = {
-    diag: { libelleCourt: "Appels", valeur: (v) => v.diag, format: nombre, secondaire: () => null },
-    honores: {
-      libelleCourt: "Honorés",
-      valeur: (v) => v.honores,
-      format: nombre,
-      secondaire: (v) => (v.diag > 0 ? `${Math.round((v.honores / v.diag) * 100)} % présence` : null),
-    },
-    transformes: {
-      libelleCourt: "Closing bookés",
-      valeur: (v) => v.transformes,
-      format: nombre,
-      secondaire: (v) => (v.contacts.size > 0 ? `${Math.round((v.transformes / v.contacts.size) * 100)} % transfo` : null),
-    },
-  };
-  brancherSalesMetrique("sales-class-setting-metrique", metriques, () => SALES_CLASS_SETTING_METRIQUE, (v) => (SALES_CLASS_SETTING_METRIQUE = v), vueSalesClassement);
-
-  const bulle = (nom, v) => `
-    <strong>${nom}</strong>
-    <span>Appels Diagnostic<b>${nombre(v.diag)}</b></span>
-    <span>Honorés<b>${nombre(v.honores)}</b></span>
-    <span>Closing bookés<b>${nombre(v.transformes)}</b></span>
-    ${v.contacts.size > 0 ? `<span class="bulle-pied">${Math.round((v.transformes / v.contacts.size) * 100)} % de transfo</span>` : ""}`;
-  salesRenduPodium("sales-class-setting-classement", entries, metriques, SALES_CLASS_SETTING_METRIQUE, bulle);
-
-  const couleur = Object.fromEntries(entries.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  document.getElementById("sales-class-setting-camemberts").innerHTML = [
-    disque("Appels Diagnostic par setter", entries.filter(([, v]) => v.diag > 0).map(([nom, v]) => [nom, v.diag, couleur[nom]]), nombre),
-    disque("Closing bookés par setter", entries.filter(([, v]) => v.transformes > 0).map(([nom, v]) => [nom, v.transformes, couleur[nom]]), nombre),
-  ].join("");
-  brancherSurvol(document.getElementById("sales-class-setting-camemberts"));
-}
-
-function brancherCaMode() {
-  const cible = document.getElementById("ca-mode");
-  if (!cible) return;
-  cible.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.mode === CA_MODE) return;
-      CA_MODE = btn.dataset.mode;
-      rendre();
-    });
-  });
-}
-
 async function charger() {
   try {
     const reponse = await fetch("/api/acquisition");
@@ -4136,10 +3965,8 @@ async function charger() {
       if (reponseSales.ok) {
         SALES_LEADS = donneesSales.leads || [];
         SALES_CALLS = donneesSales.calls || [];
-        SALES_CONTRATS = donneesSales.contrats || [];
         vueSalesClosing();
         vueSalesSetting();
-        vueSalesClassement();
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.
@@ -4148,7 +3975,6 @@ async function charger() {
     brancherPeriode();
     brancherCanalProduit();
     brancherTracking();
-    brancherCaMode();
     rendre();
 
     const heure = new Date(donnees.genereLe).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
