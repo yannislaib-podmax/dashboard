@@ -3572,6 +3572,11 @@ function salesGraphR1R2(cibleId, s) {
           <span><i class="r2"></i>R2+ — relance (${nombre(s.nbR2)})</span>
         </div>
         <div class="r1r2-metrique">
+          <div class="r1r2-metrique-titre">Taux d'annulation</div>
+          ${barre(s.annulationR1, "r1", s.nbR1, "R1 bookés")}
+          ${barre(s.annulationR2, "r2", s.nbR2, "relances bookées")}
+        </div>
+        <div class="r1r2-metrique">
           <div class="r1r2-metrique-titre">Taux de présence</div>
           ${barre(s.presenceR1, "r1", s.conclusR1, "R1 conclus (honoré ou no-show)")}
           ${barre(s.presenceR2, "r2", s.conclusR2, "relances conclues")}
@@ -3580,11 +3585,6 @@ function salesGraphR1R2(cibleId, s) {
           <div class="r1r2-metrique-titre">Taux de closing</div>
           ${barre(s.closingR1, "r1", s.honoresR1, "R1 honorés")}
           ${barre(s.closingR2, "r2", s.honoresR2, "relances honorées")}
-        </div>
-        <div class="r1r2-metrique">
-          <div class="r1r2-metrique-titre">Taux d'annulation</div>
-          ${barre(s.annulationR1, "r1", s.nbR1, "R1 bookés")}
-          ${barre(s.annulationR2, "r2", s.nbR2, "relances bookées")}
         </div>
       </div>
     </div>`;
