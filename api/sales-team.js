@@ -169,7 +169,10 @@ export default async function handler(req, res) {
         // Diagnostic ; null pour les calls Closing (pas concernés).
         famille: c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
         closer: c.closer,
-        setter: c.setter,
+        // Sur un call Diagnostic reserve via iClosed, le "closer" assigne EST le setter
+        // (regle confirmee le 2026-10-06) : le champ Setter n'est rempli que par les
+        // issues saisies par le setter lui-meme (SETTER-...).
+        setter: c.setter || (c.typeAppel === "Diagnostic" ? c.closer : null),
         statut: c.statut,
         issue: c.issue,
         rangR: c.rangR,

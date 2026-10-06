@@ -3485,6 +3485,11 @@ function salesStatsR1R2(calls) {
     presenceR2: ratio(honoresR2, conclusR2),
     closingR1: ratio(somme(r1, "vente"), honoresR1),
     closingR2: ratio(somme(r2, "vente"), honoresR2),
+    // Annulation : part des calls bookés qui ont été annulés (avant d'avoir lieu).
+    annulesR1: r1.filter((c) => c.statut === "Annulé").length,
+    annulesR2: r2.filter((c) => c.statut === "Annulé").length,
+    annulationR1: ratio(r1.filter((c) => c.statut === "Annulé").length, r1.length),
+    annulationR2: ratio(r2.filter((c) => c.statut === "Annulé").length, r2.length),
   };
 }
 
@@ -3575,6 +3580,11 @@ function salesGraphR1R2(cibleId, s) {
           <div class="r1r2-metrique-titre">Taux de closing</div>
           ${barre(s.closingR1, "r1", s.honoresR1, "R1 honorés")}
           ${barre(s.closingR2, "r2", s.honoresR2, "relances honorées")}
+        </div>
+        <div class="r1r2-metrique">
+          <div class="r1r2-metrique-titre">Taux d'annulation</div>
+          ${barre(s.annulationR1, "r1", s.nbR1, "R1 bookés")}
+          ${barre(s.annulationR2, "r2", s.nbR2, "relances bookées")}
         </div>
       </div>
     </div>`;
