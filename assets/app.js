@@ -252,8 +252,11 @@ const CANAL_VERS_SOURCE = {
   Facebook: "Organique",
   LinkedIn: "Organique",
   "Site web": "Organique",
-  "Setting Call": "Autre",
-  "Setting dm": "Autre",
+  // Outbound = tout ce qui sort pour booker du Closing (decision 07/10) :
+  // Setting Call = lead tiede (base de donnees, pas encore book), Cold Call =
+  // prospection a froid (listes hors lead magnet / pub). Meme source, canaux distincts.
+  "Setting Call": "Outbound",
+  "Cold Call": "Outbound",
   Autre: "Autre",
 };
 const deriverSource = (canal) => CANAL_VERS_SOURCE[canal] || "Autre";
