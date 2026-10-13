@@ -66,13 +66,43 @@ const CHAMPS_CALL_BOOKED = {
 // Ventes et CA (decision 2026-10-05) : une seule source, les CONTRATS. Un call
 // est une vente s'il est rattache (lien CALL BOOKED -> CONTRATS) a un contrat
 // signe, et son CA est le montant de ce contrat. iClosed ne sert plus qu'a
-// compter les calls, la presence et les no-shows. Les abonnements (Media
-// Buying, pas de montant total) ne comptent ni comme vente ni comme CA.
+// compter les calls, la presence et les no-shows. Tous les contrats comptent,
+// abonnements compris (montant = 1er mois).
 const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
 const CHAMPS_CONTRATS = {
   fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
   fldz1nshv9SfQLn04: "montantTotal",
+  fldlhedw3iJNyAITQ: "dateSignature",
+  fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
 };
+
+// L'Intake ne relie au call que le contrat principal : on y ajoute les contrats
+// du meme client signes le meme jour (ex. abonnement Media Buying pris en
+// option avec un pack). Une seule vente, montant = somme des contrats.
+function contratsAvecFreres(contratsBrut) {
+  const parId = new Map(contratsBrut.map((k) => [k._id, k]));
+  const parClientJour = new Map();
+  const cle = (idClient, k) => `${idClient}|${String(k.dateSignature || "").slice(0, 10)}`;
+  for (const k of contratsBrut) {
+    for (const idClient of String(k.clients || "").split(", ").filter(Boolean)) {
+      const c = cle(idClient, k);
+      if (!parClientJour.has(c)) parClientJour.set(c, []);
+      parClientJour.get(c).push(k._id);
+    }
+  }
+  return (idsLies) => {
+    const ids = new Set();
+    for (const id of idsLies) {
+      const k = parId.get(id);
+      if (!k) continue;
+      ids.add(id);
+      for (const idClient of String(k.clients || "").split(", ").filter(Boolean)) {
+        for (const frere of parClientJour.get(cle(idClient, k)) || []) ids.add(frere);
+      }
+    }
+    return [...ids];
+  };
+}
 
 function valeur(brut) {
   if (brut === undefined || brut === null) return null;
@@ -147,16 +177,12 @@ export default async function handler(req, res) {
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS),
     ]);
 
-    // Montant par contrat (abonnements exclus : pas de montant total).
-    const montantContrat = new Map(
-      contratsBrut.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
-    );
+    // Montant par contrat (abonnements compris : montant = 1er mois).
+    const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
 
-    // Contrats lies a un call, hors abonnements.
-    const liensContrats = (c) =>
-      String(c.contrats || "")
-        .split(", ")
-        .filter((id) => montantContrat.has(id));
+    // Contrats lies a un call.
+    const etendre = contratsAvecFreres(contratsBrut);
+    const liensContrats = (c) => etendre(String(c.contrats || "").split(", ").filter(Boolean));
 
     const leads = leadsBrut
       .filter((l) => l.setter) // un lead jamais assigné à un setter n'a rien à faire ici

@@ -43,12 +43,42 @@ const CHAMPS_CALL_BOOKED = {
 // Ventes et CA = CONTRATS (meme regle que api/sales-team.js, decision 2026-10-05) :
 // un call est une vente s'il est rattache a un contrat de prestation, et son CA
 // est le montant de ce contrat. L'issue iClosed (SALE) n'est plus utilisee.
-// Les abonnements (pas de montant total) ne comptent ni comme vente ni comme CA.
+// Tous les contrats comptent, abonnements compris (montant = 1er mois).
 const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
 const CHAMPS_CONTRATS = {
   fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
   fldz1nshv9SfQLn04: "montantTotal",
+  fldlhedw3iJNyAITQ: "dateSignature",
+  fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
 };
+
+// L'Intake ne relie au call que le contrat principal : on y ajoute les contrats
+// du meme client signes le meme jour (ex. abonnement Media Buying pris en
+// option avec un pack). Une seule vente, montant = somme des contrats.
+function contratsAvecFreres(contratsBrut) {
+  const parId = new Map(contratsBrut.map((k) => [k._id, k]));
+  const parClientJour = new Map();
+  const cle = (idClient, k) => `${idClient}|${String(k.dateSignature || "").slice(0, 10)}`;
+  for (const k of contratsBrut) {
+    for (const idClient of String(k.clients || "").split(", ").filter(Boolean)) {
+      const c = cle(idClient, k);
+      if (!parClientJour.has(c)) parClientJour.set(c, []);
+      parClientJour.get(c).push(k._id);
+    }
+  }
+  return (idsLies) => {
+    const ids = new Set();
+    for (const id of idsLies) {
+      const k = parId.get(id);
+      if (!k) continue;
+      ids.add(id);
+      for (const idClient of String(k.clients || "").split(", ").filter(Boolean)) {
+        for (const frere of parClientJour.get(cle(idClient, k)) || []) ids.add(frere);
+      }
+    }
+    return [...ids];
+  };
+}
 
 // Un select Airtable arrive en objet { id, name, color } ; un multipleSelects
 // arrive en tableau d'objets ; une date/nombre arrive brut ; un champ vide
@@ -136,14 +166,10 @@ export default async function handler(req, res) {
 
     const leads = leadsBrut.map(({ _id, ...reste }) => reste);
 
-    // Montant par contrat de prestation (abonnements exclus).
-    const montantContrat = new Map(
-      contratsBrut.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
-    );
-    const contratsDuCall = (r) =>
-      String(r.contrats || "")
-        .split(", ")
-        .filter((id) => montantContrat.has(id));
+    // Montant par contrat (abonnements compris).
+    const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
+    const etendre = contratsAvecFreres(contratsBrut);
+    const contratsDuCall = (r) => etendre(String(r.contrats || "").split(", ").filter(Boolean));
 
     // On exclut les calls Diagnostic (requalification post-disqualif, pas un
     // call produit) : seuls les calls Closing comptent pour le Tracking UTM.

@@ -269,16 +269,35 @@ export default async function handler(req, res) {
     ]);
 
     // Ventes et CA = CONTRATS (meme regle que api/sales-team.js, decision
-    // 2026-10-05) : un call est une vente s'il est rattache a un contrat de
-    // prestation, son CA est le montant de ce contrat. L'issue iClosed (SALE)
-    // n'est plus utilisee. Abonnements exclus (pas de montant total).
-    const montantContrat = new Map(
-      contrats.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
-    );
+    // 2026-10-05) : un call est une vente s'il est rattache a un contrat, son CA
+    // est le montant de ce contrat. L'issue iClosed (SALE) n'est plus utilisee.
+    // Tous les contrats comptent, abonnements compris (montant = 1er mois).
+    // L'Intake ne relie au call que le contrat principal : on y ajoute les
+    // contrats du meme client signes le meme jour (ex. abonnement Media Buying
+    // pris en option avec un pack). Une seule vente, montant = somme.
+    const montantContrat = new Map(contrats.map((k) => [k._id, k.montantTotal || 0]));
+    const contratsParClientJour = new Map();
+    const contratParId = new Map(contrats.map((k) => [k._id, k]));
+    const cleClientJour = (idClient, k) => `${idClient}|${String(k.dateSignature || "").slice(0, 10)}`;
+    for (const k of contrats) {
+      for (const idClient of k[CHAMP_CONTRAT_CLIENT] || []) {
+        const cle = cleClientJour(idClient, k);
+        if (!contratsParClientJour.has(cle)) contratsParClientJour.set(cle, []);
+        contratsParClientJour.get(cle).push(k._id);
+      }
+    }
     for (const c of callsBooked) {
-      const ids = (c[CHAMP_LIEN_CONTRATS] || []).filter((id) => montantContrat.has(id));
-      c.vente = ids.length > 0 ? 1 : 0;
-      c.montant = ids.reduce((t, id) => t + montantContrat.get(id), 0);
+      const ids = new Set();
+      for (const id of c[CHAMP_LIEN_CONTRATS] || []) {
+        const k = contratParId.get(id);
+        if (!k) continue;
+        ids.add(id);
+        for (const idClient of k[CHAMP_CONTRAT_CLIENT] || []) {
+          for (const frere of contratsParClientJour.get(cleClientJour(idClient, k)) || []) ids.add(frere);
+        }
+      }
+      c.vente = ids.size > 0 ? 1 : 0;
+      c.montant = [...ids].reduce((t, id) => t + (montantContrat.get(id) || 0), 0);
     }
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
