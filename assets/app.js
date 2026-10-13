@@ -3795,10 +3795,24 @@ function vueSalesClosing() {
 // "Part du CA" : CA des Closing DE LA PERIODE (jour du Closing) issus d'un
 // contact passe par le rattrapage, sur le CA de tous les Closing de la periode.
 let SETTING_METRIQUE = "transformes";
+// Perimetre de rang R des calls Closing (cartes, taux, entonnoir, part du CA) :
+// "tous" par defaut ici, car le Setting compte par LEAD (un lead relance ne
+// gonfle pas les volumes) et le CA du rattrapage peut tomber au R2. La
+// section Relation R1/R2 ignore ce toggle, comme dans l'onglet Closing.
+let SETTING_RANG = "tous";
 
 function vueSettingRattrapage() {
   const prefixeId = "sales-setting-f2";
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
+
+  brancherSalesRangToggle(
+    "sales-setting-rang",
+    () => SETTING_RANG,
+    (v) => (SETTING_RANG = v),
+    vueSettingRattrapage
+  );
+  const suffixeRang = SETTING_RANG === "r1" ? " · R1 uniquement" : " · tous rangs";
+  const duRang = (c) => SETTING_RANG === "tous" || c.rangR === 1;
 
   const duSetter = (c) => SALES_SETTER === "tout" || c.setter === SALES_SETTER;
   const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c));
@@ -3815,12 +3829,22 @@ function vueSettingRattrapage() {
     const parContact = new Map();
     liste.forEach((c, i) => {
       const cle = c.contactId != null ? c.contactId : `sans-id-${i}`;
-      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false });
-      if (c.present) parContact.get(cle).honore = true;
+      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false, premierHonore: null });
+      const o = parContact.get(cle);
+      if (c.present) {
+        o.honore = true;
+        if (c.jour && (!o.premierHonore || c.jour < o.premierHonore)) o.premierHonore = c.jour;
+      }
     });
     const contacts = [...parContact.values()];
-    const avecClosing = contacts.filter((o) => o.honore).filter((o) => o.id != null && (closingsParContact.get(o.id) || []).length > 0);
-    const callsClosing = avecClosing.flatMap((o) => closingsParContact.get(o.id));
+    // Seuls comptent les Closing posterieurs au Diagnostic honore : un Closing
+    // pris AVANT le Diagnostic n'est pas un rattrapage.
+    const apresDiag = (o) => (closingsParContact.get(o.id) || []).filter((c) => !o.premierHonore || (c.jour && c.jour >= o.premierHonore));
+    const closingsApres = (o) => apresDiag(o).filter(duRang);
+    const avecClosing = contacts.filter((o) => o.honore && o.id != null && closingsApres(o).length > 0);
+    const callsClosing = avecClosing.flatMap(closingsApres);
+    // Tous rangs confondus, jamais filtre par le toggle : sert a la section R1/R2.
+    const callsClosingTousRangs = contacts.filter((o) => o.honore && o.id != null).flatMap(apresDiag);
     return {
       reserves: liste.length,
       honores: somme(liste, "present"),
@@ -3831,35 +3855,44 @@ function vueSettingRattrapage() {
       contacts: contacts.length,
       contactsHonores: contacts.filter((o) => o.honore).length,
       closing: avecClosing.length,
-      closingHonores: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.present)).length,
-      ventes: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.vente)).length,
+      closingHonores: avecClosing.filter((o) => closingsApres(o).some((c) => c.present)).length,
+      ventes: avecClosing.filter((o) => closingsApres(o).some((c) => c.vente)).length,
       presentClosing: somme(callsClosing, "present"),
       concluClosing: somme(callsClosing, "conclu"),
       ca: somme(callsClosing, "montant"),
+      callsClosingTousRangs,
     };
   };
 
   const g = agreger(diags);
 
   // Part du CA : base "jour du Closing dans la periode".
-  const contactsRattrapage = new Set(diagsTous.map((c) => c.contactId).filter((id) => id != null));
-  const closingsPeriode = closings.filter(dansPeriode);
+  // Un Closing compte comme rattrapage seulement s'il est posterieur au
+  // premier Diagnostic de ce contact.
+  const premierDiag = new Map();
+  diagsTous.forEach((c) => {
+    if (c.contactId != null && c.jour && (!premierDiag.has(c.contactId) || c.jour < premierDiag.get(c.contactId))) premierDiag.set(c.contactId, c.jour);
+  });
+  const closingsPeriode = closings.filter(dansPeriode).filter(duRang);
   const caTotal = somme(closingsPeriode, "montant");
-  const caRattrapage = somme(closingsPeriode.filter((c) => contactsRattrapage.has(c.contactId)), "montant");
+  const caRattrapage = somme(
+    closingsPeriode.filter((c) => premierDiag.has(c.contactId) && c.jour && c.jour >= premierDiag.get(c.contactId)),
+    "montant"
+  );
 
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`),
     carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir"),
     carte("Honorés", nombre(g.honores), "leads venus au Diagnostic"),
-    carte("Closing bookés", nombre(g.closing), "appels de Closing pris"),
-    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
+    carte("Closing bookés", nombre(g.closing), `leads honorés ayant pris un Closing${suffixeRang}`),
+    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}${suffixeRang}`),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
     carte("Taux d'annulation", pourcent(ratio(g.annules, g.reserves)), g.reserves ? `${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""} sur ${nombre(g.reserves)} rendez-vous pris` : "aucun rendez-vous pris sur la période"),
     carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé"),
-    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés` : "—"),
-    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés` : "aucun call Closing passé"),
-    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période` : "aucun CA Closing sur la période"),
+    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés${suffixeRang}` : "—"),
+    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés${suffixeRang}` : "aucun call Closing passé"),
+    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période${suffixeRang}` : "aucun CA Closing sur la période"),
   ].join("");
 
   // A traiter : toute date confondue.
@@ -3936,6 +3969,16 @@ function vueSettingRattrapage() {
     disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
+
+  // Relation R1/R2 sur les seuls Closing issus du rattrapage (ignore le toggle).
+  salesGraphR1R2("sales-setting-f2-r1r2", salesStatsR1R2(g.callsClosingTousRangs));
+
+  // Tout vient d'etre reconstruit (innerHTML) : ces ".rv" ne sont jamais observes par apparitions() (qui n'observe qu'au 1er rendu de la vue). Sans ce re-armement, les sections restent invisibles apres un clic sur le toggle du classement (meme correctif que vueSalesClosing).
+  const cibleVue = document.getElementById("vue-sales-setting");
+  if (cibleVue) {
+    brancherInfobulles(cibleVue);
+    requestAnimationFrame(() => apparitions(cibleVue));
+  }
 }
 
 let OUTBOUND_METRIQUE = "transformes";
@@ -4087,6 +4130,13 @@ function vueOutbound() {
     disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
+
+  // Meme re-armement de l'animation d'entree que vueSalesClosing, sinon les sections disparaissent apres un clic sur le toggle du classement.
+  const cibleVue = document.getElementById("vue-outbound");
+  if (cibleVue) {
+    brancherInfobulles(cibleVue);
+    requestAnimationFrame(() => apparitions(cibleVue));
+  }
 }
 
 function vueSalesSetting() {
