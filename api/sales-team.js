@@ -83,6 +83,17 @@ function valeur(brut) {
   return brut;
 }
 
+// Jour AAAA-MM-JJ en heure de Paris (Airtable renvoie l'UTC : un evenement a
+// 00h30 a Paris tomberait la veille). Meme regle que api/tracking.js.
+function jourParis(brut) {
+  if (!brut) return null;
+  const s = String(brut);
+  if (s.length <= 10) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
 async function lireTable(token, tableId, champs) {
   const lignes = [];
   let offset;
@@ -150,8 +161,8 @@ export default async function handler(req, res) {
     const leads = leadsBrut
       .filter((l) => l.setter) // un lead jamais assigné à un setter n'a rien à faire ici
       .map((l) => ({
-        jour: l.capteLe ? String(l.capteLe).slice(0, 10) : null,
-        jourAssignation: l.dateAssignation ? String(l.dateAssignation).slice(0, 10) : null,
+        jour: jourParis(l.capteLe),
+        jourAssignation: jourParis(l.dateAssignation),
         contactId: l.contactId ?? null,
         setter: l.setter,
         statut: l.statut,
@@ -161,7 +172,7 @@ export default async function handler(req, res) {
     const calls = callsBrut
       .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic")
       .map((c) => ({
-        jour: c.jourRdvDt ? String(c.jourRdvDt).slice(0, 10) : null,
+        jour: jourParis(c.jourRdvDt),
         contactId: c.contactId ?? null,
         typeAppel: c.typeAppel,
         // Famille 1 (base de données, auto-assignation) vs Famille 2

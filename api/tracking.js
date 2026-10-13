@@ -51,6 +51,19 @@ function valeur(brut) {
   return brut;
 }
 
+// Jour AAAA-MM-JJ en heure de Paris. Airtable renvoie les dates en UTC : un
+// lead capte a 00h30 a Paris (22h30 UTC la veille) tombait la veille, alors que
+// la ligne ACQUISITION (donc le Funnel) le range le bon jour. Une date sans
+// heure (10 caracteres) est gardee telle quelle.
+function jourParis(brut) {
+  if (!brut) return null;
+  const s = String(brut);
+  if (s.length <= 10) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
 async function lireTable(token, tableId, champs, champJour) {
   const lignes = [];
   let offset;
@@ -80,7 +93,7 @@ async function lireTable(token, tableId, champs, champJour) {
       }
       // Jour au format AAAA-MM-JJ, pour se brancher sur le même filtre
       // période que le reste du dashboard (DEBUT/FIN, format ISO court).
-      ligne.jour = ligne[champJour] ? String(ligne[champJour]).slice(0, 10) : null;
+      ligne.jour = jourParis(ligne[champJour]);
       for (const compteur of ["present", "conclu", "vente", "montant"]) {
         if (compteur in ligne) ligne[compteur] = ligne[compteur] ?? 0;
       }
