@@ -33,10 +33,21 @@ const CHAMPS_CALL_BOOKED = {
   fldTeh1hsGiPQGpN8: "utmContent",
   fldS2brPeHHyuCRf3: "present",
   fldHub4Sw3d9ZiEzC: "conclu",
-  fldwA9cRx6qHqForP: "vente",
-  fld1GgVHXLLo54h8s: "montant",
+  fldwA9cRx6qHqForP: "vente", // formule iClosed (SALE) : remplacee par les contrats, voir handler
+  fld1GgVHXLLo54h8s: "montant", // idem
   fldFPd5SGaSFfImIE: "typeAppel",
   fldTBeyP7bcOpxz4p: "rangR",
+  fldszCN4DEDuhjCzh: "contrats", // lien CALL BOOKED -> CONTRATS (ids), source unique des ventes et du CA
+};
+
+// Ventes et CA = CONTRATS (meme regle que api/sales-team.js, decision 2026-10-05) :
+// un call est une vente s'il est rattache a un contrat de prestation, et son CA
+// est le montant de ce contrat. L'issue iClosed (SALE) n'est plus utilisee.
+// Les abonnements (pas de montant total) ne comptent ni comme vente ni comme CA.
+const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
+const CHAMPS_CONTRATS = {
+  fldTBSFvLGbiZKter: "typeContrat", // Abonnement / Prestation
+  fldz1nshv9SfQLn04: "montantTotal",
 };
 
 // Un select Airtable arrive en objet { id, name, color } ; un multipleSelects
@@ -87,7 +98,7 @@ async function lireTable(token, tableId, champs, champJour) {
     const donnees = await reponse.json();
 
     for (const enr of donnees.records) {
-      const ligne = {};
+      const ligne = { _id: enr.id };
       for (const [id, nom] of Object.entries(champs)) {
         ligne[nom] = valeur(enr.fields[id]);
       }
@@ -117,10 +128,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [leads, rdvBrut] = await Promise.all([
+    const [leadsBrut, rdvBrut, contratsBrut] = await Promise.all([
       lireTable(token, TABLE_LEADS, CHAMPS_LEADS, "capteLe"),
       lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, "prisLe"),
+      lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, null),
     ]);
+
+    const leads = leadsBrut.map(({ _id, ...reste }) => reste);
+
+    // Montant par contrat de prestation (abonnements exclus).
+    const montantContrat = new Map(
+      contratsBrut.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
+    );
+    const contratsDuCall = (r) =>
+      String(r.contrats || "")
+        .split(", ")
+        .filter((id) => montantContrat.has(id));
 
     // On exclut les calls Diagnostic (requalification post-disqualif, pas un
     // call produit) : seuls les calls Closing comptent pour le Tracking UTM.
@@ -129,7 +152,14 @@ export default async function handler(req, res) {
     // mais le rapport R1/R2 a besoin de voir aussi les rangs suivants.
     const rdv = rdvBrut
       .filter((r) => r.typeAppel === "Closing")
-      .map(({ typeAppel, ...reste }) => reste);
+      .map(({ typeAppel, _id, contrats, ...reste }) => {
+        const ids = contratsDuCall({ contrats });
+        return {
+          ...reste,
+          vente: ids.length > 0 ? 1 : 0,
+          montant: ids.reduce((t, id) => t + montantContrat.get(id), 0),
+        };
+      });
 
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 

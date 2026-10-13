@@ -64,6 +64,7 @@ const CHAMPS_CALL_BOOKED = {
 
 const CHAMP_LIEN_ACQUISITION = "fld5Wqq8cb4vPqWW2"; // "Dépense média" — lien CALL BOOKED -> ACQUISITION
 const CHAMP_LIEN_LEAD = "fldHbTh0TKkb2IECE"; // lien CALL BOOKED -> LEADS
+const CHAMP_LIEN_CONTRATS = "fldszCN4DEDuhjCzh"; // lien CALL BOOKED -> CONTRATS (source unique des ventes et du CA)
 
 // Acquisition PAR CLIENT (decision 2026-10-05) : l'acquisition sert a obtenir un
 // client, pas un contrat. Chemin : CONTRATS -> CLIENTS <- LEADS (champ "Client",
@@ -261,11 +262,24 @@ export default async function handler(req, res) {
   try {
     const [lignesAcquisition, callsBooked, leads, contrats, paiements] = await Promise.all([
       lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
-      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION, CHAMP_LIEN_LEAD]),
+      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION, CHAMP_LIEN_LEAD, CHAMP_LIEN_CONTRATS]),
       lireTable(token, TABLE_LEADS, {}, [CHAMP_LEAD_CLIENT, CHAMP_LEAD_ACQUISITION]),
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, [CHAMP_CONTRAT_CLIENT]),
       lireTable(token, TABLE_PAIEMENTS, CHAMPS_PAIEMENTS, [CHAMP_PAIEMENT_CLIENT]),
     ]);
+
+    // Ventes et CA = CONTRATS (meme regle que api/sales-team.js, decision
+    // 2026-10-05) : un call est une vente s'il est rattache a un contrat de
+    // prestation, son CA est le montant de ce contrat. L'issue iClosed (SALE)
+    // n'est plus utilisee. Abonnements exclus (pas de montant total).
+    const montantContrat = new Map(
+      contrats.filter((k) => k.typeContrat !== "Abonnement").map((k) => [k._id, k.montantTotal || 0])
+    );
+    for (const c of callsBooked) {
+      const ids = (c[CHAMP_LIEN_CONTRATS] || []).filter((id) => montantContrat.has(id));
+      c.vente = ids.length > 0 ? 1 : 0;
+      c.montant = ids.reduce((t, id) => t + montantContrat.get(id), 0);
+    }
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
     const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, lignesAcquisition, paiements);
