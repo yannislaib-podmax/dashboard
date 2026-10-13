@@ -4006,17 +4006,20 @@ function vueOutbound() {
   const g = agreger(leads);
   const show = ratio(g.present, g.conclu);
 
+  // Ligne 1 : les volumes (KPI). Ligne 2 : les taux, dessous.
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période"),
-    carte(
-      "Issues renseignées",
-      nombre(g.issues),
-      g.assignes ? `${pourcent(ratio(g.issues, g.assignes))} des assignés · ${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées` : "aucun lead assigné sur la période"
-    ),
-    carte("Closing bookés", nombre(g.closing), g.issues ? `${pourcent(ratio(g.closing, g.issues))} des appels traités` : "aucune issue renseignée"),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} leads assignés` : "—"),
+    carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`),
+    carte("Closing bookés", nombre(g.closing), "appels de Closing pris"),
+    carte("Closing honorés", nombre(g.honores), "leads venus au Closing"),
+    carte("Ventes", nombre(g.ventes), "contrats signés"),
+    carte("CA généré", euros(g.ca), "montant des contrats signés"),
+  ].join("");
+  document.getElementById(`${prefixeId}-taux`).innerHTML = [
+    carte("Taux d'issue", pourcent(ratio(g.issues, g.assignes)), g.assignes ? `${nombre(g.issues)} sur ${nombre(g.assignes)} assignés` : "—"),
+    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—"),
     carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé"),
-    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
+    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—"),
   ].join("");
 
   entonnoir(
@@ -4074,27 +4077,6 @@ function vueOutbound() {
     <span>CA<b>${euros(v.ca)}</b></span>
     ${v.assignes > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.assignes) * 100)} % de transfo</span>` : ""}`;
   salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, OUTBOUND_METRIQUE, bulleSetter);
-
-  document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
-    ? `<table>
-        <thead><tr><th>Setter</th><th>Assignés</th><th>Issues</th><th>Approuvées</th><th>Rejetées</th><th>Closing booké</th><th>Transfo</th><th>Ventes</th><th>CA</th></tr></thead>
-        <tbody>${lignesSetter
-          .map(
-            ([nom, p]) => `<tr>
-              <td>${nom}</td>
-              ${cellule(p.assignes)}
-              ${cellule(p.issues)}
-              ${cellule(p.approuves)}
-              ${cellule(p.rejetes)}
-              ${cellule(p.closing)}
-              <td>${p.assignes ? pourcent(p.closing / p.assignes) : "—"}</td>
-              ${cellule(p.ventes)}
-              ${cellule(p.ca, euros)}
-            </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="vide">Aucun lead assigné sur cette période.</div>`;
 
   const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
