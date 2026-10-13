@@ -3812,8 +3812,7 @@ function salesCallsDiagFamillePrecedents(famille) {
 // Métrique active du classement "par setter" — une entrée par famille (1/2),
 // vocabulaire partagé (diag/honores/transformes) mais libellés adaptés au
 // moment de la lecture (voir metriquesSetting dans salesRenduFamilleSetting).
-// (Famille 1 : assignes / issues / transformes / ca — voir salesRenduFamille1Setting.)
-let SALES_SETTING_METRIQUE = { 1: "transformes", 2: "transformes" };
+let SALES_SETTING_METRIQUE = { 2: "transformes" };
 
 // Rend un bloc Famille (cartes + entonnoir + table + camemberts) pour la
 // famille donnée. `libelleTaux`/`libelleAppels` adaptent le vocabulaire des
@@ -3935,183 +3934,11 @@ function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
 }
 
-// Famille 1 (canal Setting call / source Outbound) : entonnoir par COHORTE de
-// leads, pas par appel. Il n'y a pas de rendez-vous en Famille 1, seulement
-// une issue saisie par le setter (ligne CALL BOOKED "SETTER-...").
-//   Setter assigne (jour d'assignation dans la periode)
-//   -> Issue renseignee (APPROVED ou REJECTED, a n'importe quelle date)
-//   -> Closing booke (le contact a un call Closing, a n'importe quelle date)
-//   -> Closing honore -> Vente (CONTRATS, meme lien que l'ecran Closing).
-// Un lead assigne qui a aussi un vrai call Diagnostic reserve via iClosed
-// releve de la Famille 2 et n'est pas compte ici.
-function salesRenduFamille1Setting() {
-  const prefixeId = "sales-setting-f1";
-
-  const contactsFamille2 = new Set(
-    SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && c.contactId != null).map((c) => c.contactId)
-  );
-  const issuesParContact = new Map();
-  SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 1 && c.contactId != null).forEach((c) => {
-    if (!issuesParContact.has(c.contactId)) issuesParContact.set(c.contactId, []);
-    issuesParContact.get(c.contactId).push(c.issue);
-  });
-  const closingsParContact = new Map();
-  SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null).forEach((c) => {
-    if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
-    closingsParContact.get(c.contactId).push(c);
-  });
-
-  const leads = SALES_LEADS.filter(
-    (l) =>
-      !(l.contactId != null && contactsFamille2.has(l.contactId)) &&
-      (SALES_SETTER === "tout" || l.setter === SALES_SETTER) &&
-      dansPeriode({ jour: l.jourAssignation })
-  ).map((l) => {
-    const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
-    const issue = !!(issues && issues.length);
-    const calls = issue ? closingsParContact.get(l.contactId) || [] : [];
-    return {
-      setter: l.setter,
-      issue,
-      approuve: issue && issues.includes("APPROVED"),
-      closing: calls.length > 0,
-      honore: calls.some((c) => c.present),
-      vendu: calls.some((c) => c.vente),
-      present: somme(calls, "present"),
-      conclu: somme(calls, "conclu"),
-      ca: somme(calls, "montant"),
-    };
-  });
-
-  const agreger = (liste) => {
-    const issues = liste.filter((l) => l.issue).length;
-    const approuves = liste.filter((l) => l.approuve).length;
-    const closing = liste.filter((l) => l.closing).length;
-    return {
-      assignes: liste.length,
-      issues,
-      approuves,
-      rejetes: issues - approuves,
-      closing,
-      honores: liste.filter((l) => l.honore).length,
-      ventes: liste.filter((l) => l.vendu).length,
-      present: somme(liste, "present"),
-      conclu: somme(liste, "conclu"),
-      ca: somme(liste, "ca"),
-    };
-  };
-
-  const g = agreger(leads);
-  const show = ratio(g.present, g.conclu);
-
-  document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte("Leads assignés", nombre(g.assignes), "à un setter sur la période"),
-    carte(
-      "Issues renseignées",
-      nombre(g.issues),
-      g.assignes ? `${pourcent(ratio(g.issues, g.assignes))} des assignés · ${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées` : "aucun lead assigné sur la période"
-    ),
-    carte("Closing bookés", nombre(g.closing), g.issues ? `${pourcent(ratio(g.closing, g.issues))} des appels traités` : "aucune issue renseignée"),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} leads assignés` : "—"),
-    carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé"),
-    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
-  ].join("");
-
-  entonnoir(
-    `${prefixeId}-entonnoir`,
-    [
-      { nom: "Setter assigné", cle: "assignes" },
-      { nom: "Issue renseignée", cle: "issues" },
-      { nom: "Closing booké", cle: "closing" },
-      { nom: "Closing honoré", cle: "honores" },
-      { nom: "Vente", cle: "ventes" },
-    ],
-    [g.assignes, g.issues, g.closing, g.honores, g.ventes],
-    null,
-    [null, g.assignes, g.issues, g.closing, g.honores],
-    null
-  );
-
-  const parSetter = {};
-  leads.forEach((l) => {
-    const n = l.setter || "Non renseigné";
-    (parSetter[n] = parSetter[n] || []).push(l);
-  });
-  const lignesSetter = Object.entries(parSetter)
-    .map(([nom, liste]) => [nom, agreger(liste)])
-    .sort((a, b) => b[1].assignes - a[1].assignes);
-
-  const metriquesSetting = {
-    assignes: { libelleCourt: "Leads assignés", valeur: (v) => v.assignes, format: nombre, secondaire: () => null },
-    issues: {
-      libelleCourt: "Issues renseignées",
-      valeur: (v) => v.issues,
-      format: nombre,
-      secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.issues / v.assignes) * 100)} % des assignés` : null),
-    },
-    transformes: {
-      libelleCourt: "Closing booké",
-      valeur: (v) => v.closing,
-      format: nombre,
-      secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.closing / v.assignes) * 100)} % transfo` : null),
-    },
-    ca: { libelleCourt: "CA généré", valeur: (v) => v.ca, format: euros, secondaire: (v) => `${nombre(v.ventes)} vente${v.ventes > 1 ? "s" : ""}` },
-  };
-  brancherSalesMetrique(
-    `${prefixeId}-metrique`,
-    metriquesSetting,
-    () => SALES_SETTING_METRIQUE[1],
-    (v) => (SALES_SETTING_METRIQUE[1] = v),
-    salesRenduFamille1Setting
-  );
-  const bulleSetter = (nom, v) => `
-    <strong>${nom}</strong>
-    <span>Assignés<b>${nombre(v.assignes)}</b></span>
-    <span>Issues<b>${nombre(v.issues)}</b></span>
-    <span>Closing booké<b>${nombre(v.closing)}</b></span>
-    <span>CA<b>${euros(v.ca)}</b></span>
-    ${v.assignes > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.assignes) * 100)} % de transfo</span>` : ""}`;
-  salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SALES_SETTING_METRIQUE[1], bulleSetter);
-
-  document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
-    ? `<table>
-        <thead><tr><th>Setter</th><th>Assignés</th><th>Issues</th><th>Approuvées</th><th>Rejetées</th><th>Closing booké</th><th>Transfo</th><th>Ventes</th><th>CA</th></tr></thead>
-        <tbody>${lignesSetter
-          .map(
-            ([nom, p]) => `<tr>
-              <td>${nom}</td>
-              ${cellule(p.assignes)}
-              ${cellule(p.issues)}
-              ${cellule(p.approuves)}
-              ${cellule(p.rejetes)}
-              ${cellule(p.closing)}
-              <td>${p.assignes ? pourcent(p.closing / p.assignes) : "—"}</td>
-              ${cellule(p.ventes)}
-              ${cellule(p.ca, euros)}
-            </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="vide">Aucun lead assigné sur cette période.</div>`;
-
-  const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
-    disque("Leads assignés par setter", lignesSetter.filter(([, p]) => p.assignes > 0).map(([nom, p]) => [nom, p.assignes, couleurSetter[nom]]), nombre),
-    disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
-  ].join("");
-  brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
-}
-
 function vueSalesSetting() {
   const cible = document.getElementById("vue-sales-setting");
   if (!cible) return;
 
-  const setters = [
-    ...new Set([
-      ...SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.setter).map((c) => c.setter),
-      ...SALES_LEADS.filter((l) => l.setter).map((l) => l.setter),
-    ]),
-  ].sort();
+  const setters = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.setter).map((c) => c.setter))].sort();
   brancherSalesToggle(
     "sales-setting-filtre",
     setters,
@@ -4120,7 +3947,6 @@ function vueSalesSetting() {
     vueSalesSetting
   );
 
-  salesRenduFamille1Setting();
   salesRenduFamilleSetting(2, "sales-setting-f2", "Appels Diagnostic (rattrapage)", "Taux de rattrapage en Closing");
 
   brancherInfobulles(cible);
