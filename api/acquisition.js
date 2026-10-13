@@ -62,7 +62,28 @@ const CHAMPS_CALL_BOOKED = {
   fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
 };
 
-const CHAMP_LIEN_ACQUISITION = "fld5Wqq8cb4vPqWW2"; // "Dépense média" — lien CALL BOOKED -> ACQUISITION
+// DECISION 2026-10-13 : on ne se sert plus du lien CALL BOOKED / LEADS -> ACQUISITION
+// (source de la moitie des bugs). ACQUISITION ne fournit plus que la DEPENSE
+// (depense/impressions/clics, saisie manuelle puis table META_DEPENSE). Tout le
+// reste (leads, RDV, ventes, clients) est compte directement dans LEADS,
+// CALL BOOKED et CONTRATS, range par jour (Paris) | canal | produit.
+const CHAMPS_LEADS = {
+  fldaUTHkR9vloCz2e: "capteLe",
+  fldllUNg0J5M1xIhb: "canal",
+  fldGQUwkMl7QTDgQP: "produit",
+};
+const SANS = "Non déterminé";
+
+// Jour AAAA-MM-JJ en heure de Paris (meme regle que api/tracking.js).
+function jourParis(brut) {
+  if (!brut) return null;
+  const s = String(brut);
+  if (s.length <= 10) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s.slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+const cleLigne = (jour, canal, produit) => `${jour} | ${canal || SANS} | ${produit || SANS}`;
 const CHAMP_LIEN_LEAD = "fldHbTh0TKkb2IECE"; // lien CALL BOOKED -> LEADS
 const CHAMP_LIEN_CONTRATS = "fldszCN4DEDuhjCzh"; // lien CALL BOOKED -> CONTRATS (source unique des ventes et du CA)
 
@@ -74,7 +95,6 @@ const CHAMP_LIEN_CONTRATS = "fldszCN4DEDuhjCzh"; // lien CALL BOOKED -> CONTRATS
 const TABLE_LEADS = "tblFfUo3I4ihrQmzr";
 const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
 const CHAMP_LEAD_CLIENT = "fld4U3Hv6uYDDdgv8"; // LEADS -> CLIENTS
-const CHAMP_LEAD_ACQUISITION = "fld82tuFABxz6WElu"; // LEADS -> ACQUISITION
 const CHAMP_CONTRAT_CLIENT = "fldm0apf8f0JU1AIF"; // CONTRATS -> CLIENTS
 // PAIEMENTS : sert aux cohortes (encaisse mois par mois depuis l'acquisition).
 const TABLE_PAIEMENTS = "tblUodmImuM0egrdk";
@@ -144,20 +164,17 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
   return lignes;
 }
 
-// Recalcule rendezVous/rendezVousConclus/honores/ventes/contracte par ligne
-// ACQUISITION (identifiée par son ID Airtable réel, pas par un texte
-// reconstruit), à partir des seuls calls Closing de rang R1 — un lead qui
-// relance (R2, R3...) ne doit pas compter comme un 2e rendez-vous.
+// Compte rendezVous/rendezVousConclus/honores/ventes/contracte/annules par
+// ligne jour | canal | produit, a partir des seuls calls Closing de rang R1
+// (un lead qui relance, R2/R3..., ne compte pas comme un 2e rendez-vous).
 function recalculerDepuisCallBooked(callsBooked) {
-  const parIdAcquisition = {};
-  const point = (id) => (parIdAcquisition[id] = parIdAcquisition[id] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 });
-
+  const parCle = {};
   for (const c of callsBooked) {
     if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
-    const idsLies = c[CHAMP_LIEN_ACQUISITION] || [];
-    if (!idsLies.length) continue; // pas de ligne ACQUISITION liée — rien à rattacher
-
-    const p = point(idsLies[0]);
+    const jour = jourParis(c.prisLe);
+    if (!jour) continue;
+    const cle = cleLigne(jour, c.canal, c.produit);
+    const p = (parCle[cle] = parCle[cle] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 });
     p.rendezVous += 1;
     p.rendezVousConclus += c.conclu || 0;
     p.honores += c.present || 0;
@@ -165,8 +182,7 @@ function recalculerDepuisCallBooked(callsBooked) {
     p.contracte += c.montant || 0;
     p.annules += c.annule || 0;
   }
-
-  return parIdAcquisition;
+  return parCle;
 }
 
 // Acquisition par client. Renvoie, par ID de ligne ACQUISITION :
@@ -175,15 +191,15 @@ function recalculerDepuisCallBooked(callsBooked) {
 //                   1er contrat ; l'abonnement Media Buying pris en option ce
 //                   jour-la est exclu s'il existe une prestation)
 //  - encaisseTous : encaisse sur TOUS les contrats du client (a date)
-function recalculerParClient(callsBooked, leads, contrats, lignesAcquisition = [], paiements = []) {
-  // lead -> ligne ACQUISITION du call Closing R1
+function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
+  // lead -> ligne (jour|canal|produit) du call Closing R1
   const ligneParLeadViaCall = {};
   for (const c of callsBooked) {
     if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
-    const idsAcq = c[CHAMP_LIEN_ACQUISITION] || [];
-    if (!idsAcq.length) continue;
+    const jour = jourParis(c.prisLe);
+    if (!jour) continue;
     for (const idLead of c[CHAMP_LIEN_LEAD] || []) {
-      if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = idsAcq[0];
+      if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = { jour, canal: c.canal || SANS, produit: c.produit || SANS };
     }
   }
 
@@ -206,7 +222,6 @@ function recalculerParClient(callsBooked, leads, contrats, lignesAcquisition = [
       });
     }
   }
-  const ligneParId = Object.fromEntries(lignesAcquisition.map((l) => [l._id, l]));
 
   const parIdAcquisition = {};
   const detail = [];
@@ -220,8 +235,9 @@ function recalculerParClient(callsBooked, leads, contrats, lignesAcquisition = [
     const mesContrats = contratsParClient[idClient] || [];
     if (!mesContrats.length) continue;
 
-    const idLigne = ligneParLeadViaCall[lead._id] || (lead[CHAMP_LEAD_ACQUISITION] || [])[0];
-    if (!idLigne) continue;
+    const ligneLead = ligneParLeadViaCall[lead._id] || (lead.capteLe ? { jour: jourParis(lead.capteLe), canal: lead.canal || SANS, produit: lead.produit || SANS } : null);
+    if (!ligneLead) continue;
+    const idLigne = cleLigne(ligneLead.jour, ligneLead.canal, ligneLead.produit);
     clientsDejaVus.add(idClient);
 
     const dates = mesContrats.map((k) => String(k.dateSignature || "")).filter(Boolean).sort();
@@ -235,11 +251,10 @@ function recalculerParClient(callsBooked, leads, contrats, lignesAcquisition = [
     p.contracte1er += premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
     p.encaisseTous += mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
 
-    const l = ligneParId[idLigne] || {};
     detail.push({
-      jour: l.jour ? String(l.jour).slice(0, 10) : null,
-      canal: l.canal || null,
-      produit: l.produit || null,
+      jour: ligneLead.jour,
+      canal: ligneLead.canal,
+      produit: ligneLead.produit,
       // nombre de prestations (hors abonnement) : >= 2 = client qui a renouvele
       prestations: mesContrats.filter((k) => k.typeContrat !== "Abonnement").length,
       paiements: paiementsParClient[idClient] || [],
@@ -262,8 +277,8 @@ export default async function handler(req, res) {
   try {
     const [lignesAcquisition, callsBooked, leads, contrats, paiements] = await Promise.all([
       lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
-      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_ACQUISITION, CHAMP_LIEN_LEAD, CHAMP_LIEN_CONTRATS]),
-      lireTable(token, TABLE_LEADS, {}, [CHAMP_LEAD_CLIENT, CHAMP_LEAD_ACQUISITION]),
+      lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_LEAD, CHAMP_LIEN_CONTRATS]),
+      lireTable(token, TABLE_LEADS, CHAMPS_LEADS, [CHAMP_LEAD_CLIENT]),
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, [CHAMP_CONTRAT_CLIENT]),
       lireTable(token, TABLE_PAIEMENTS, CHAMPS_PAIEMENTS, [CHAMP_PAIEMENT_CLIENT]),
     ]);
@@ -301,27 +316,52 @@ export default async function handler(req, res) {
     }
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
-    const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, lignesAcquisition, paiements);
+    const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, paiements);
     const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 };
     const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
-    const lignes = lignesAcquisition.map((ligne) => {
-      const r = recalcul[ligne._id] || vide;
-      const cl = parClient[ligne._id] || videClient;
-      const { _id, ...reste } = ligne;
+    // Lignes = depense ACQUISITION + comptages calcules. On cree une ligne des
+    // qu'un lead, un call ou un client existe sur une cle sans depense.
+    const parCle = new Map();
+    const ligneDe = (jour, canal, produit) => {
+      const cle = cleLigne(jour, canal, produit);
+      if (!parCle.has(cle)) {
+        parCle.set(cle, { cle, jour, canal: canal || SANS, produit: produit || SANS, depense: 0, impressions: 0, clics: 0, leads: 0 });
+      }
+      return parCle.get(cle);
+    };
+    for (const a of lignesAcquisition) {
+      const jour = a.jour ? String(a.jour).slice(0, 10) : null;
+      if (!jour) continue;
+      const l = ligneDe(jour, a.canal, a.produit);
+      l.depense += a.depense ?? 0;
+      l.impressions += a.impressions ?? 0;
+      l.clics += a.clics ?? 0;
+    }
+    for (const ld of leads) {
+      const jour = jourParis(ld.capteLe);
+      if (jour) ligneDe(jour, ld.canal, ld.produit).leads += 1;
+    }
+    for (const cle of Object.keys(recalcul)) {
+      const [jour, canal, produit] = cle.split(" | ");
+      ligneDe(jour, canal, produit);
+    }
+    for (const cle of Object.keys(parClient)) {
+      const [jour, canal, produit] = cle.split(" | ");
+      ligneDe(jour, canal, produit);
+    }
+
+    const lignes = [...parCle.values()].map((ligne) => {
+      const r = recalcul[ligne.cle] || vide;
+      const cl = parClient[ligne.cle] || videClient;
       return {
-        ...reste,
-        depense: ligne.depense ?? 0,
-        impressions: ligne.impressions ?? 0,
-        clics: ligne.clics ?? 0,
-        leads: ligne.leads ?? 0,
+        ...ligne,
         rendezVous: r.rendezVous,
         rendezVousConclus: r.rendezVousConclus,
         honores: r.honores,
         ventes: r.ventes,
         contracte: r.contracte,
         annules: r.annules,
-        // Acquisition par client (additif : les champs ci-dessus ne changent pas)
         clients: cl.clients,
         contracte1er: cl.contracte1er,
         encaisseTous: cl.encaisseTous,
