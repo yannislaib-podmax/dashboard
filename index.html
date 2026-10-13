@@ -306,7 +306,7 @@
       défaut sur les <strong>R1 uniquement</strong> (premier call sur chaque
       lead), via le toggle R1/Tous ci-dessous : sinon un lead relancé
       plusieurs fois gonflerait le volume et brouillerait la vraie
-      performance d'acquisition. Seule la section Relation R1/R2 tout en bas
+      performance d'acquisition. Seule la section Relation R1/R2
       ignore ce toggle, puisqu'elle compare justement les deux rangs entre
       eux.
     </p>
@@ -317,17 +317,17 @@
     <div id="sales-closing-cartes" class="cartes"></div>
     <div class="cartes cartes-etroit" id="sales-closing-cartes-etroit"></div>
 
-    <h3 class="sous-section">Classement</h3>
-    <p class="sous-titre rv">Le meilleur closer en haut (sur le périmètre R1/Tous choisi ci-dessus). Change la métrique pour reclasser sur un autre indicateur — même métrique que la courbe d'évolution plus bas.</p>
-    <div class="toggle-granularite" id="sales-closing-metrique"></div>
-    <div class="glass classement podium-carte rv" id="sales-closing-classement"></div>
+    <h3 class="sous-section">À traiter</h3>
+    <p class="sous-titre rv">Toutes dates et tous rangs confondus : ce que le closer doit encore tenir ou clôturer.</p>
+    <div id="sales-closing-traiter" class="cartes"></div>
 
     <h3 class="sous-section">Entonnoir</h3>
     <p class="sous-titre rv">RDV prévus → conclus → honorés → ventes, pour le périmètre sélectionné.</p>
     <div class="glass entonnoir rv" id="sales-closing-entonnoir"></div>
 
     <h3 class="sous-section">Évolution</h3>
-    <p class="sous-titre rv">Le top 5 des closers dans le temps, sur la même métrique que le classement ci-dessus.</p>
+    <p class="sous-titre rv">Le top 5 des closers dans le temps. Change la métrique pour tracer un autre indicateur (indépendant du classement).</p>
+    <div class="toggle-granularite" id="sales-closing-courbe-metrique"></div>
     <div class="glass courbe-carte rv" id="sales-closing-courbe"></div>
 
     <h3 class="sous-section">Répartition</h3>
@@ -341,6 +341,11 @@
       closer en haut de page.
     </p>
     <div class="glass r1r2 rv" id="sales-closing-r1r2"></div>
+
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur closer en haut (sur le périmètre R1/Tous choisi ci-dessus). Change la métrique pour reclasser sur un autre indicateur.</p>
+    <div class="toggle-granularite" id="sales-closing-metrique"></div>
+    <div class="glass classement podium-carte rv" id="sales-closing-classement"></div>
   </section>
 
   <!-- ---------- Acquisition — Outbound ---------- -->
@@ -489,6 +494,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=82"></script>
+<script src="/assets/app.js?v=84"></script>
 </body>
 </html>

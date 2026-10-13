@@ -3316,6 +3316,8 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
 
 let GRANULARITE_SALES_CLOSING = "semaine";
 let SALES_CLOSING_METRIQUE = "ca"; // "booke" | "present" | "ventes" | "ca"
+// Metrique propre au graphique Evolution (independante du toggle du Classement).
+let SALES_CLOSING_COURBE_METRIQUE = "ca";
 
 // Métriques sélectionnables sur le graphique d'évolution Closing — même
 // structure que TRACK_METRIQUES (titre court pour le toggle, valeur extraite
@@ -3323,7 +3325,7 @@ let SALES_CLOSING_METRIQUE = "ca"; // "booke" | "present" | "ventes" | "ca"
 // secondaire optionnel affiché à côté du nom et dans la bulle de survol).
 const SALES_METRIQUES = {
   booke: {
-    libelleCourt: "Call booké",
+    libelleCourt: "RDV prévus",
     valeur: (v) => v.rdv,
     format: nombre,
     secondaire: () => null,
@@ -3685,6 +3687,19 @@ function vueSalesClosing() {
     ),
   ].join("");
 
+  // A traiter : toute date et tout rang confondus (seul le filtre closer
+  // s'applique), comme dans l'onglet Setting.
+  const closingsTous = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER));
+  const aVenirClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= AUJOURDHUI);
+  const passesSansStatutClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < AUJOURDHUI);
+  const conclusSansIssueClosing = closingsTous.filter((c) => c.conclu && !c.issue && !c.vente);
+  const prochainClosing = aVenirClosing.map((c) => c.jour).sort()[0];
+  document.getElementById("sales-closing-traiter").innerHTML = [
+    carte("Closing à venir", nombre(aVenirClosing.length), prochainClosing ? `prochain le ${jourCourt(prochainClosing)}` : "aucun à venir"),
+    carte("Passés sans statut final", nombre(passesSansStatutClosing.length), "restés « Confirmé » après la date"),
+    carte("Conclus sans issue", nombre(conclusSansIssueClosing.length), "honorés ou no-show sans outcome renseigné"),
+  ].join("");
+
   entonnoir(
     "sales-closing-entonnoir",
     [
@@ -3715,9 +3730,8 @@ function vueSalesClosing() {
   });
   const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
 
-  // Classement — le meilleur closer en haut, juste sous les cartes d'en-tête
-  // (même principe que le classement UTM de Tracking) : toggle Call booké/
-  // Call présent/Ventes/CA, même métrique que la courbe d'évolution plus bas.
+  // Classement — en bas de page, avec son propre toggle RDV prévus/Call
+  // présent/Ventes/CA (indépendant de la courbe d'évolution).
   brancherSalesMetrique(
     "sales-closing-metrique",
     SALES_METRIQUES,
@@ -3739,9 +3753,11 @@ function vueSalesClosing() {
   const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
+  const partsHonores = lignesCloser.filter(([, p]) => p.honores > 0).map(([nom, p]) => [nom, p.honores, couleurCloser[nom]]);
 
   document.getElementById("sales-closing-camemberts").innerHTML = [
     disque(`RDV prévus par closer${suffixeRang}`, partsRdv, nombre),
+    disque(`RDV honorés par closer${suffixeRang}`, partsHonores, nombre),
     disque(`CA contracté par closer${suffixeRang}`, partsCa, euros),
   ].join("");
 
@@ -3754,11 +3770,17 @@ function vueSalesClosing() {
 
   // Évolution de la métrique active par closer dans le temps — top 5, même
   // couleur que la table/les camemberts ci-dessus pour une lecture cohérente.
-  // Toggle Call booké/Call présent/Ventes/CA (comme le classement Tracking) :
-  // le taux secondaire (présence/closing) s'affiche dans la bulle et en bout
-  // de ligne via courbeMultiSeries. Le toggle lui-même a déjà été branché
-  // plus haut (il pilote aussi le classement).
-  const metriqueDef = SALES_METRIQUES[SALES_CLOSING_METRIQUE];
+  // Toggle RDV prévus/Call présent/Ventes/CA : propre à ce graphique
+  // (indépendant du Classement, qui est en bas de page). Le taux secondaire
+  // (présence/closing) s'affiche dans la bulle et en bout de ligne.
+  brancherSalesMetrique(
+    "sales-closing-courbe-metrique",
+    SALES_METRIQUES,
+    () => SALES_CLOSING_COURBE_METRIQUE,
+    (v) => (SALES_CLOSING_COURBE_METRIQUE = v),
+    vueSalesClosing
+  );
+  const metriqueDef = SALES_METRIQUES[SALES_CLOSING_COURBE_METRIQUE];
   const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
   const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
   const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
@@ -3913,15 +3935,15 @@ function vueSettingRattrapage() {
   ].join("");
 
   // A traiter : toute date confondue.
-  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const aujourdhui = AUJOURDHUI;
   const aVenir = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= aujourdhui);
   const passesSansStatut = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < aujourdhui);
-  const honoresSansIssue = diagsTous.filter((c) => c.statut === "Honoré" && !c.issue);
+  const conclusSansIssue = diagsTous.filter((c) => c.conclu && !c.issue);
   const prochain = aVenir.map((c) => c.jour).sort()[0];
   document.getElementById(`${prefixeId}-traiter`).innerHTML = [
     carte("Diagnostics à venir", nombre(aVenir.length), prochain ? `prochain le ${jourCourt(prochain)}` : "aucun à venir"),
     carte("Passés sans statut final", nombre(passesSansStatut.length), "restés « Confirmé » après la date"),
-    carte("Honorés sans issue", nombre(honoresSansIssue.length), "le setter n'a pas saisi l'issue"),
+    carte("Conclus sans issue", nombre(conclusSansIssue.length), "honorés ou no-show : le setter n'a pas saisi l'issue"),
   ].join("");
 
   entonnoir(
