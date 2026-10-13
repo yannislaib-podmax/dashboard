@@ -51,6 +51,7 @@
       <button type="button">Acquisition <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
         <a href="#ensemble"   data-vue="ensemble"   class="actif">Performance pub</a>
+        <a href="#outbound"  data-vue="outbound">Outbound</a>
         <a href="#conversion" data-vue="conversion">Funnel</a>
         <a href="#tracking"  data-vue="tracking">Tracking UTM</a>
       </div></div>
@@ -342,6 +343,32 @@
     <div class="glass r1r2 rv" id="sales-closing-r1r2"></div>
   </section>
 
+  <!-- ---------- Acquisition — Outbound ---------- -->
+  <section class="vue" id="vue-outbound">
+    <div class="titre-vue">
+      <h1>Outbound</h1>
+      <p class="sous-titre">Canal « Setting call » (source Outbound) : des leads déjà en base (lead magnet sans réservation) ou froids (cold call), travaillés par le setter. Entonnoir par cohorte : leads assignés dans la période → issue renseignée (approuvée ou rejetée) → Closing booké → honoré → vente. Les issues et les Closing sont cherchés sans limite de date.</p>
+    </div>
+
+    
+    
+    <div id="outbound-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Classement</h3>
+    <p class="sous-titre rv">Le meilleur setter en haut. Change la métrique pour reclasser sur un autre indicateur.</p>
+    <div class="toggle-granularite" id="outbound-metrique"></div>
+    <div class="glass classement podium-carte rv" id="outbound-classement"></div>
+
+    <h3 class="sous-section">Entonnoir</h3>
+    <div class="glass entonnoir rv" id="outbound-entonnoir"></div>
+
+    <h3 class="sous-section">Par setter</h3>
+    <div class="glass cadre-table rv" id="outbound-table"></div>
+
+    <h3 class="sous-section">Répartition</h3>
+    <div class="camemberts" id="outbound-camemberts"></div>
+  </section>
+
   <!-- ---------- Sales Team — Setting ---------- -->
   <section class="vue" id="vue-sales-setting">
     <div class="titre-vue">
@@ -447,6 +474,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=67"></script>
+<script src="/assets/app.js?v=68"></script>
 </body>
 </html>
