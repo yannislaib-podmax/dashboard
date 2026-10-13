@@ -3583,13 +3583,13 @@ function salesGraphR1R2(cibleId, s) {
       </div>
       <div class="r1r2-compare">
         <div class="r1r2-legende">
-          <span><i class="r1"></i>R1 — 1er call (${nombre(s.nbR1)} bookés, ${nombre(s.honoresR1)} présents)</span>
+          <span><i class="r1"></i>R1 — 1er call (${nombre(s.nbR1)} prévus, ${nombre(s.honoresR1)} présents)</span>
           <span><i class="r2"></i>R2+ — relance (${nombre(s.nbR2)})</span>
         </div>
         <div class="r1r2-metrique">
           <div class="r1r2-metrique-titre">Taux d'annulation</div>
-          ${barre(s.annulationR1, "r1", s.nbR1, "R1 bookés")}
-          ${barre(s.annulationR2, "r2", s.nbR2, "relances bookées")}
+          ${barre(s.annulationR1, "r1", s.nbR1, "R1 prévus")}
+          ${barre(s.annulationR2, "r2", s.nbR2, "relances prévues")}
         </div>
         <div class="r1r2-metrique">
           <div class="r1r2-metrique-titre">Taux de présence</div>
@@ -3646,7 +3646,7 @@ function vueSalesClosing() {
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   document.getElementById("sales-closing-cartes").innerHTML = [
-    carte("RDV bookés", nombre(rdv), `calls Closing sur la période${suffixeRang}`, sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
+    carte("RDV prévus", nombre(rdv), `calls Closing dont le RDV tombe dans la période${suffixeRang}`, sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
     carte("RDV conclus", nombre(conclus), "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
     carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
@@ -3688,7 +3688,7 @@ function vueSalesClosing() {
   entonnoir(
     "sales-closing-entonnoir",
     [
-      { nom: "RDV bookés", cle: "rdv" },
+      { nom: "RDV prévus", cle: "rdv" },
       { nom: "RDV conclus", cle: "conclus" },
       { nom: "RDV honorés", cle: "honores" },
       { nom: "Ventes", cle: "ventes" },
@@ -3727,7 +3727,7 @@ function vueSalesClosing() {
   );
   const bulleCloser = (nom, v) => `
     <strong>${nom}${suffixeRang}</strong>
-    <span>RDV bookés<b>${nombre(v.rdv)}</b></span>
+    <span>RDV prévus<b>${nombre(v.rdv)}</b></span>
     <span>RDV honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
@@ -3741,7 +3741,7 @@ function vueSalesClosing() {
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
 
   document.getElementById("sales-closing-camemberts").innerHTML = [
-    disque(`RDV bookés par closer${suffixeRang}`, partsRdv, nombre),
+    disque(`RDV prévus par closer${suffixeRang}`, partsRdv, nombre),
     disque(`CA contracté par closer${suffixeRang}`, partsCa, euros),
   ].join("");
 
@@ -3898,7 +3898,7 @@ function vueSettingRattrapage() {
   const caPrec = plage ? partCa(dansPrec) : null;
 
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`, gPrec ? ecartDe(g.reserves, gPrec.reserves, "salesRdv") : null),
+    carte("Diagnostics prévus", nombre(g.reserves), `RDV de la période · ${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`, gPrec ? ecartDe(g.reserves, gPrec.reserves, "salesRdv") : null),
     carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir", gPrec ? ecartDe(g.conclus, gPrec.conclus, "salesConclus") : null),
     carte("Honorés", nombre(g.honores), "leads venus au Diagnostic", gPrec ? ecartDe(g.honores, gPrec.honores, "salesHonores") : null),
     carte("Closing bookés", nombre(g.closing), `leads honorés ayant pris un Closing${suffixeRang}`, gPrec ? ecartDe(g.closing, gPrec.closing, "salesClosingBooke") : null),
@@ -3927,7 +3927,7 @@ function vueSettingRattrapage() {
   entonnoir(
     `${prefixeId}-entonnoir`,
     [
-      { nom: "Diagnostic réservé", cle: "reserves" },
+      { nom: "Diagnostic prévu", cle: "reserves" },
       { nom: "Honoré", cle: "honores" },
       { nom: "Closing booké", cle: "closing" },
       { nom: "Closing honoré", cle: "closingHonores" },
@@ -3949,7 +3949,7 @@ function vueSettingRattrapage() {
     .sort((x, y) => y[1].reserves - x[1].reserves);
 
   const metriquesSetting = {
-    reserves: { libelleCourt: "Diagnostics réservés", valeur: (v) => v.reserves, format: nombre, secondaire: () => null },
+    reserves: { libelleCourt: "Diagnostics prévus", valeur: (v) => v.reserves, format: nombre, secondaire: () => null },
     honores: {
       libelleCourt: "Honorés",
       valeur: (v) => v.honores,
@@ -3978,7 +3978,7 @@ function vueSettingRattrapage() {
   );
   const bulleSetter = (nom, v) => `
     <strong>${nom}</strong>
-    <span>Réservés<b>${nombre(v.reserves)}</b></span>
+    <span>Prévus<b>${nombre(v.reserves)}</b></span>
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Closing booké<b>${nombre(v.closing)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
@@ -3987,7 +3987,7 @@ function vueSettingRattrapage() {
 
   const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
-    disque("Diagnostics réservés par setter", lignesSetter.filter(([, p]) => p.reserves > 0).map(([nom, p]) => [nom, p.reserves, couleurSetter[nom]]), nombre),
+    disque("Diagnostics prévus par setter", lignesSetter.filter(([, p]) => p.reserves > 0).map(([nom, p]) => [nom, p.reserves, couleurSetter[nom]]), nombre),
     disque("Calls présents par setter", lignesSetter.filter(([, p]) => p.honores > 0).map(([nom, p]) => [nom, p.honores, couleurSetter[nom]]), nombre),
     disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
