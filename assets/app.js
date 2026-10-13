@@ -3800,6 +3800,9 @@ let SETTING_METRIQUE = "transformes";
 // gonfle pas les volumes) et le CA du rattrapage peut tomber au R2. La
 // section Relation R1/R2 ignore ce toggle, comme dans l'onglet Closing.
 let SETTING_RANG = "tous";
+let GRANULARITE_SALES_SETTING = "semaine";
+// Metrique propre au graphique Evolution (independante du toggle du Classement).
+let SETTING_COURBE_METRIQUE = "transformes";
 
 function vueSettingRattrapage() {
   const prefixeId = "sales-setting-f2";
@@ -3866,6 +3869,14 @@ function vueSettingRattrapage() {
 
   const g = agreger(diags);
 
+  // Periode precedente (fleches de tendance, comme l'onglet Closing) : null si
+  // la comparaison est desactivee ou si aucune periode n'est choisie.
+  const plage = plagePrecedente();
+  const dansPrec = (c) => c.jour && c.jour >= plage[0] && c.jour <= plage[1];
+  const gPrec = plage ? agreger(diagsTous.filter(dansPrec)) : null;
+  const ec = (actuel, precedent, baisseEstBonne) =>
+    gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null;
+
   // Part du CA : base "jour du Closing dans la periode".
   // Un Closing compte comme rattrapage seulement s'il est posterieur au
   // premier Diagnostic de ce contact.
@@ -3873,26 +3884,32 @@ function vueSettingRattrapage() {
   diagsTous.forEach((c) => {
     if (c.contactId != null && c.jour && (!premierDiag.has(c.contactId) || c.jour < premierDiag.get(c.contactId))) premierDiag.set(c.contactId, c.jour);
   });
-  const closingsPeriode = closings.filter(dansPeriode).filter(duRang);
-  const caTotal = somme(closingsPeriode, "montant");
-  const caRattrapage = somme(
-    closingsPeriode.filter((c) => premierDiag.has(c.contactId) && c.jour && c.jour >= premierDiag.get(c.contactId)),
-    "montant"
-  );
+  const partCa = (dansLaPlage) => {
+    const dansPlage = closings.filter(dansLaPlage).filter(duRang);
+    return {
+      total: somme(dansPlage, "montant"),
+      rattrapage: somme(
+        dansPlage.filter((c) => premierDiag.has(c.contactId) && c.jour && c.jour >= premierDiag.get(c.contactId)),
+        "montant"
+      ),
+    };
+  };
+  const { total: caTotal, rattrapage: caRattrapage } = partCa(dansPeriode);
+  const caPrec = plage ? partCa(dansPrec) : null;
 
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`),
-    carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir"),
-    carte("Honorés", nombre(g.honores), "leads venus au Diagnostic"),
-    carte("Closing bookés", nombre(g.closing), `leads honorés ayant pris un Closing${suffixeRang}`),
-    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}${suffixeRang}`),
+    carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`, gPrec ? ecartDe(g.reserves, gPrec.reserves, "salesRdv") : null),
+    carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir", gPrec ? ecartDe(g.conclus, gPrec.conclus, "salesConclus") : null),
+    carte("Honorés", nombre(g.honores), "leads venus au Diagnostic", gPrec ? ecartDe(g.honores, gPrec.honores, "salesHonores") : null),
+    carte("Closing bookés", nombre(g.closing), `leads honorés ayant pris un Closing${suffixeRang}`, gPrec ? ecartDe(g.closing, gPrec.closing, "salesClosingBooke") : null),
+    carte("Ventes générées", nombre(g.ventes), g.closing ? `sur ${nombre(g.closing)} lead${g.closing > 1 ? "s" : ""} en Closing${suffixeRang}` : `aucun lead en Closing${suffixeRang}`, gPrec ? ecartDe(g.ventes, gPrec.ventes, "salesVentes") : null),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
-    carte("Taux d'annulation", pourcent(ratio(g.annules, g.reserves)), g.reserves ? `${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""} sur ${nombre(g.reserves)} rendez-vous pris` : "aucun rendez-vous pris sur la période"),
-    carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé"),
-    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés${suffixeRang}` : "—"),
-    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés${suffixeRang}` : "aucun call Closing passé"),
-    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période${suffixeRang}` : "aucun CA Closing sur la période"),
+    carte("Taux d'annulation", pourcent(ratio(g.annules, g.reserves)), g.reserves ? `${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""} sur ${nombre(g.reserves)} rendez-vous pris` : "aucun rendez-vous pris sur la période", gPrec ? ec(ratio(g.annules, g.reserves), ratio(gPrec.annules, gPrec.reserves), true) : null),
+    carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé", gPrec ? ec(ratio(g.honores, g.conclus), ratio(gPrec.honores, gPrec.conclus)) : null),
+    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés${suffixeRang}` : "—", gPrec ? ec(ratio(g.closing, g.contactsHonores), ratio(gPrec.closing, gPrec.contactsHonores)) : null),
+    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés${suffixeRang}` : "aucun call Closing passé", gPrec ? ec(ratio(g.presentClosing, g.concluClosing), ratio(gPrec.presentClosing, gPrec.concluClosing)) : null),
+    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période${suffixeRang}` : "aucun CA Closing sur la période", caPrec ? ec(ratio(caRattrapage, caTotal), ratio(caPrec.rattrapage, caPrec.total)) : null),
   ].join("");
 
   // A traiter : toute date confondue.
@@ -3945,7 +3962,12 @@ function vueSettingRattrapage() {
       format: nombre,
       secondaire: (v) => (v.contactsHonores > 0 ? `${Math.round((v.closing / v.contactsHonores) * 100)} % rattrapage` : null),
     },
-    ca: { libelleCourt: "CA généré", valeur: (v) => v.ca, format: euros, secondaire: (v) => `${nombre(v.ventes)} vente${v.ventes > 1 ? "s" : ""}` },
+    ventes: {
+      libelleCourt: "Ventes générées",
+      valeur: (v) => v.ventes,
+      format: nombre,
+      secondaire: (v) => (v.closing > 0 ? `${Math.round((v.ventes / v.closing) * 100)} % des Closing` : null),
+    },
   };
   brancherSalesMetrique(
     `${prefixeId}-metrique`,
@@ -3959,16 +3981,47 @@ function vueSettingRattrapage() {
     <span>Réservés<b>${nombre(v.reserves)}</b></span>
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Closing booké<b>${nombre(v.closing)}</b></span>
-    <span>CA<b>${euros(v.ca)}</b></span>
+    <span>Ventes<b>${nombre(v.ventes)}</b></span>
     ${v.contactsHonores > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.contactsHonores) * 100)} % de rattrapage</span>` : ""}`;
   salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SETTING_METRIQUE, bulleSetter);
 
   const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
     disque("Diagnostics réservés par setter", lignesSetter.filter(([, p]) => p.reserves > 0).map(([nom, p]) => [nom, p.reserves, couleurSetter[nom]]), nombre),
+    disque("Calls présents par setter", lignesSetter.filter(([, p]) => p.honores > 0).map(([nom, p]) => [nom, p.honores, couleurSetter[nom]]), nombre),
     disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
+
+  // Evolution : top 5 des setters dans le temps, avec son PROPRE toggle de
+  // metrique (le Classement est en bas de page : un toggle partage n'aurait pas
+  // de sens).
+  brancherSalesMetrique(
+    `${prefixeId}-courbe-metrique`,
+    metriquesSetting,
+    () => SETTING_COURBE_METRIQUE,
+    (v) => (SETTING_COURBE_METRIQUE = v),
+    vueSettingRattrapage
+  );
+  const metriqueDef = metriquesSetting[SETTING_COURBE_METRIQUE];
+  const top5Setters = lignesSetter.slice(0, 5).map(([nom]) => nom);
+  const joursDiag = diags.map((c) => c.jour).filter(Boolean).sort();
+  const blocsSetter = decoupagePeriodesEtendu(joursDiag, GRANULARITE_SALES_SETTING);
+  const seriesSetter = top5Setters.map((nom) => {
+    const statsParBloc = blocsSetter.map((b) =>
+      agreger(diags.filter((c) => (c.setter || "Non renseigné") === nom && c.jour >= b.debut && c.jour <= b.fin))
+    );
+    return {
+      nom,
+      couleur: couleurSetter[nom],
+      points: statsParBloc.map((st) => metriqueDef.valeur(st)),
+      secondaires: statsParBloc.map((st) => metriqueDef.secondaire(st)),
+    };
+  });
+  courbeMultiSeries("sales-setting-f2-courbe", blocsSetter, seriesSetter, metriqueDef.format, GRANULARITE_SALES_SETTING, (gr) => {
+    GRANULARITE_SALES_SETTING = gr;
+    vueSettingRattrapage();
+  });
 
   // Relation R1/R2 sur les seuls Closing issus du rattrapage (ignore le toggle).
   salesGraphR1R2("sales-setting-f2-r1r2", salesStatsR1R2(g.callsClosingTousRangs));
