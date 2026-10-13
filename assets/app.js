@@ -3855,6 +3855,7 @@ function vueSettingRattrapage() {
     carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
+    carte("Taux d'annulation", pourcent(ratio(g.annules, g.reserves)), g.reserves ? `${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""} sur ${nombre(g.reserves)} rendez-vous pris` : "aucun rendez-vous pris sur la période"),
     carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé"),
     carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés` : "—"),
     carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés` : "aucun call Closing passé"),
