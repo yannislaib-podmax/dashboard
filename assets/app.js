@@ -3785,153 +3785,162 @@ function vueSalesClosing() {
   requestAnimationFrame(() => apparitions(cible));
 }
 
-// Tous les contacts ayant au moins un call Closing — toute date confondue
-// (pas filtré période) : la conversion d'un Diagnostic en Closing peut
-// arriver après la période affichée, et on veut quand même la compter.
-const salesContactsAvecClosing = () =>
-  new Set(SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null).map((c) => c.contactId));
+// Setting = Famille 2, rattrapage : un lead disqualifie par le funnel a reserve
+// lui-meme un vrai call Diagnostic traite par le setter. Cohorte = les calls
+// Diagnostic (hors "SETTER-") dont le jour de RDV est dans la periode.
+//   Reserve -> Honore -> Approuve (issue saisie par le setter) -> Closing booke
+//   -> Closing honore -> Vente. Le Closing est cherche sans limite de date, et
+//   compte seulement si le contact est approuve. Les issues sont toujours
+//   saisies par le setter (rien n'est pose par Make).
+// "Part du CA" : CA des Closing DE LA PERIODE (jour du Closing) issus d'un
+// contact passe par le rattrapage, sur le CA de tous les Closing de la periode.
+let SETTING_METRIQUE = "transformes";
 
-// Calls Diagnostic d'une famille donnée (1 = base de données/auto-assignation,
-// 2 = rattrapage post-disqualification — voir api/sales-team.js), filtrés
-// période + setter actif.
-const salesCallsDiagFamille = (famille) =>
-  SALES_CALLS.filter(
-    (c) => c.typeAppel === "Diagnostic" && c.famille === famille && dansPeriode(c) && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
-  );
+function vueSettingRattrapage() {
+  const prefixeId = "sales-setting-f2";
+  if (!document.getElementById(`${prefixeId}-cartes`)) return;
 
-// Même famille de calls Diagnostic, mais sur la période précédente (↑/↓ sur
-// les cartes) — `null` si la comparaison est désactivée.
-function salesCallsDiagFamillePrecedents(famille) {
-  const plage = plagePrecedente();
-  if (!plage) return null;
-  const [a, b] = plage;
-  return SALES_CALLS.filter(
-    (c) => c.typeAppel === "Diagnostic" && c.famille === famille && c.jour && c.jour >= a && c.jour <= b && (SALES_SETTER === "tout" || c.setter === SALES_SETTER)
-  );
-}
+  const duSetter = (c) => SALES_SETTER === "tout" || c.setter === SALES_SETTER;
+  const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c));
+  const diags = diagsTous.filter(dansPeriode);
 
-// Métrique active du classement "par setter" — une entrée par famille (1/2),
-// vocabulaire partagé (diag/honores/transformes) mais libellés adaptés au
-// moment de la lecture (voir metriquesSetting dans salesRenduFamilleSetting).
-let SALES_SETTING_METRIQUE = { 2: "transformes" };
+  const closings = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null);
+  const closingsParContact = new Map();
+  closings.forEach((c) => {
+    if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
+    closingsParContact.get(c.contactId).push(c);
+  });
 
-// Rend un bloc Famille (cartes + entonnoir + table + camemberts) pour la
-// famille donnée. `libelleTaux`/`libelleAppels` adaptent le vocabulaire des
-// cartes à la famille (transfo vs rattrapage) sans dupliquer la logique.
-function salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux) {
-  const diag = salesCallsDiagFamille(famille);
-  const diagPrec = salesCallsDiagFamillePrecedents(famille);
-  const contactsClosing = salesContactsAvecClosing();
-  const honores = somme(diag, "present");
-  const presence = ratio(honores, diag.length);
+  const agreger = (liste) => {
+    const parContact = new Map();
+    liste.forEach((c, i) => {
+      const cle = c.contactId != null ? c.contactId : `sans-id-${i}`;
+      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false, approuve: false });
+      const o = parContact.get(cle);
+      if (c.present) o.honore = true;
+      if (c.issue === "APPROVED") o.approuve = true;
+    });
+    const contacts = [...parContact.values()].map((o) => ({ ...o, approuve: o.approuve && o.honore }));
+    const approuves = contacts.filter((o) => o.approuve);
+    const avecClosing = approuves.filter((o) => o.id != null && (closingsParContact.get(o.id) || []).length > 0);
+    const callsClosing = avecClosing.flatMap((o) => closingsParContact.get(o.id));
+    return {
+      reserves: liste.length,
+      honores: somme(liste, "present"),
+      noShow: liste.filter((c) => c.statut === "No-show").length,
+      conclus: somme(liste, "conclu"),
+      annules: liste.filter((c) => c.statut === "Annulé").length,
+      aVenir: liste.filter((c) => c.statut === "Confirmé").length,
+      contacts: contacts.length,
+      contactsHonores: contacts.filter((o) => o.honore).length,
+      approuves: approuves.length,
+      closing: avecClosing.length,
+      closingHonores: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.present)).length,
+      ventes: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.vente)).length,
+      presentClosing: somme(callsClosing, "present"),
+      concluClosing: somme(callsClosing, "conclu"),
+      ca: somme(callsClosing, "montant"),
+    };
+  };
 
-  const contactsDiagUniques = new Set(diag.map((c) => c.contactId).filter((id) => id != null));
-  const transformes = [...contactsDiagUniques].filter((id) => contactsClosing.has(id)).length;
-  const taux = ratio(transformes, contactsDiagUniques.size);
+  const g = agreger(diags);
 
-  // Même calcul sur la période précédente, pour les badges ↑/↓.
-  let honoresPrec = null;
-  let tauxPrec = null;
-  if (diagPrec) {
-    honoresPrec = somme(diagPrec, "present");
-    const contactsDiagUniquesPrec = new Set(diagPrec.map((c) => c.contactId).filter((id) => id != null));
-    const transformesPrec = [...contactsDiagUniquesPrec].filter((id) => contactsClosing.has(id)).length;
-    tauxPrec = ratio(transformesPrec, contactsDiagUniquesPrec.size);
-  }
+  // Part du CA : base "jour du Closing dans la periode".
+  const contactsRattrapage = new Set(diagsTous.map((c) => c.contactId).filter((id) => id != null));
+  const closingsPeriode = closings.filter(dansPeriode);
+  const caTotal = somme(closingsPeriode, "montant");
+  const caRattrapage = somme(closingsPeriode.filter((c) => contactsRattrapage.has(c.contactId)), "montant");
 
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte(libelleAppels, nombre(diag.length), "sur la période", diagPrec ? ecartDe(diag.length, diagPrec.length, "salesDiag") : null),
-    carte("Honorés", nombre(honores), presence === null ? "—" : `${pourcent(presence)} de présence`, diagPrec ? ecartDe(honores, honoresPrec, "salesHonores") : null),
-    carte(libelleTaux, taux === null ? "—" : pourcent(taux), contactsDiagUniques.size ? `${nombre(transformes)} sur ${nombre(contactsDiagUniques.size)}` : "aucun appel sur la période", taux !== null && tauxPrec !== null ? ecartPoints(taux, tauxPrec) : null),
+    carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`),
+    carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir"),
+    carte("Honorés", nombre(g.honores), "leads venus au Diagnostic"),
+    carte("Approuvés", nombre(g.approuves), "issue APPROVED saisie par le setter"),
+    carte("Closing bookés", nombre(g.closing), "appels de Closing pris"),
+    carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
+  ].join("");
+  document.getElementById(`${prefixeId}-taux`).innerHTML = [
+    carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé"),
+    carte("Taux d'approbation", pourcent(ratio(g.approuves, g.contactsHonores)), g.contactsHonores ? `${nombre(g.approuves)} approuvés sur ${nombre(g.contactsHonores)} honorés` : "—"),
+    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés` : "—"),
+    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés` : "aucun call Closing passé"),
+    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période` : "aucun CA Closing sur la période"),
+  ].join("");
+
+  // A traiter : toute date confondue.
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const aVenir = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= aujourdhui);
+  const passesSansStatut = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < aujourdhui);
+  const honoresSansIssue = diagsTous.filter((c) => c.statut === "Honoré" && !c.issue);
+  const prochain = aVenir.map((c) => c.jour).sort()[0];
+  document.getElementById(`${prefixeId}-traiter`).innerHTML = [
+    carte("Diagnostics à venir", nombre(aVenir.length), prochain ? `prochain le ${jourCourt(prochain)}` : "aucun à venir"),
+    carte("Passés sans statut final", nombre(passesSansStatut.length), "restés « Confirmé » après la date"),
+    carte("Honorés sans issue", nombre(honoresSansIssue.length), "le setter n'a pas saisi l'issue"),
   ].join("");
 
   entonnoir(
     `${prefixeId}-entonnoir`,
     [
-      { nom: libelleAppels, cle: "diag" },
-      { nom: "Honorés", cle: "honores" },
+      { nom: "Diagnostic réservé", cle: "reserves" },
+      { nom: "Honoré", cle: "honores" },
+      { nom: "Approuvé", cle: "approuves" },
       { nom: "Closing booké", cle: "closing" },
+      { nom: "Closing honoré", cle: "closingHonores" },
+      { nom: "Vente", cle: "ventes" },
     ],
-    [diag.length, honores, transformes],
+    [g.contacts, g.contactsHonores, g.approuves, g.closing, g.closingHonores, g.ventes],
     null,
-    [null, diag.length, honores],
+    [null, g.contacts, g.contactsHonores, g.approuves, g.closing, g.closingHonores],
     null
   );
 
   const parSetter = {};
-  diag.forEach((c) => {
+  diags.forEach((c) => {
     const n = c.setter || "Non renseigné";
-    if (!parSetter[n]) parSetter[n] = { diag: 0, honores: 0, contacts: new Set() };
-    parSetter[n].diag += 1;
-    parSetter[n].honores += c.present;
-    if (c.contactId != null) parSetter[n].contacts.add(c.contactId);
+    (parSetter[n] = parSetter[n] || []).push(c);
   });
-
   const lignesSetter = Object.entries(parSetter)
-    .map(([nom, p]) => [nom, { ...p, transformes: [...p.contacts].filter((id) => contactsClosing.has(id)).length }])
-    .sort((a, b) => b[1].diag - a[1].diag);
+    .map(([nom, liste]) => [nom, agreger(liste)])
+    .sort((x, y) => y[1].reserves - x[1].reserves);
 
-  // Classement — le meilleur setter en haut, juste sous les cartes d'en-tête
-  // de cette famille (même principe que Closing). Vocabulaire du taux final
-  // adapté à la famille (transfo vs rattrapage).
-  const libelleTauxCourt = famille === 1 ? "transfo" : "rattrapage";
   const metriquesSetting = {
-    diag: { libelleCourt: libelleAppels, valeur: (v) => v.diag, format: nombre, secondaire: () => null },
+    reserves: { libelleCourt: "Diagnostics réservés", valeur: (v) => v.reserves, format: nombre, secondaire: () => null },
     honores: {
       libelleCourt: "Honorés",
       valeur: (v) => v.honores,
       format: nombre,
-      secondaire: (v) => (v.diag > 0 ? `${Math.round((v.honores / v.diag) * 100)} % présence` : null),
+      secondaire: (v) => (v.conclus > 0 ? `${Math.round((v.honores / v.conclus) * 100)} % de show` : null),
     },
     transformes: {
       libelleCourt: "Closing booké",
-      valeur: (v) => v.transformes,
+      valeur: (v) => v.closing,
       format: nombre,
-      secondaire: (v) => (v.contacts.size > 0 ? `${Math.round((v.transformes / v.contacts.size) * 100)} % ${libelleTauxCourt}` : null),
+      secondaire: (v) => (v.contactsHonores > 0 ? `${Math.round((v.closing / v.contactsHonores) * 100)} % rattrapage` : null),
     },
+    ca: { libelleCourt: "CA généré", valeur: (v) => v.ca, format: euros, secondaire: (v) => `${nombre(v.ventes)} vente${v.ventes > 1 ? "s" : ""}` },
   };
   brancherSalesMetrique(
     `${prefixeId}-metrique`,
     metriquesSetting,
-    () => SALES_SETTING_METRIQUE[famille],
-    (v) => (SALES_SETTING_METRIQUE[famille] = v),
-    () => salesRenduFamilleSetting(famille, prefixeId, libelleAppels, libelleTaux)
+    () => SETTING_METRIQUE,
+    (v) => (SETTING_METRIQUE = v),
+    vueSettingRattrapage
   );
   const bulleSetter = (nom, v) => `
     <strong>${nom}</strong>
-    <span>${libelleAppels}<b>${nombre(v.diag)}</b></span>
+    <span>Réservés<b>${nombre(v.reserves)}</b></span>
     <span>Honorés<b>${nombre(v.honores)}</b></span>
-    <span>Closing booké<b>${nombre(v.transformes)}</b></span>
-    ${v.contacts.size > 0 ? `<span class="bulle-pied">${Math.round((v.transformes / v.contacts.size) * 100)} % de ${libelleTauxCourt} · ${v.diag > 0 ? Math.round((v.honores / v.diag) * 100) : 0} % de présence</span>` : ""}`;
-  salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SALES_SETTING_METRIQUE[famille], bulleSetter);
-
-  document.getElementById(`${prefixeId}-table`).innerHTML = lignesSetter.length
-    ? `<table>
-        <thead><tr><th>Setter</th><th>${libelleAppels}</th><th>Honorés</th><th>Présence</th><th>Closing booké</th><th>${libelleTaux}</th></tr></thead>
-        <tbody>${lignesSetter
-          .map(
-            ([nom, p]) => `<tr>
-              <td>${nom}</td>
-              ${cellule(p.diag)}
-              ${cellule(p.honores)}
-              <td>${p.diag ? pourcent(p.honores / p.diag) : "—"}</td>
-              ${cellule(p.transformes)}
-              <td>${p.contacts.size ? pourcent(p.transformes / p.contacts.size) : "—"}</td>
-            </tr>`
-          )
-          .join("")}</tbody>
-      </table>`
-    : `<div class="vide">Pas encore d'appel sur cette période.</div>`;
+    <span>Closing booké<b>${nombre(v.closing)}</b></span>
+    <span>CA<b>${euros(v.ca)}</b></span>
+    ${v.contactsHonores > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.contactsHonores) * 100)} % de rattrapage</span>` : ""}`;
+  salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SETTING_METRIQUE, bulleSetter);
 
   const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  const partsDiag = lignesSetter.filter(([, p]) => p.diag > 0).map(([nom, p]) => [nom, p.diag, couleurSetter[nom]]);
-  const partsTransformes = lignesSetter.filter(([, p]) => p.transformes > 0).map(([nom, p]) => [nom, p.transformes, couleurSetter[nom]]);
-
   document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
-    disque(`${libelleAppels} par setter`, partsDiag, nombre),
-    disque("Closing booké par setter", partsTransformes, nombre),
+    disque("Diagnostics réservés par setter", lignesSetter.filter(([, p]) => p.reserves > 0).map(([nom, p]) => [nom, p.reserves, couleurSetter[nom]]), nombre),
+    disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
-
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
 }
 
@@ -4099,7 +4108,7 @@ function vueSalesSetting() {
     vueSalesSetting
   );
 
-  salesRenduFamilleSetting(2, "sales-setting-f2", "Appels Diagnostic (rattrapage)", "Taux de rattrapage en Closing");
+  vueSettingRattrapage();
 
   brancherInfobulles(cible);
 
