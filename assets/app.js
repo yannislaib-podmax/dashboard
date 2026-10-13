@@ -3788,10 +3788,10 @@ function vueSalesClosing() {
 // Setting = Famille 2, rattrapage : un lead disqualifie par le funnel a reserve
 // lui-meme un vrai call Diagnostic traite par le setter. Cohorte = les calls
 // Diagnostic (hors "SETTER-") dont le jour de RDV est dans la periode.
-//   Reserve -> Honore -> Approuve (issue saisie par le setter) -> Closing booke
-//   -> Closing honore -> Vente. Le Closing est cherche sans limite de date, et
-//   compte seulement si le contact est approuve. Les issues sont toujours
-//   saisies par le setter (rien n'est pose par Make).
+//   Reserve -> Honore -> Closing booke -> Closing honore -> Vente. Le Closing
+//   est cherche sans limite de date : un contact honore au Diagnostic qui a un
+//   call Closing. L'issue (APPROVED/REJECTED, saisie par le setter) n'entre pas
+//   dans les chiffres : le Closing booke dit deja si le lead a ete rattrape.
 // "Part du CA" : CA des Closing DE LA PERIODE (jour du Closing) issus d'un
 // contact passe par le rattrapage, sur le CA de tous les Closing de la periode.
 let SETTING_METRIQUE = "transformes";
@@ -3815,14 +3815,11 @@ function vueSettingRattrapage() {
     const parContact = new Map();
     liste.forEach((c, i) => {
       const cle = c.contactId != null ? c.contactId : `sans-id-${i}`;
-      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false, approuve: false });
-      const o = parContact.get(cle);
-      if (c.present) o.honore = true;
-      if (c.issue === "APPROVED") o.approuve = true;
+      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false });
+      if (c.present) parContact.get(cle).honore = true;
     });
-    const contacts = [...parContact.values()].map((o) => ({ ...o, approuve: o.approuve && o.honore }));
-    const approuves = contacts.filter((o) => o.approuve);
-    const avecClosing = approuves.filter((o) => o.id != null && (closingsParContact.get(o.id) || []).length > 0);
+    const contacts = [...parContact.values()];
+    const avecClosing = contacts.filter((o) => o.honore).filter((o) => o.id != null && (closingsParContact.get(o.id) || []).length > 0);
     const callsClosing = avecClosing.flatMap((o) => closingsParContact.get(o.id));
     return {
       reserves: liste.length,
@@ -3833,7 +3830,6 @@ function vueSettingRattrapage() {
       aVenir: liste.filter((c) => c.statut === "Confirmé").length,
       contacts: contacts.length,
       contactsHonores: contacts.filter((o) => o.honore).length,
-      approuves: approuves.length,
       closing: avecClosing.length,
       closingHonores: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.present)).length,
       ventes: avecClosing.filter((o) => closingsParContact.get(o.id).some((c) => c.vente)).length,
@@ -3855,13 +3851,11 @@ function vueSettingRattrapage() {
     carte("Diagnostics réservés", nombre(g.reserves), `${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`),
     carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir"),
     carte("Honorés", nombre(g.honores), "leads venus au Diagnostic"),
-    carte("Approuvés", nombre(g.approuves), "issue APPROVED saisie par le setter"),
     carte("Closing bookés", nombre(g.closing), "appels de Closing pris"),
     carte("CA généré", euros(g.ca), `${nombre(g.ventes)} vente${g.ventes > 1 ? "s" : ""} signée${g.ventes > 1 ? "s" : ""}`),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
     carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé"),
-    carte("Taux d'approbation", pourcent(ratio(g.approuves, g.contactsHonores)), g.contactsHonores ? `${nombre(g.approuves)} approuvés sur ${nombre(g.contactsHonores)} honorés` : "—"),
     carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés` : "—"),
     carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés` : "aucun call Closing passé"),
     carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période` : "aucun CA Closing sur la période"),
@@ -3884,14 +3878,13 @@ function vueSettingRattrapage() {
     [
       { nom: "Diagnostic réservé", cle: "reserves" },
       { nom: "Honoré", cle: "honores" },
-      { nom: "Approuvé", cle: "approuves" },
       { nom: "Closing booké", cle: "closing" },
       { nom: "Closing honoré", cle: "closingHonores" },
       { nom: "Vente", cle: "ventes" },
     ],
-    [g.contacts, g.contactsHonores, g.approuves, g.closing, g.closingHonores, g.ventes],
+    [g.contacts, g.contactsHonores, g.closing, g.closingHonores, g.ventes],
     null,
-    [null, g.contacts, g.contactsHonores, g.approuves, g.closing, g.closingHonores],
+    [null, g.contacts, g.contactsHonores, g.closing, g.closingHonores],
     null
   );
 
