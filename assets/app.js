@@ -2117,6 +2117,17 @@ function brancherPeriode() {
       FIN = FIN || dernier;
       iDebut.value = DEBUT;
       iFin.value = FIN;
+    } else if (choix === "aujourdhui" || choix === "hier") {
+      // Jours calendaires réels (heure locale), indépendants du dernier jour
+      // présent dans les données : "Aujourd'hui" reste valable même sans ligne.
+      const auj = new Date();
+      if (choix === "hier") auj.setDate(auj.getDate() - 1);
+      const iso = `${auj.getFullYear()}-${String(auj.getMonth() + 1).padStart(2, "0")}-${String(auj.getDate()).padStart(2, "0")}`;
+      DEBUT = iso;
+      FIN = iso;
+      if (iso > iFin.max) iFin.max = iDebut.max = iso;
+      iDebut.value = DEBUT;
+      iFin.value = FIN;
     } else {
       const ref = enDate(dernier);
       FIN = dernier;
