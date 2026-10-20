@@ -1862,3 +1862,11 @@ tr.total td {
   background-image: linear-gradient(135deg, rgba(var(--ac-rgb), .12), rgba(var(--ac-rgb), 0) 60%) !important;
 }
 .carte[data-acc] .chiffre { color: var(--ac-t) !important; }
+
+/* Blocs de cartes sans trou : N cartes qui remplissent exactement la ligne (desktop seulement,
+   en dessous le auto-fit des .cartes reprend la main). */
+@media (min-width: 1000px) {
+  .cartes.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .cartes.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .cartes.cols-5 { grid-template-columns: repeat(5, 1fr); }
+}

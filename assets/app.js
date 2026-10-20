@@ -4167,9 +4167,16 @@ let OUTBOUND_METRIQUE = "transformes";
 //   -> Closing honore -> Vente (CONTRATS, meme lien que l'ecran Closing).
 // Un lead assigne qui a aussi un vrai call Diagnostic reserve via iClosed
 // releve de la Famille 2 et n'est pas compte ici.
+// Rang des calls Closing du Setting (R1 / R2+ / Tous), "tous" par defaut comme
+// Rattrapage. Ne touche que les etapes Closing (booke, honore, vente, CA, part du CA).
+let OUTBOUND_RANG = "tous";
+
 function vueOutbound() {
   const prefixeId = "outbound";
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
+
+  brancherSalesRangToggle("outbound-rang", () => OUTBOUND_RANG, (v) => (OUTBOUND_RANG = v), vueOutbound);
+  const duRang = (c) => rangAccepte(OUTBOUND_RANG, c);
 
   const contactsFamille2 = new Set(
     SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && c.contactId != null).map((c) => c.contactId)
@@ -4192,7 +4199,7 @@ function vueOutbound() {
   const enrichir = (l) => {
     const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
     const issue = !!(issues && issues.length);
-    const calls = issue ? closingsParContact.get(l.contactId) || [] : [];
+    const calls = issue ? (closingsParContact.get(l.contactId) || []).filter(duRang) : [];
     return {
       setter: l.setter,
       contacte: !!l.jourContacte,
@@ -4240,7 +4247,7 @@ function vueOutbound() {
   // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
   // Setting) se partagent le meme CA et font 100 %.
   const origineCa = origineCaFn();
-  const closingsPerimetre = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && parFiltresBarre(c));
+  const closingsPerimetre = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && parFiltresBarre(c) && duRang(c));
   const partCaSetting = (dansLaPlage) => {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
     return {
@@ -4253,11 +4260,14 @@ function vueOutbound() {
   const ev = (cle) => (gPrec ? ecartDe(g[cle], gPrec[cle], "salesOutbound" + cle) : null);
   const ep = (actuel, precedent) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent) : null);
 
-  // Ligne 1 : les volumes (KPI). Ligne 2 : les taux, dessous.
+  // Trois blocs sans trou (3 / 4 / 6 cartes, chacun remplit sa ligne) :
+  // etapes Setting, etapes Closing, puis taux de conversion + part du CA.
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
     carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
+  ].join("");
+  document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
     carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
     carte("Closing honorés", nombre(g.honores), "leads venus au Closing", ev("honores")),
     carte("Ventes", nombre(g.ventes), "contrats signés", ev("ventes")),
@@ -4269,13 +4279,13 @@ function vueOutbound() {
     carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.closing, g.assignes), gPrec && ratio(gPrec.closing, gPrec.assignes))),
     carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.present, gPrec.conclu))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
-    carte(
-      "Part du CA",
-      caP.total ? pourcent(ratio(caP.setting, caP.total)) : "—",
-      caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing de la période` : "aucun CA Closing sur la période",
-      caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
-    ),
   ].join("");
+  document.getElementById(`${prefixeId}-partca`).innerHTML = carte(
+    "Part du CA",
+    caP.total ? pourcent(ratio(caP.setting, caP.total)) : "—",
+    caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing de la période` : "aucun CA Closing sur la période",
+    caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
+  );
 
   entonnoir(
     `${prefixeId}-entonnoir`,
