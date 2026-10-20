@@ -3663,6 +3663,26 @@ function vueSalesClosing() {
   // ratio (CA / ventes), pas un volume, donc sa place est ici plutôt que
   // dans les cartes d'en-tête. Tout le bloc suit le toggle R1/Tous comme le
   // reste de l'onglet.
+  // Repartition du CA du perimetre (R1 ou tous rangs) entre Closing direct et
+  // Rattrapage : meme definition que la carte "Part du CA" du mode Rattrapage
+  // (un Closing est un rattrapage s'il est posterieur au 1er Diagnostic du
+  // contact). Ignore le filtre setter : on regarde tous les Diagnostic.
+  const premierDiagTous = new Map();
+  SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2).forEach((c) => {
+    if (c.contactId != null && c.jour && (!premierDiagTous.has(c.contactId) || c.jour < premierDiagTous.get(c.contactId))) premierDiagTous.set(c.contactId, c.jour);
+  });
+  const estRattrapage = (c) => premierDiagTous.has(c.contactId) && c.jour && c.jour >= premierDiagTous.get(c.contactId);
+  const repartCa = (liste) => {
+    const total = somme(liste, "montant");
+    const rattrapage = somme(liste.filter(estRattrapage), "montant");
+    return { total, rattrapage, direct: total - rattrapage };
+  };
+  const rc = repartCa(calls);
+  const rcPrec = callsPrec ? repartCa(callsPrec) : null;
+  const ecartPart = (actuel, precedent, baisseEstBonne) =>
+    actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null;
+  const partDirect = ratio(rc.direct, rc.total);
+
   document.getElementById("sales-closing-cartes-etroit").innerHTML = [
     carte(
       "Taux d'annulation",
@@ -3687,6 +3707,16 @@ function vueSalesClosing() {
       panier === null ? "—" : euros(panier),
       `par vente${suffixeRang}`,
       panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
+    ),
+    // Une seule carte, uniquement la part du CA issue du Closing direct (hors
+    // rattrapage). La part du rattrapage vit dans le mode Rattrapage.
+    carte(
+      "Part du CA",
+      rc.total ? pourcent(partDirect) : "—",
+      rc.total
+        ? `${euros(rc.direct)} sur ${euros(rc.total)} de CA Closing${suffixeRang}`
+        : "aucun CA sur la période" + suffixeRang,
+      rc.total && rcPrec && rcPrec.total ? ecartPart(partDirect, ratio(rcPrec.direct, rcPrec.total)) : null
     ),
   ].join("");
 
