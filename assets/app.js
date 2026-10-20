@@ -3714,15 +3714,11 @@ function vueSalesClosing() {
   // Rattrapage : meme definition que la carte "Part du CA" du mode Rattrapage
   // (un Closing est un rattrapage s'il est posterieur au 1er Diagnostic du
   // contact). Ignore le filtre setter : on regarde tous les Diagnostic.
-  const premierDiagTous = new Map();
-  SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2).forEach((c) => {
-    if (c.contactId != null && c.jour && (!premierDiagTous.has(c.contactId) || c.jour < premierDiagTous.get(c.contactId))) premierDiagTous.set(c.contactId, c.jour);
-  });
-  const estRattrapage = (c) => premierDiagTous.has(c.contactId) && c.jour && c.jour >= premierDiagTous.get(c.contactId);
+  const origineCa = origineCaFn();
   const repartCa = (liste) => {
     const total = somme(liste, "montant");
-    const rattrapage = somme(liste.filter(estRattrapage), "montant");
-    return { total, rattrapage, direct: total - rattrapage };
+    const direct = somme(liste.filter((c) => origineCa(c) === "direct"), "montant");
+    return { total, direct };
   };
   const rc = repartCa(calls);
   const rcPrec = callsPrec ? repartCa(callsPrec) : null;
@@ -3902,6 +3898,30 @@ function vueSalesClosing() {
 //   dans les chiffres : le Closing booke dit deja si le lead a ete rattrape.
 // "Part du CA" : CA des Closing DE LA PERIODE (jour du Closing) issus d'un
 // contact passe par le rattrapage, sur le CA de tous les Closing de la periode.
+// Origine du CA d'un call Closing : UNE regle partagee par les trois cartes
+// "Part du CA" (Closing, Rattrapage, Setting), pour que les trois parts fassent
+// 100 % du meme CA. Priorite : "rattrapage" (Closing a partir du 1er Diagnostic
+// de famille 2 du contact), puis "setting" (Closing a partir de la 1re issue
+// setter de famille 1), sinon "direct". Ignore les filtres setter / rang.
+function origineCaFn() {
+  const premierRatt = new Map();
+  const premierSetting = new Map();
+  const maj = (m, c) => {
+    if (!m.has(c.contactId) || c.jour < m.get(c.contactId)) m.set(c.contactId, c.jour);
+  };
+  SALES_CALLS.forEach((c) => {
+    if (c.typeAppel !== "Diagnostic" || c.contactId == null || !c.jour) return;
+    if (c.famille === 2) maj(premierRatt, c);
+    else if (c.famille === 1 && c.issue) maj(premierSetting, c);
+  });
+  return (c) => {
+    if (c.contactId == null || !c.jour) return "direct";
+    if (premierRatt.has(c.contactId) && c.jour >= premierRatt.get(c.contactId)) return "rattrapage";
+    if (premierSetting.has(c.contactId) && c.jour >= premierSetting.get(c.contactId)) return "setting";
+    return "direct";
+  };
+}
+
 let SETTING_METRIQUE = "transformes";
 // Perimetre de rang R des calls Closing (cartes, taux, entonnoir, part du CA) :
 // "tous" par defaut ici, car le Setting compte par LEAD (un lead relance ne
@@ -3988,18 +4008,12 @@ function vueSettingRattrapage() {
   // Part du CA : base "jour du Closing dans la periode".
   // Un Closing compte comme rattrapage seulement s'il est posterieur au
   // premier Diagnostic de ce contact.
-  const premierDiag = new Map();
-  diagsTous.forEach((c) => {
-    if (c.contactId != null && c.jour && (!premierDiag.has(c.contactId) || c.jour < premierDiag.get(c.contactId))) premierDiag.set(c.contactId, c.jour);
-  });
+  const origineCa = origineCaFn();
   const partCa = (dansLaPlage) => {
     const dansPlage = closings.filter(dansLaPlage).filter(duRang).filter(parFiltresBarre);
     return {
       total: somme(dansPlage, "montant"),
-      rattrapage: somme(
-        dansPlage.filter((c) => premierDiag.has(c.contactId) && c.jour && c.jour >= premierDiag.get(c.contactId)),
-        "montant"
-      ),
+      rattrapage: somme(dansPlage.filter((c) => origineCa(c) === "rattrapage"), "montant"),
     };
   };
   const { total: caTotal, rattrapage: caRattrapage } = partCa(dansPeriode);
@@ -4220,6 +4234,22 @@ function vueOutbound() {
   const g = agreger(leads);
   const gPrec = leadsPrec ? agreger(leadsPrec) : null;
   const show = ratio(g.present, g.conclu);
+
+  // Part du CA : meme base que Closing et Rattrapage (CA des Closing dont le
+  // JOUR est dans la periode, filtres de la barre appliques, tous rangs). Origine
+  // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
+  // Setting) se partagent le meme CA et font 100 %.
+  const origineCa = origineCaFn();
+  const closingsPerimetre = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && parFiltresBarre(c));
+  const partCaSetting = (dansLaPlage) => {
+    const dansPlage = closingsPerimetre.filter(dansLaPlage);
+    return {
+      total: somme(dansPlage, "montant"),
+      setting: somme(dansPlage.filter((c) => origineCa(c) === "setting"), "montant"),
+    };
+  };
+  const caP = partCaSetting(dansPeriode);
+  const caPPrec = plagePrec ? partCaSetting((c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]) : null;
   const ev = (cle) => (gPrec ? ecartDe(g[cle], gPrec[cle], "salesOutbound" + cle) : null);
   const ep = (actuel, precedent) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent) : null);
 
@@ -4239,6 +4269,12 @@ function vueOutbound() {
     carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.closing, g.assignes), gPrec && ratio(gPrec.closing, gPrec.assignes))),
     carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.present, gPrec.conclu))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
+    carte(
+      "Part du CA",
+      caP.total ? pourcent(ratio(caP.setting, caP.total)) : "—",
+      caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing de la période` : "aucun CA Closing sur la période",
+      caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
+    ),
   ].join("");
 
   entonnoir(
