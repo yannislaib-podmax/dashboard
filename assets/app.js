@@ -1650,6 +1650,7 @@ function contratsDirectionFiltres() {
     }
     if (CANAL !== "tout" && c.canal !== CANAL) return false;
     if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    if (SOURCE !== "tout" && c.source !== SOURCE) return false;
     return true;
   });
 }
@@ -1663,10 +1664,11 @@ function paiementsDirectionFiltres() {
       if (DEBUT && p.datePaiement < DEBUT) return false;
       if (FIN && p.datePaiement > FIN) return false;
     }
-    if (CANAL !== "tout" || PRODUIT !== "tout") {
+    if (CANAL !== "tout" || PRODUIT !== "tout" || SOURCE !== "tout") {
       const c = parContrat[idLie(p.contrat)];
       if (CANAL !== "tout" && (!c || c.canal !== CANAL)) return false;
       if (PRODUIT !== "tout" && (!c || c.produit !== PRODUIT)) return false;
+      if (SOURCE !== "tout" && (!c || c.source !== SOURCE)) return false;
     }
     return true;
   });
@@ -1677,6 +1679,7 @@ function contratsDirectionDansPlage(a, b) {
     if (!c.dateSignature || c.dateSignature < a || c.dateSignature > b) return false;
     if (CANAL !== "tout" && c.canal !== CANAL) return false;
     if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    if (SOURCE !== "tout" && c.source !== SOURCE) return false;
     return true;
   }).filter((c) => c.statut !== "Annulé");
 }
@@ -1686,10 +1689,11 @@ function paiementsDirectionDansPlage(a, b) {
 
   return DIRECTION_PAIEMENTS.filter((p) => {
     if (!p.datePaiement || p.datePaiement < a || p.datePaiement > b) return false;
-    if (CANAL !== "tout" || PRODUIT !== "tout") {
+    if (CANAL !== "tout" || PRODUIT !== "tout" || SOURCE !== "tout") {
       const c = parContrat[idLie(p.contrat)];
       if (CANAL !== "tout" && (!c || c.canal !== CANAL)) return false;
       if (PRODUIT !== "tout" && (!c || c.produit !== PRODUIT)) return false;
+      if (SOURCE !== "tout" && (!c || c.source !== SOURCE)) return false;
     }
     return true;
   });
@@ -1700,6 +1704,7 @@ function resiliationsDansPlage(a, b) {
     if (!c.dateResiliation || c.dateResiliation < a || c.dateResiliation > b) return false;
     if (CANAL !== "tout" && c.canal !== CANAL) return false;
     if (PRODUIT !== "tout" && c.produit !== PRODUIT) return false;
+    if (SOURCE !== "tout" && c.source !== SOURCE) return false;
     return true;
   }).length;
 }
@@ -3052,10 +3057,17 @@ let SALES_SETTER = "tout";
 // comprises — décision du 2026-10-04 (demande utilisateur).
 let SALES_CLOSING_RANG = "r1";
 
-// Closing : calls Closing de CALL BOOKED, filtrés période + closer actif.
+// Filtres Canal / Produit / Source de la barre commune : ils doivent s'appliquer
+// à TOUTES les vues Sales Team (calls et leads portent ces champs).
+const parFiltresBarre = (c) =>
+  (CANAL === "tout" || c.canal === CANAL) &&
+  (PRODUIT === "tout" || c.produit === PRODUIT) &&
+  (SOURCE === "tout" || c.source === SOURCE);
+
+// Closing : calls Closing de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
   SALES_CALLS.filter(
-    (c) => c.typeAppel === "Closing" && dansPeriode(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+    (c) => c.typeAppel === "Closing" && dansPeriode(c) && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 
 function salesToggleHtml(noms, actif, attribut) {
@@ -3462,7 +3474,7 @@ function salesCallsClosingPrecedentes() {
   if (!plage) return null;
   const [a, b] = plage;
   return SALES_CALLS.filter(
-    (c) => c.typeAppel === "Closing" && c.jour && c.jour >= a && c.jour <= b && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+    (c) => c.typeAppel === "Closing" && c.jour && c.jour >= a && c.jour <= b && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 }
 
@@ -3720,9 +3732,15 @@ function vueSalesClosing() {
     ),
   ].join("");
 
-  // A traiter : toute date et tout rang confondus (seul le filtre closer
-  // s'applique), comme dans l'onglet Setting.
-  const closingsTous = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER));
+  // A traiter : toutes dates confondues (le filtre closer s'applique), mais le rang suit le toggle R1 / Tous les rangs
+  // (sinon des R2 a venir s'affichaient en mode R1).
+  const closingsTous = SALES_CALLS.filter(
+    (c) =>
+      c.typeAppel === "Closing" &&
+      parFiltresBarre(c) &&
+      (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
+      (SALES_CLOSING_RANG === "tous" || c.rangR === 1)
+  );
   const aVenirClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= AUJOURDHUI);
   const passesSansStatutClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < AUJOURDHUI);
   const conclusSansIssueClosing = closingsTous.filter((c) => c.conclu && !c.issue && !c.vente);
@@ -3873,7 +3891,7 @@ function vueSettingRattrapage() {
   const duRang = (c) => SETTING_RANG === "tous" || c.rangR === 1;
 
   const duSetter = (c) => SALES_SETTER === "tout" || c.setter === SALES_SETTER;
-  const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c));
+  const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c) && parFiltresBarre(c));
   const diags = diagsTous.filter(dansPeriode);
 
   const closings = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null);
@@ -3940,7 +3958,7 @@ function vueSettingRattrapage() {
     if (c.contactId != null && c.jour && (!premierDiag.has(c.contactId) || c.jour < premierDiag.get(c.contactId))) premierDiag.set(c.contactId, c.jour);
   });
   const partCa = (dansLaPlage) => {
-    const dansPlage = closings.filter(dansLaPlage).filter(duRang);
+    const dansPlage = closings.filter(dansLaPlage).filter(duRang).filter(parFiltresBarre);
     return {
       total: somme(dansPlage, "montant"),
       rattrapage: somme(
@@ -4118,11 +4136,11 @@ function vueOutbound() {
     closingsParContact.get(c.contactId).push(c);
   });
 
-  const leads = SALES_LEADS.filter(
-    (l) =>
-      !(l.contactId != null && contactsFamille2.has(l.contactId)) &&
-            dansPeriode({ jour: l.jourAssignation })
-  ).map((l) => {
+  // Leads du périmètre (hors Famille 2) filtrés par la barre commune
+  // (Canal / Produit / Source) ; la période est appliquée ensuite, et la période
+  // précédente (flèches ↑/↓) réutilise exactement la même base.
+  const leadsBase = SALES_LEADS.filter((l) => !(l.contactId != null && contactsFamille2.has(l.contactId)) && parFiltresBarre(l));
+  const enrichir = (l) => {
     const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
     const issue = !!(issues && issues.length);
     const calls = issue ? closingsParContact.get(l.contactId) || [] : [];
@@ -4137,7 +4155,12 @@ function vueOutbound() {
       conclu: somme(calls, "conclu"),
       ca: somme(calls, "montant"),
     };
-  });
+  };
+  const leads = leadsBase.filter((l) => dansPeriode({ jour: l.jourAssignation })).map(enrichir);
+  const plagePrec = plagePrecedente();
+  const leadsPrec = plagePrec
+    ? leadsBase.filter((l) => l.jourAssignation && l.jourAssignation >= plagePrec[0] && l.jourAssignation <= plagePrec[1]).map(enrichir)
+    : null;
 
   const agreger = (liste) => {
     const issues = liste.filter((l) => l.issue).length;
@@ -4158,22 +4181,25 @@ function vueOutbound() {
   };
 
   const g = agreger(leads);
+  const gPrec = leadsPrec ? agreger(leadsPrec) : null;
   const show = ratio(g.present, g.conclu);
+  const ev = (cle) => (gPrec ? ecartDe(g[cle], gPrec[cle], "salesOutbound" + cle) : null);
+  const ep = (actuel, precedent) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent) : null);
 
   // Ligne 1 : les volumes (KPI). Ligne 2 : les taux, dessous.
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte("Leads assignés", nombre(g.assignes), "à un setter sur la période"),
-    carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`),
-    carte("Closing bookés", nombre(g.closing), "appels de Closing pris"),
-    carte("Closing honorés", nombre(g.honores), "leads venus au Closing"),
-    carte("Ventes", nombre(g.ventes), "contrats signés"),
-    carte("CA généré", euros(g.ca), "montant des contrats signés"),
+    carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
+    carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
+    carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
+    carte("Closing honorés", nombre(g.honores), "leads venus au Closing", ev("honores")),
+    carte("Ventes", nombre(g.ventes), "contrats signés", ev("ventes")),
+    carte("CA généré", euros(g.ca), "montant des contrats signés", ev("ca")),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
-    carte("Taux d'issue", pourcent(ratio(g.issues, g.assignes)), g.assignes ? `${nombre(g.issues)} sur ${nombre(g.assignes)} assignés` : "—"),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—"),
-    carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé"),
-    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—"),
+    carte("Taux d'issue", pourcent(ratio(g.issues, g.assignes)), g.assignes ? `${nombre(g.issues)} sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.issues, g.assignes), gPrec && ratio(gPrec.issues, gPrec.assignes))),
+    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.closing, g.assignes), gPrec && ratio(gPrec.closing, gPrec.assignes))),
+    carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.present, gPrec.conclu))),
+    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
   ].join("");
 
   entonnoir(
@@ -4460,7 +4486,7 @@ async function charger() {
       const reponseDirection = await fetch("/api/direction");
       const donneesDirection = await reponseDirection.json();
       if (reponseDirection.ok) {
-        DIRECTION_CONTRATS = donneesDirection.contrats || [];
+        DIRECTION_CONTRATS = (donneesDirection.contrats || []).map((c) => ({ ...c, source: deriverSource(c.canal) }));
         DIRECTION_PAIEMENTS = donneesDirection.paiements || [];
       }
     } catch {
@@ -4486,8 +4512,10 @@ async function charger() {
       const reponseSales = await fetch("/api/sales-team");
       const donneesSales = await reponseSales.json();
       if (reponseSales.ok) {
-        SALES_LEADS = donneesSales.leads || [];
-        SALES_CALLS = donneesSales.calls || [];
+        // Source : champ réel si renseigné, sinon dérivée du canal (comme TOUTES).
+        const avecSource = (x) => ({ ...x, source: x.source || deriverSource(x.canal) });
+        SALES_LEADS = (donneesSales.leads || []).map(avecSource);
+        SALES_CALLS = (donneesSales.calls || []).map(avecSource);
         vueSalesClosing();
         vueSalesSetting();
       }

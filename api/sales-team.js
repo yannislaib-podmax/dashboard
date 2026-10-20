@@ -41,6 +41,10 @@ const CHAMPS_LEADS = {
   fldE9CLUd3f08MQri: "statut",
   fldsTCF9f3IolFvV1: "dateAssignation",
   fldreiHMlZQd2xHX3: "nbCallsBookes",
+  // Qualification du lead : alimente les filtres Canal / Produit / Source de la barre.
+  fldPsYc33WNxnbJx5: "source",
+  fldllUNg0J5M1xIhb: "canal",
+  fldGQUwkMl7QTDgQP: "produit",
 };
 
 const CHAMPS_CALL_BOOKED = {
@@ -55,6 +59,7 @@ const CHAMPS_CALL_BOOKED = {
   fldIJJbmVTPBFHt1o: "issue",
   fldTBeyP7bcOpxz4p: "rangR",
   fld1GgVHXLLo54h8s: "montant",
+  fldG440Cf4HAIkHEk: "source",
   fldONsYE6GNJUI15C: "canal",
   fldChsnbeVQFDCmjy: "produit",
   fldS2brPeHHyuCRf3: "present", // formule 0/1
@@ -193,6 +198,9 @@ export default async function handler(req, res) {
         setter: l.setter,
         statut: l.statut,
         nbCallsBookes: l.nbCallsBookes || 0,
+        source: l.source,
+        canal: l.canal,
+        produit: l.produit,
       }));
 
     const calls = callsBrut
@@ -214,6 +222,7 @@ export default async function handler(req, res) {
         issue: c.issue,
         rangR: c.rangR,
         montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
+        source: c.source,
         canal: c.canal,
         produit: c.produit,
         present: c.present || 0,
