@@ -1911,6 +1911,8 @@ function apparitions(racine) {
 }
 
 function afficherVue(nom) {
+  // Ancien onglet Acquisition > Outbound, devenu Sales Team > Setting (anciens favoris).
+  if (nom === "outbound") nom = "sales-setting";
   document.querySelectorAll(".vue").forEach((v) => v.classList.remove("active"));
   document.querySelectorAll(".sous a").forEach((a) => a.classList.remove("actif"));
 
@@ -1922,7 +1924,8 @@ function afficherVue(nom) {
   if (lien) lien.classList.add("actif");
 
   const barre = document.getElementById("filtre");
-  const ancre = vue.querySelector(".convention") || vue.querySelector(".titre-vue");
+  // Closing : le bloc .convention peut etre masque (mode Rattrapage), on ancre sous le toggle de mode.
+  const ancre = vue.querySelector("#sales-mode") || vue.querySelector(".convention") || vue.querySelector(".titre-vue");
   if (barre && ancre) ancre.after(barre);
 
   vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
@@ -4049,7 +4052,7 @@ function vueSettingRattrapage() {
   salesGraphR1R2("sales-setting-f2-r1r2", salesStatsR1R2(g.callsClosingTousRangs));
 
   // Tout vient d'etre reconstruit (innerHTML) : ces ".rv" ne sont jamais observes par apparitions() (qui n'observe qu'au 1er rendu de la vue). Sans ce re-armement, les sections restent invisibles apres un clic sur le toggle du classement (meme correctif que vueSalesClosing).
-  const cibleVue = document.getElementById("vue-sales-setting");
+  const cibleVue = document.getElementById("vue-sales-closing");
   if (cibleVue) {
     brancherInfobulles(cibleVue);
     requestAnimationFrame(() => apparitions(cibleVue));
@@ -4207,16 +4210,53 @@ function vueOutbound() {
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
 
   // Meme re-armement de l'animation d'entree que vueSalesClosing, sinon les sections disparaissent apres un clic sur le toggle du classement.
-  const cibleVue = document.getElementById("vue-outbound");
+  const cibleVue = document.getElementById("vue-sales-setting");
   if (cibleVue) {
     brancherInfobulles(cibleVue);
     requestAnimationFrame(() => apparitions(cibleVue));
   }
 }
 
+// Toggle de l'onglet Closing : "closing" (R1 / tous les rangs) ou "rattrapage"
+// (ex onglet Setting : calls Diagnostic de 15 min des prospects disqualifies,
+// traites par le setter, dont l'objectif est de booker un Closing R1).
+// Les deux blocs sont rendus a chaque rendre() ; ce toggle n'affiche que l'un.
+let SALES_MODE = "closing";
+
+function appliquerSalesMode() {
+  const cible = document.getElementById("vue-sales-closing");
+  const zone = document.getElementById("sales-mode");
+  if (!cible || !zone) return;
+  const blocClosing = document.getElementById("sales-bloc-closing");
+  const blocRattrapage = document.getElementById("sales-bloc-rattrapage");
+  if (blocClosing) blocClosing.style.display = SALES_MODE === "closing" ? "" : "none";
+  if (blocRattrapage) blocRattrapage.style.display = SALES_MODE === "rattrapage" ? "" : "none";
+  const sousTitre = document.getElementById("sales-mode-soustitre");
+  if (sousTitre) {
+    sousTitre.textContent =
+      SALES_MODE === "closing"
+        ? "Qui décroche les calls Closing, et ce que chacun rapporte."
+        : "Rattrapage des prospects disqualifiés : call de 15 minutes avec le setter pour booker un Closing R1.";
+  }
+  zone.innerHTML =
+    `<button type="button" class="${SALES_MODE === "closing" ? "actif" : ""}" data-sales-mode="closing">Closing</button>` +
+    `<button type="button" class="${SALES_MODE === "rattrapage" ? "actif" : ""}" data-sales-mode="rattrapage">Rattrapage</button>`;
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      SALES_MODE = btn.getAttribute("data-sales-mode");
+      appliquerSalesMode();
+      // Le bloc qui vient d'apparaitre n'a jamais ete observe : on re-arme les ".rv".
+      cible.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
+      requestAnimationFrame(() => apparitions(cible));
+    });
+  });
+}
+
 function vueSalesSetting() {
-  const cible = document.getElementById("vue-sales-setting");
+  const cible = document.getElementById("vue-sales-closing");
   if (!cible) return;
+  appliquerSalesMode();
 
   const setters = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.setter).map((c) => c.setter))].sort();
   brancherSalesToggle(
