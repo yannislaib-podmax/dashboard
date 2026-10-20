@@ -4181,6 +4181,7 @@ function vueOutbound() {
     const calls = issue ? closingsParContact.get(l.contactId) || [] : [];
     return {
       setter: l.setter,
+      contacte: !!l.jourContacte,
       issue,
       approuve: issue && issues.includes("APPROVED"),
       closing: calls.length > 0,
@@ -4203,6 +4204,7 @@ function vueOutbound() {
     const closing = liste.filter((l) => l.closing).length;
     return {
       assignes: liste.length,
+      contactes: liste.filter((l) => l.contacte).length,
       issues,
       approuves,
       rejetes: issues - approuves,
@@ -4224,6 +4226,7 @@ function vueOutbound() {
   // Ligne 1 : les volumes (KPI). Ligne 2 : les taux, dessous.
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
+    carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
     carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
     carte("Closing honorés", nombre(g.honores), "leads venus au Closing", ev("honores")),
@@ -4231,7 +4234,8 @@ function vueOutbound() {
     carte("CA généré", euros(g.ca), "montant des contrats signés", ev("ca")),
   ].join("");
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
-    carte("Taux d'issue", pourcent(ratio(g.issues, g.assignes)), g.assignes ? `${nombre(g.issues)} sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.issues, g.assignes), gPrec && ratio(gPrec.issues, gPrec.assignes))),
+    carte("Taux de contact", pourcent(ratio(g.contactes, g.assignes)), g.assignes ? `${nombre(g.contactes)} contactés sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.contactes, g.assignes), gPrec && ratio(gPrec.contactes, gPrec.assignes))),
+    carte("Taux d'issue", pourcent(ratio(g.issues, g.contactes)), g.contactes ? `${nombre(g.issues)} issues sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.issues, g.contactes), gPrec && ratio(gPrec.issues, gPrec.contactes))),
     carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.closing, g.assignes), gPrec && ratio(gPrec.closing, gPrec.assignes))),
     carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.present, gPrec.conclu))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
@@ -4241,14 +4245,15 @@ function vueOutbound() {
     `${prefixeId}-entonnoir`,
     [
       { nom: "Setter assigné", cle: "assignes" },
+      { nom: "Lead contacté", cle: "contactes" },
       { nom: "Issue renseignée", cle: "issues" },
       { nom: "Closing booké", cle: "closing" },
       { nom: "Closing honoré", cle: "honores" },
       { nom: "Vente", cle: "ventes" },
     ],
-    [g.assignes, g.issues, g.closing, g.honores, g.ventes],
+    [g.assignes, g.contactes, g.issues, g.closing, g.honores, g.ventes],
     null,
-    [null, g.assignes, g.issues, g.closing, g.honores],
+    [null, g.assignes, g.contactes, g.issues, g.closing, g.honores],
     null
   );
 
@@ -4263,11 +4268,17 @@ function vueOutbound() {
 
   const metriquesSetting = {
     assignes: { libelleCourt: "Leads assignés", valeur: (v) => v.assignes, format: nombre, secondaire: () => null },
+    contactes: {
+      libelleCourt: "Leads contactés",
+      valeur: (v) => v.contactes,
+      format: nombre,
+      secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.contactes / v.assignes) * 100)} % des assignés` : null),
+    },
     issues: {
       libelleCourt: "Issues renseignées",
       valeur: (v) => v.issues,
       format: nombre,
-      secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.issues / v.assignes) * 100)} % des assignés` : null),
+      secondaire: (v) => (v.contactes > 0 ? `${Math.round((v.issues / v.contactes) * 100)} % des contactés` : null),
     },
     transformes: {
       libelleCourt: "Closing booké",
@@ -4287,6 +4298,7 @@ function vueOutbound() {
   const bulleSetter = (nom, v) => `
     <strong>${nom}</strong>
     <span>Assignés<b>${nombre(v.assignes)}</b></span>
+    <span>Contactés<b>${nombre(v.contactes)}</b></span>
     <span>Issues<b>${nombre(v.issues)}</b></span>
     <span>Closing booké<b>${nombre(v.closing)}</b></span>
     <span>CA<b>${euros(v.ca)}</b></span>

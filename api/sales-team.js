@@ -41,6 +41,7 @@ const CHAMPS_LEADS = {
   fldE9CLUd3f08MQri: "statut",
   fldsTCF9f3IolFvV1: "dateAssignation",
   fldreiHMlZQd2xHX3: "nbCallsBookes",
+  fldIV8czAyl8PtCln: "dateContacte", // passage au stage "Contacted" iClosed (scenario Make 8068615)
   // Qualification du lead : alimente les filtres Canal / Produit / Source de la barre.
   fldPsYc33WNxnbJx5: "source",
   fldllUNg0J5M1xIhb: "canal",
@@ -194,6 +195,7 @@ export default async function handler(req, res) {
       .map((l) => ({
         jour: jourParis(l.capteLe),
         jourAssignation: jourParis(l.dateAssignation),
+        jourContacte: jourParis(l.dateContacte),
         contactId: l.contactId ?? null,
         setter: l.setter,
         statut: l.statut,
