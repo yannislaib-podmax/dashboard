@@ -198,9 +198,10 @@ function recalculerDepuisCallBooked(callsBooked) {
 
 // Acquisition par client. Renvoie, par ID de ligne ACQUISITION :
 //  - clients      : nombre de clients (avec au moins un contrat) issus de ce lead
-//  - contracte1er : contracte du PREMIER achat (contrats signes a la date du
-//                   1er contrat ; l'abonnement Media Buying pris en option ce
-//                   jour-la est exclu s'il existe une prestation)
+//  - contracte1er : contracte du PREMIER achat (tous les contrats signes a la
+//                   date du 1er contrat, abonnement Media Buying pris en
+//                   option ce jour-la compris : 1re mensualite = CA
+//                   d'acquisition ; les suivantes vont dans la LTV)
 //  - encaisseTous : encaisse sur TOUS les contrats du client (a date)
 function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
   // lead -> ligne (jour|canal|produit) du call Closing R1
@@ -254,8 +255,11 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
     const dates = mesContrats.map((k) => String(k.dateSignature || "")).filter(Boolean).sort();
     const d0 = dates[0] || "";
     const duJour = mesContrats.filter((k) => String(k.dateSignature || "") === d0);
-    const prestations = duJour.filter((k) => k.typeContrat !== "Abonnement");
-    const premier = prestations.length ? prestations : duJour;
+    // 1er achat = TOUS les contrats du jour du 1er contrat, abonnement Media Buying
+    // pris en option compris (decision 2026-10-20) : sa 1re mensualite est du CA
+    // d'acquisition, les mensualites suivantes ne comptent que dans la LTV
+    // (encaisseTous).
+    const premier = duJour;
 
     const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || { clients: 0, contracte1er: 0, encaisseTous: 0 });
     p.clients += 1;
