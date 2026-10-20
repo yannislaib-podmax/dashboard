@@ -168,19 +168,30 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // ligne jour | canal | produit, a partir des seuls calls Closing de rang R1
 // (un lead qui relance, R2/R3..., ne compte pas comme un 2e rendez-vous).
 function recalculerDepuisCallBooked(callsBooked) {
+  // R1 = champs sans suffixe (comportement historique). R2+ = relances (R2, R3...),
+  // dans des champs suffixes "R2" : le dashboard choisit R1 / R2+ / Tous.
+  const champsVides = () => {
+    const o = {};
+    for (const suf of ["", "R2"]) {
+      for (const f of ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"]) o[f + suf] = 0;
+    }
+    return o;
+  };
   const parCle = {};
   for (const c of callsBooked) {
-    if (c.typeAppel !== "Closing" || c.rangR !== 1) continue;
+    if (c.typeAppel !== "Closing") continue;
+    const suf = c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
+    if (suf === null) continue;
     const jour = jourParis(c.prisLe);
     if (!jour) continue;
     const cle = cleLigne(jour, c.canal, c.produit);
-    const p = (parCle[cle] = parCle[cle] || { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 });
-    p.rendezVous += 1;
-    p.rendezVousConclus += c.conclu || 0;
-    p.honores += c.present || 0;
-    p.ventes += c.vente || 0;
-    p.contracte += c.montant || 0;
-    p.annules += c.annule || 0;
+    const p = (parCle[cle] = parCle[cle] || champsVides());
+    p["rendezVous" + suf] += 1;
+    p["rendezVousConclus" + suf] += c.conclu || 0;
+    p["honores" + suf] += c.present || 0;
+    p["ventes" + suf] += c.vente || 0;
+    p["contracte" + suf] += c.montant || 0;
+    p["annules" + suf] += c.annule || 0;
   }
   return parCle;
 }
@@ -317,7 +328,10 @@ export default async function handler(req, res) {
 
     const recalcul = recalculerDepuisCallBooked(callsBooked);
     const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, paiements);
-    const vide = { rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0 };
+    const vide = {
+      rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0,
+      rendezVousR2: 0, rendezVousConclusR2: 0, honoresR2: 0, ventesR2: 0, contracteR2: 0, annulesR2: 0,
+    };
     const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
     // Lignes = depense ACQUISITION + comptages calcules. On cree une ligne des
@@ -362,6 +376,12 @@ export default async function handler(req, res) {
         ventes: r.ventes,
         contracte: r.contracte,
         annules: r.annules,
+        rendezVousR2: r.rendezVousR2,
+        rendezVousConclusR2: r.rendezVousConclusR2,
+        honoresR2: r.honoresR2,
+        ventesR2: r.ventesR2,
+        contracteR2: r.contracteR2,
+        annulesR2: r.annulesR2,
         clients: cl.clients,
         contracte1er: cl.contracte1er,
         encaisseTous: cl.encaisseTous,

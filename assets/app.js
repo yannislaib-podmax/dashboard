@@ -39,7 +39,7 @@ const carte = (libelle, chiffre, note, ecart) => `
 
 const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0);
 
-// Base de calcul du CA dans « Performance pub » (décision 2026-10-05) :
+// Base de calcul du CA dans « Paid Ads » (décision 2026-10-05) :
 //  - "call"    : CA des ventes saisies dans iClosed au call (historique) ;
 //  - "premier" : CA du 1er achat de chaque client acquis (contrats Airtable) ;
 //  - "tous"    : CA encaissé sur tous les contrats de ces clients, à date.
@@ -448,7 +448,7 @@ function vueConversion(lignes, precedentes) {
       carte(
         "Taux d'annulation",
         pourcent(annulation),
-        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (R1, closing)${fragile(rdvPris)}`,
+        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (closing${suffixeDeRang(FUNNEL_RANG)})${fragile(rdvPris)}`,
         annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null
       ) +
       carte(
@@ -2032,13 +2032,35 @@ function majLegende() {
   document.getElementById("filtre-note").textContent = [`${n} ligne${n > 1 ? "s" : ""}`, periode, ...restrictions].join(" · ");
 }
 
+// Toggle de rang du Funnel (R1 / Tous ; pas de R2+ seul : les leads et la
+// depense ne dependent pas du rang, les ratios n'auraient pas de sens). L'API renvoie les compteurs de
+// calls Closing en R1 (champs sans suffixe) et en R2+ (champs suffixés "R2") ;
+// on substitue ici les compteurs selon le choix. Leads, dépense et clients ne
+// dépendent pas du rang. Paid Ads reste sur R1 (acquisition pure).
+let FUNNEL_RANG = "r1";
+const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
+function appliquerRangFunnel(lignes) {
+  if (!lignes || FUNNEL_RANG === "r1") return lignes;
+  return lignes.map((l) => {
+    const o = { ...l };
+    CHAMPS_CALLS_RANG.forEach((f) => {
+      const r2 = l[f + "R2"] || 0;
+      o[f] = FUNNEL_RANG === "r2" ? r2 : (l[f] || 0) + r2;
+    });
+    return o;
+  });
+}
+
 function rendre() {
   const lignes = lignesFiltrees();
   const precedentes = lignesPrecedentes();
+  brancherSalesRangToggle("funnel-rang", () => FUNNEL_RANG, (v) => (FUNNEL_RANG = v), rendre, true);
+  const lignesFunnel = appliquerRangFunnel(lignes);
+  const precedentesFunnel = appliquerRangFunnel(precedentes);
 
   vueEnsemble(lignes, precedentes);
-  vueConversion(lignes, precedentes);
-  simulateur(lignes);
+  vueConversion(lignesFunnel, precedentesFunnel);
+  simulateur(lignesFunnel);
   vueJour(lignes);
   vueCanal(lignes);
   vueDepenses(lignes);
@@ -2418,9 +2440,14 @@ const parCanalEtProduitTrack = (lignes) =>
       (SOURCE === "tout" || l.source === SOURCE)
   );
 
+// Toggle de rang (R1 / R2+ / Tous) : ne concerne que les RDV. Les leads ne sont
+// pas rattachés à un rang, ils restent comptés en entier.
+let TRACK_RANG = "r1";
+const trackRdvSelonRang = () => TRACK_RDV_TOUS.filter((r) => rangAccepte(TRACK_RANG, r));
+
 const trackLignesFiltrees = () => ({
   leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPeriode)),
-  rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPeriode)),
+  rdv: parCanalEtProduitTrack(trackRdvSelonRang().filter(dansPeriode)),
 });
 
 // Même logique de période précédente que le reste du dashboard (barre de
@@ -2433,7 +2460,7 @@ function trackLignesPrecedentes() {
 
   return {
     leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPlage)),
-    rdv: parCanalEtProduitTrack(TRACK_RDV.filter(dansPlage)),
+    rdv: parCanalEtProduitTrack(trackRdvSelonRang().filter(dansPlage)),
   };
 }
 
@@ -2974,6 +3001,8 @@ function vueTracking() {
   const cible = document.getElementById("vue-tracking");
   if (!cible) return;
 
+  brancherSalesRangToggle("tracking-rang", () => TRACK_RANG, (v) => (TRACK_RANG = v), vueTracking);
+
   const champ = TRACK_CHAMP[TRACK_DIMENSION];
   const { leads, rdv } = trackLignesFiltrees();
   const parValeur = trackAgreger(champ, leads, rdv);
@@ -3097,17 +3126,23 @@ function brancherSalesToggle(id, noms, getActif, onChoix, rerender) {
 // Toggle R1 uniquement / Tous les rangs — restreint les métriques de
 // PERFORMANCE de Closing (taux, classement, courbe) au 1er call sur chaque
 // lead par défaut. Même correctif d'attribut brut que brancherSalesToggle.
-function salesRangToggleHtml(id, actif) {
+// Périmètre de rang partagé (Closing, Rattrapage, Funnel, Tracking) :
+// "r1" = 1er call de chaque lead, "r2" = relances (R2, R3...), "tous" = tout.
+const rangAccepte = (rang, c) => rang === "tous" || (rang === "r1" ? c.rangR === 1 : c.rangR > 1);
+const suffixeDeRang = (rang) => (rang === "r1" ? " · R1 uniquement" : rang === "r2" ? " · R2+ uniquement" : " · tous rangs");
+
+function salesRangToggleHtml(id, actif, sansR2) {
   return (
     `<button type="button" class="${actif === "r1" ? "actif" : ""}" data-${id}="r1">R1 uniquement</button>` +
+    (sansR2 ? "" : `<button type="button" class="${actif === "r2" ? "actif" : ""}" data-${id}="r2">R2+ uniquement</button>`) +
     `<button type="button" class="${actif === "tous" ? "actif" : ""}" data-${id}="tous">Tous les rangs</button>`
   );
 }
 
-function brancherSalesRangToggle(id, getActif, onChoix, rerender) {
+function brancherSalesRangToggle(id, getActif, onChoix, rerender, sansR2) {
   const zone = document.getElementById(id);
   if (!zone) return;
-  zone.innerHTML = salesRangToggleHtml(id, getActif());
+  zone.innerHTML = salesRangToggleHtml(id, getActif(), sansR2);
   zone.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("actif")) return;
@@ -3654,12 +3689,12 @@ function vueSalesClosing() {
   // "business" qui ne suivaient pas le toggle rendaient la lecture
   // incohérente).
   const callsTousRangs = salesCallsClosing();
-  const calls = SALES_CLOSING_RANG === "r1" ? callsTousRangs.filter((c) => c.rangR === 1) : callsTousRangs;
+  const calls = callsTousRangs.filter((c) => rangAccepte(SALES_CLOSING_RANG, c));
   const callsPrecTousRangs = salesCallsClosingPrecedentes();
-  const callsPrec = callsPrecTousRangs ? (SALES_CLOSING_RANG === "r1" ? callsPrecTousRangs.filter((c) => c.rangR === 1) : callsPrecTousRangs) : null;
+  const callsPrec = callsPrecTousRangs ? callsPrecTousRangs.filter((c) => rangAccepte(SALES_CLOSING_RANG, c)) : null;
   const s = salesStatsCallsClosing(calls);
   const sPrec = callsPrec ? salesStatsCallsClosing(callsPrec) : null;
-  const suffixeRang = SALES_CLOSING_RANG === "r1" ? " · R1 uniquement" : " · tous rangs";
+  const suffixeRang = suffixeDeRang(SALES_CLOSING_RANG);
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   document.getElementById("sales-closing-cartes").innerHTML = [
@@ -3739,7 +3774,7 @@ function vueSalesClosing() {
       c.typeAppel === "Closing" &&
       parFiltresBarre(c) &&
       (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
-      (SALES_CLOSING_RANG === "tous" || c.rangR === 1)
+      rangAccepte(SALES_CLOSING_RANG, c)
   );
   const aVenirClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= AUJOURDHUI);
   const passesSansStatutClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < AUJOURDHUI);
@@ -3887,8 +3922,8 @@ function vueSettingRattrapage() {
     (v) => (SETTING_RANG = v),
     vueSettingRattrapage
   );
-  const suffixeRang = SETTING_RANG === "r1" ? " · R1 uniquement" : " · tous rangs";
-  const duRang = (c) => SETTING_RANG === "tous" || c.rangR === 1;
+  const suffixeRang = suffixeDeRang(SETTING_RANG);
+  const duRang = (c) => rangAccepte(SETTING_RANG, c);
 
   const duSetter = (c) => SALES_SETTER === "tout" || c.setter === SALES_SETTER;
   const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c) && parFiltresBarre(c));
