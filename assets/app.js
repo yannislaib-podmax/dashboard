@@ -4628,14 +4628,20 @@ async function charger() {
 
     // Cold call (Google Sheet des callers) — même isolement : ça ne bloque
     // jamais le reste du dashboard si /api/coldcall échoue.
-    try {
-      const reponseCC = await fetch("/api/coldcall");
-      const donneesCC = await reponseCC.json();
-      COLDCALL_ERREUR = reponseCC.ok ? null : donneesCC.erreur || "Erreur inconnue";
-      if (reponseCC.ok) COLDCALL = donneesCC.callers || [];
-    } catch (e) {
-      COLDCALL_ERREUR = e.message;
-    }
+    // NON bloquant (Apps Script peut etre lent) : timeout 8 s, la vue Outbound
+    // se remplit a l'arrivee des donnees.
+    COLDCALL_ERREUR = "chargement en cours…";
+    (async () => {
+      try {
+        const reponseCC = await fetch("/api/coldcall", { signal: AbortSignal.timeout(8000) });
+        const donneesCC = await reponseCC.json();
+        COLDCALL_ERREUR = reponseCC.ok ? null : donneesCC.erreur || "Erreur inconnue";
+        if (reponseCC.ok) COLDCALL = donneesCC.callers || [];
+      } catch (e) {
+        COLDCALL_ERREUR = e.name === "TimeoutError" ? "délai dépassé (Google Sheet trop lent)" : e.message;
+      }
+      vueColdCall();
+    })();
 
     brancherPeriode();
     brancherCanalProduit();
@@ -4728,117 +4734,59 @@ function ccCallerPeriode(c) {
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
+  const ids = ["coldcall-cartes", "coldcall-taux", "coldcall-entonnoir"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
-
-  if (COLDCALL_ERREUR) {
-    cartes.innerHTML = "";
-    ["coldcall-table", "coldcall-niches", "coldcall-jours"].forEach((id) => {
-      document.getElementById(id).innerHTML = vide(`Données Cold call indisponibles : ${COLDCALL_ERREUR}`);
-    });
-    return;
-  }
-  if (!COLDCALL.length) {
-    cartes.innerHTML = "";
-    ["coldcall-table", "coldcall-niches", "coldcall-jours"].forEach((id) => {
-      document.getElementById(id).innerHTML = vide("Aucun caller détecté dans le Sheet.");
-    });
+  const message = COLDCALL_ERREUR
+    ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
+    : !COLDCALL.length
+      ? "Aucun caller détecté dans le Sheet."
+      : null;
+  if (message) {
+    ids.forEach((id) => (document.getElementById(id).innerHTML = ""));
+    document.getElementById("coldcall-cartes").innerHTML = vide(message);
     return;
   }
 
-  const lignes = COLDCALL.map((c) => ({ c, p: ccCallerPeriode(c) }));
-  const tot = lignes.reduce(
-    (t, { c, p }) => ({
-      assignes: t.assignes + c.assignes,
-      traites: t.traites + c.appeles,
-      appeles: t.appeles + p.appeles,
-      reponse: t.reponse + p.reponse,
-      callBook: t.callBook + p.callBook,
-    }),
+  // Tous callers confondus : la periode du filtre s'applique aux appels (par jour).
+  const t = COLDCALL.reduce(
+    (a, c) => {
+      const p = ccCallerPeriode(c);
+      return {
+        assignes: a.assignes + c.assignes,
+        traites: a.traites + c.appeles,
+        appeles: a.appeles + p.appeles,
+        reponse: a.reponse + p.reponse,
+        callBook: a.callBook + p.callBook,
+      };
+    },
     { assignes: 0, traites: 0, appeles: 0, reponse: 0, callBook: 0 }
   );
 
   cartes.innerHTML = [
-    carteInfo("Leads assignés", nombre(tot.assignes), "Total des lignes de tous les onglets callers.", null),
-    carteInfo("Appels passés", nombre(tot.appeles), "Lignes avec un Status ou un État renseigné (sur la période choisie).", null),
-    carteInfo("Taux de décrochage", ccPct(tot.reponse, tot.appeles), "Réponses / appels passés.", null),
-    carteInfo("Calls bookés", nombre(tot.callBook), "État de l'appel = Call Book.", null),
-    carteInfo("Remplissage de la base", ccPct(tot.traites, tot.assignes), "Leads déjà travaillés / leads assignés (total, hors période).", null),
+    carte("Leads assignés", nombre(t.assignes), "lignes de la base des cold callers", null),
+    carte("Appelés", nombre(t.appeles), "Status ou État renseigné, sur la période", null),
+    carte("Décrochés", nombre(t.reponse), "Status = Réponse", null),
+    carte("Calls bookés", nombre(t.callBook), "État de l'appel = Call Book", null),
   ].join("");
-  brancherInfobulles(cartes);
 
-  const corps = lignes
-    .sort((a, b) => b.p.callBook - a.p.callBook || b.p.appeles - a.p.appeles)
-    .map(
-      ({ c, p }) => `<tr>
-        <td>${c.caller}</td>
-        <td>${nombre(c.assignes)}</td>
-        <td>${nombre(p.appeles)}</td>
-        <td>${ccPct(p.reponse, p.appeles)}</td>
-        <td>${nombre(p.callBook)}</td>
-        <td>${ccPct(p.callBook, p.reponse)}</td>
-        <td>${ccPct(c.appeles, c.assignes)}</td>
-      </tr>`
-    )
-    .join("");
-  document.getElementById("coldcall-table").innerHTML = `
-    <table>
-      <thead><tr>
-        <th>Caller</th><th>Leads assignés</th><th>Appels</th><th>Décrochage</th>
-        <th>Calls bookés</th><th>Book / décroché</th><th>Remplissage</th>
-      </tr></thead>
-      <tbody>${corps}</tbody>
-    </table>`;
+  document.getElementById("coldcall-taux").innerHTML = [
+    carte("Taux d'appel", ccPct(t.traites, t.assignes), `${nombre(t.traites)} travaillés sur ${nombre(t.assignes)} assignés (total, hors période)`, null),
+    carte("Taux de décrochage", ccPct(t.reponse, t.appeles), t.appeles ? `${nombre(t.reponse)} décrochés sur ${nombre(t.appeles)} appelés` : "—", null),
+    carte("Book / décroché", ccPct(t.callBook, t.reponse), t.reponse ? `${nombre(t.callBook)} bookés sur ${nombre(t.reponse)} décrochés` : "—", null),
+    carte("Book / appelé", ccPct(t.callBook, t.appeles), t.appeles ? `${nombre(t.callBook)} bookés sur ${nombre(t.appeles)} appelés` : "—", null),
+  ].join("");
 
-  // Par niche (totaux, tous callers confondus)
-  const niches = {};
-  COLDCALL.forEach((c) =>
-    Object.entries(c.niches || {}).forEach(([nom, n]) => {
-      const o = (niches[nom] ||= { assignes: 0, appeles: 0, reponse: 0, callBook: 0 });
-      o.assignes += n.assignes;
-      o.appeles += n.appeles;
-      o.reponse += n.reponse;
-      o.callBook += n.callBook;
-    })
+  entonnoir(
+    "coldcall-entonnoir",
+    [
+      { nom: "Lead assigné", cle: "assignes" },
+      { nom: "Appelé", cle: "appeles" },
+      { nom: "Décroché", cle: "reponse" },
+      { nom: "Call booké", cle: "callBook" },
+    ],
+    [t.assignes, t.appeles, t.reponse, t.callBook],
+    null,
+    [null, t.assignes, t.appeles, t.reponse],
+    null
   );
-  const corpsNiches = Object.entries(niches)
-    .sort((a, b) => b[1].callBook - a[1].callBook || b[1].appeles - a[1].appeles)
-    .map(
-      ([nom, n]) => `<tr>
-        <td>${nom}</td><td>${nombre(n.assignes)}</td><td>${nombre(n.appeles)}</td>
-        <td>${ccPct(n.reponse, n.appeles)}</td><td>${nombre(n.callBook)}</td><td>${ccPct(n.appeles, n.assignes)}</td>
-      </tr>`
-    )
-    .join("");
-  document.getElementById("coldcall-niches").innerHTML = `
-    <table>
-      <thead><tr><th>Niche</th><th>Leads assignés</th><th>Appels</th><th>Décrochage</th><th>Calls bookés</th><th>Remplissage</th></tr></thead>
-      <tbody>${corpsNiches}</tbody>
-    </table>`;
-
-  // Par jour (tous callers confondus, periode appliquee)
-  const parJour = {};
-  COLDCALL.forEach((c) =>
-    Object.entries(c.jours || {}).forEach(([jour, j]) => {
-      if (!dansPeriode({ jour })) return;
-      const o = (parJour[jour] ||= { appeles: 0, reponse: 0, callBook: 0 });
-      o.appeles += j.appeles;
-      o.reponse += j.reponse;
-      o.callBook += j.callBook;
-    })
-  );
-  const corpsJours = Object.entries(parJour)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(
-      ([jour, j]) => `<tr>
-        <td>${jour.split("-").reverse().join("/")}</td><td>${nombre(j.appeles)}</td>
-        <td>${ccPct(j.reponse, j.appeles)}</td><td>${nombre(j.callBook)}</td>
-      </tr>`
-    )
-    .join("");
-  document.getElementById("coldcall-jours").innerHTML = corpsJours
-    ? `<table>
-        <thead><tr><th>Jour</th><th>Appels</th><th>Décrochage</th><th>Calls bookés</th></tr></thead>
-        <tbody>${corpsJours}</tbody>
-      </table>`
-    : vide("Aucun appel daté sur la période (la date se remplit automatiquement dès qu'un caller renseigne une ligne).");
 }
