@@ -4234,6 +4234,7 @@ function vueOutbound() {
     return {
       assignes: liste.length,
       contactes: liste.filter((l) => l.contacte).length,
+      sansIssue: liste.filter((l) => l.contacte && !l.issue).length,
       issues,
       approuves,
       rejetes: issues - approuves,
@@ -4273,8 +4274,8 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
     carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
+    carte("Contactés sans issue", nombre(g.sansIssue), "contactés dont l'issue n'est pas encore saisie dans iClosed", null),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
-    carte("Contactés sans issue", nombre(Math.max(0, g.contactes - g.issues)), "à relancer : l'issue n'est pas encore saisie dans iClosed", null),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
     carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
