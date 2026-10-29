@@ -61,6 +61,7 @@
       <div class="sous"><div class="sous-interieur">
         <a href="#sales-closing" data-vue="sales-closing">Closing</a>
         <a href="#sales-setting" data-vue="sales-setting">Setting</a>
+        <a href="#sales-coldcall" data-vue="sales-coldcall">Cold call</a>
       </div></div>
     </div>
 
@@ -403,6 +404,26 @@
     <div class="toggle-granularite" id="sales-setting-f2-metrique"></div>
     <div class="glass classement podium-carte rv" id="sales-setting-f2-classement"></div>
     </div>
+  </section>
+
+  <!-- ---------- Sales Team — Cold call (Google Sheet des callers) ---------- -->
+  <section class="vue" id="vue-sales-coldcall">
+    <div class="titre-vue">
+      <h1>Sales Team — Cold call</h1>
+      <p class="sous-titre">Le travail des cold callers, lu dans le Google Sheet : leads assignés, appels passés, décrochés, calls bookés. Un onglet du Sheet = un caller : renommer ou ajouter un onglet met cette page à jour toute seule. Les calls bookés qui ont réellement atterri dans iClosed sont suivis côté Acquisition (canal Cold call).</p>
+    </div>
+
+    <h3 class="sous-section">Vue d'ensemble</h3>
+    <div id="coldcall-cartes" class="cartes cols-5"></div>
+
+    <h3 class="sous-section">Par caller</h3>
+    <div class="glass cadre-table rv" id="coldcall-table"></div>
+
+    <h3 class="sous-section">Par niche</h3>
+    <div class="glass cadre-table rv" id="coldcall-niches"></div>
+
+    <h3 class="sous-section">Appels par jour</h3>
+    <div class="glass cadre-table rv" id="coldcall-jours"></div>
   </section>
 
   <!-- ---------- Sales Team — Setting (ex Acquisition > Outbound) ---------- -->
