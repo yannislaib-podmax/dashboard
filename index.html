@@ -53,6 +53,7 @@
         <a href="#ensemble"   data-vue="ensemble"   class="actif">Paid Ads</a>
         <a href="#conversion" data-vue="conversion">Funnel</a>
         <a href="#tracking"  data-vue="tracking">Tracking UTM</a>
+        <a href="#sales-coldcall" data-vue="sales-coldcall">Outbound</a>
       </div></div>
     </div>
 
@@ -61,7 +62,6 @@
       <div class="sous"><div class="sous-interieur">
         <a href="#sales-closing" data-vue="sales-closing">Closing</a>
         <a href="#sales-setting" data-vue="sales-setting">Setting</a>
-        <a href="#sales-coldcall" data-vue="sales-coldcall">Cold call</a>
       </div></div>
     </div>
 
@@ -409,8 +409,8 @@
   <!-- ---------- Sales Team — Cold call (Google Sheet des callers) ---------- -->
   <section class="vue" id="vue-sales-coldcall">
     <div class="titre-vue">
-      <h1>Sales Team — Cold call</h1>
-      <p class="sous-titre">Le travail des cold callers, lu dans le Google Sheet : leads assignés, appels passés, décrochés, calls bookés. Un onglet du Sheet = un caller : renommer ou ajouter un onglet met cette page à jour toute seule. Les calls bookés qui ont réellement atterri dans iClosed sont suivis côté Acquisition (canal Cold call).</p>
+      <h1>Outbound — Cold call</h1>
+      <p class="sous-titre">Le travail des cold callers, lu dans le Google Sheet : leads assignés, appels passés, décrochés, calls bookés. Outbound = prospects contactés à froid, jamais les leads déjà inscrits (ceux-là sont suivis dans Sales Team > Setting). Un onglet du Sheet = un caller : renommer ou ajouter un onglet met cette page à jour toute seule. Les calls bookés qui ont réellement atterri dans iClosed sont suivis côté Acquisition (canal Cold call).</p>
     </div>
 
     <h3 class="sous-section">Vue d'ensemble</h3>
@@ -430,13 +430,14 @@
   <section class="vue" id="vue-sales-setting">
     <div class="titre-vue">
       <h1>Sales Team — Setting</h1>
-      <p class="sous-titre">Canal « Setting call » (source Outbound) : des leads déjà en base (lead magnet sans réservation) ou froids (cold call), travaillés par le setter. Entonnoir par cohorte : leads assignés dans la période → issue renseignée (approuvée ou rejetée) → Closing booké → honoré → vente. Les issues et les Closing sont cherchés sans limite de date.</p>
+      <p class="sous-titre">Leads déjà inscrits (pub, organique, base de données…) assignés à un setter, quelle que soit leur source d'acquisition. Entonnoir par cohorte : leads assignés dans la période → issue renseignée (approuvée ou rejetée) → Closing booké → honoré → vente. Les issues et les Closing sont cherchés sans limite de date.</p>
     </div>
 
+    <div class="toggle-granularite" id="outbound-filtre"></div>
     <div class="toggle-granularite" id="outbound-rang"></div>
 
     <h3 class="sous-section">Étapes Setting</h3>
-    <div id="outbound-cartes" class="cartes cols-3"></div>
+    <div id="outbound-cartes" class="cartes cols-4"></div>
 
     <h3 class="sous-section">Étapes Closing</h3>
     <div id="outbound-cartes-closing" class="cartes cols-4"></div>

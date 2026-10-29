@@ -252,14 +252,15 @@ const CANAL_VERS_SOURCE = {
   Facebook: "Organique",
   LinkedIn: "Organique",
   "Site web": "Organique",
-  // Outbound = tout ce qui sort pour booker du Closing (decision 07/10) :
-  // Setting Call = lead tiede (base de donnees, pas encore book), Cold Call =
-  // prospection a froid (listes hors lead magnet / pub). Meme source, canaux distincts.
-  "Setting Call": "Outbound",
+  // Outbound = UNIQUEMENT la prospection a froid (Cold Call), decision du 29/10
+  // (remplace celle du 07/10). Un lead travaille par un setter garde sa source
+  // d'origine : "passe par un setter" est une dimension a part (champ Setter).
+  "Setting Call": "Autre",
   "Cold Call": "Outbound",
   Autre: "Autre",
 };
-const deriverSource = (canal) => CANAL_VERS_SOURCE[canal] || "Autre";
+const CANAL_VERS_SOURCE_MIN = Object.fromEntries(Object.entries(CANAL_VERS_SOURCE).map(([k, v]) => [k.toLowerCase(), v]));
+const deriverSource = (canal) => CANAL_VERS_SOURCE_MIN[String(canal || "").toLowerCase()] || "Autre";
 
 const parCanalEtProduit = (lignes) =>
   lignes.filter(
@@ -4171,11 +4172,15 @@ let OUTBOUND_METRIQUE = "transformes";
 // Rang des calls Closing du Setting (R1 / R2+ / Tous), "tous" par defaut comme
 // Rattrapage. Ne touche que les etapes Closing (booke, honore, vente, CA, part du CA).
 let OUTBOUND_RANG = "tous";
+// Filtre par setter de la page Setting ("tout" = tous les setters).
+let OUTBOUND_SETTER = "tout";
 
 function vueOutbound() {
   const prefixeId = "outbound";
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
 
+  const settersOutbound = [...new Set(SALES_LEADS.filter((l) => l.setter).map((l) => l.setter))].sort();
+  brancherSalesToggle("outbound-filtre", settersOutbound, () => OUTBOUND_SETTER, (v) => (OUTBOUND_SETTER = v), vueOutbound);
   brancherSalesRangToggle("outbound-rang", () => OUTBOUND_RANG, (v) => (OUTBOUND_RANG = v), vueOutbound);
   const duRang = (c) => rangAccepte(OUTBOUND_RANG, c);
 
@@ -4196,7 +4201,9 @@ function vueOutbound() {
   // Leads du périmètre (hors Famille 2) filtrés par la barre commune
   // (Canal / Produit / Source) ; la période est appliquée ensuite, et la période
   // précédente (flèches ↑/↓) réutilise exactement la même base.
-  const leadsBase = SALES_LEADS.filter((l) => !(l.contactId != null && contactsFamille2.has(l.contactId)) && parFiltresBarre(l));
+  const leadsBase = SALES_LEADS.filter(
+    (l) => !(l.contactId != null && contactsFamille2.has(l.contactId)) && parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
+  );
   const enrichir = (l) => {
     const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
     const issue = !!(issues && issues.length);
@@ -4267,6 +4274,7 @@ function vueOutbound() {
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
     carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
+    carte("Contactés sans issue", nombre(Math.max(0, g.contactes - g.issues)), "à relancer : l'issue n'est pas encore saisie dans iClosed", null),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
     carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
@@ -4689,7 +4697,7 @@ colorerCartes();
 
 
 /* ------------------------------------------------------------------ */
-/*  Sales Team — Cold call (Google Sheet des callers)                  */
+/*  Acquisition — Outbound / Cold call (Google Sheet des callers)      */
 /* ------------------------------------------------------------------ */
 // Donnees agregees par caller, venant de /api/coldcall (web app Apps Script).
 // Un onglet du Sheet = un caller. La periode du filtre global s'applique
