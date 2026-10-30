@@ -1904,5 +1904,5 @@ tr.total td {
 .cc-separateur::before, .cc-separateur::after { content: ""; flex: 1; height: 1px; background: var(--bord); }
 
 /* Toggle Closing / Rattrapage de la barre de filtres (onglets Acquisition). */
-#acq-mode { display: flex; width: fit-content; }
+#acq-mode, #sales-mode { display: flex; width: fit-content; }
 #acq-mode[hidden] { display: none; }
