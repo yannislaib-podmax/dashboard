@@ -4752,6 +4752,9 @@ const ccSlug = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 const ccCle = (c) => ccSlug(c.utm || c.caller);
+// Remuneration du caller : 30 EUR par call de closing auquel le prospect se presente
+// (call honore, 1er call R1 uniquement : un prospect revu en R2 n'est pas paye deux fois).
+const CC_PRIME_HONORE = 30;
 const ccEstOutbound = (r) => r.source === "Outbound" || /(^|, )outbound(,|$)/i.test(r.utmSource || "");
 
 // Metriques du classement et de l'evolution (Sheet + Airtable), meme structure que
@@ -4780,7 +4783,7 @@ const ccAjouterRdv = (o, r) => {
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -4913,6 +4916,59 @@ function vueColdCall() {
     }
     return null;
   };
+  // Remuneration : 30 EUR par call honore (R1), independante du toggle de rang.
+  const rdvPayes = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && r.rangR === 1 && (r.present || 0) > 0);
+  const payesChoisis = COLDCALL_CALLER === "tout" ? rdvPayes : rdvPayes.filter(dansCallers);
+  const remun = payesChoisis.length * CC_PRIME_HONORE;
+  const remunParCaller = {};
+  rdvPayes.forEach((r) => {
+    const n = nomDuRdv(r);
+    if (n) remunParCaller[n] = (remunParCaller[n] || 0) + CC_PRIME_HONORE;
+  });
+  const caR = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
+  document.getElementById("coldcall-cout").innerHTML = [
+    carte("Rémunération callers", euros(remun), `${nombre(payesChoisis.length)} calls de closing honorés × ${CC_PRIME_HONORE} €`, null),
+    carte("Coût par vente", ventes > 0 ? euros(remun / ventes) : "—", ventes ? `${euros(remun)} pour ${nombre(ventes)} ventes` : "aucune vente sur la période", null),
+    carte("Retour sur rémunération", remun > 0 && caR > 0 ? `x${(caR / remun).toFixed(1).replace(".", ",")}` : "—", remun > 0 ? `${euros(caR)} de CA pour ${euros(remun)} versés` : "—", null),
+  ].join("");
+
+  // Activite du jour : aujourd'hui / hier / moyenne par jour travaille (30 derniers
+  // jours), par caller. Ne depend pas du filtre de periode (suivi quotidien).
+  const fmtJour = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const auj = new Date();
+  const hier = new Date(auj.getTime() - 86400000);
+  const jAuj = fmtJour(auj);
+  const jHier = fmtJour(hier);
+  const jDebut30 = fmtJour(new Date(auj.getTime() - 29 * 86400000));
+  const ligneActivite = (c) => {
+    const j = c.jours || {};
+    const z = { appeles: 0, reponse: 0, callBook: 0 };
+    const d = j[jAuj] || z;
+    const h = j[jHier] || z;
+    const actifs = Object.entries(j).filter(([k, v]) => k >= jDebut30 && k <= jAuj && v.appeles > 0);
+    const moy = actifs.length ? Math.round(actifs.reduce((s, [, v]) => s + v.appeles, 0) / actifs.length) : 0;
+    return { nom: c.caller, d, h, moy, joursActifs: actifs.length };
+  };
+  const lignesAct = COLDCALL.map(ligneActivite);
+  const flecheHier = (auj, hier) => {
+    if (auj === hier) return `<span class="cc-act-var stable">= hier</span>`;
+    const d = auj - hier;
+    return `<span class="cc-act-var ${d > 0 ? "hausse" : "baisse"}">${d > 0 ? "▲ +" : "▼ "}${nombre(d)} vs hier (${nombre(hier)})</span>`;
+  };
+  document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesAct
+    .map((l, i) => {
+      const pct = l.moy > 0 ? Math.round((l.d.appeles / l.moy) * 100) : l.d.appeles > 0 ? 100 : 0;
+      const etat = l.d.appeles === 0 ? "zero" : pct >= 100 ? "ok" : pct >= 60 ? "moyen" : "bas";
+      return `<div class="glass cc-act-carte rv">
+        <div class="cc-act-tete"><span class="cc-act-nom">${l.nom}</span>${flecheHier(l.d.appeles, l.h.appeles)}</div>
+        <div class="cc-act-chiffre ${etat}">${nombre(l.d.appeles)}<small> appels aujourd'hui</small></div>
+        <div class="cc-act-barre"><i class="${etat}" style="width:${Math.min(pct, 100)}%"></i></div>
+        <div class="cc-act-rythme">${l.moy > 0 ? `${pct} % de son rythme habituel (${nombre(l.moy)} / jour travaillé, ${l.joursActifs} j sur 30)` : "Pas d'historique sur 30 jours"}</div>
+        <div class="cc-act-pastilles"><span>Décrochés<b>${nombre(l.d.reponse)}</b></span><span>Calls bookés<b>${nombre(l.d.callBook)}</b></span></div>
+      </div>`;
+    })
+    .join("")}</div>`;
+
   const parCaller = {};
   COLDCALL.forEach((c) => {
     const p = ccCallerPeriode(c);
@@ -4939,6 +4995,7 @@ function vueColdCall() {
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
+    <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
     ${v.appeles > 0 ? `<span class="bulle-pied">${Math.round((v.reponse / v.appeles) * 100)} % de réponse${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}</span>` : ""}`;
   salesRenduPodium("coldcall-classement", lignesCaller, CC_METRIQUES, COLDCALL_METRIQUE, bulleCaller);
 

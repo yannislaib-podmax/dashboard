@@ -1875,3 +1875,25 @@ tr.total td {
 
 /* Outbound : une rangee de taux sous une rangee de cartes, avec le meme ecart que la grille. */
 .cartes + .cartes.cartes-taux { margin-top: 16px; }
+
+/* Outbound — activite du jour : une carte par caller */
+.cc-act-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.cc-act-carte { padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; }
+.cc-act-tete { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.cc-act-nom { font-weight: 600; font-size: 15px; color: var(--txt); }
+.cc-act-var { font-size: 11.5px; padding: 3px 10px; border-radius: 99px; background: var(--verre); white-space: nowrap; }
+.cc-act-var.hausse { color: var(--vert); background: rgba(111, 211, 163, 0.12); }
+.cc-act-var.baisse { color: var(--rouge); background: rgba(240, 133, 133, 0.12); }
+.cc-act-var.stable { color: var(--ambre); background: rgba(240, 185, 90, 0.12); }
+.cc-act-chiffre { font-size: 38px; font-weight: 600; line-height: 1.1; color: var(--blanc); }
+.cc-act-chiffre small { font-size: 13px; font-weight: 400; color: var(--txt3); }
+.cc-act-chiffre.zero { color: var(--txt3); }
+.cc-act-barre { height: 8px; border-radius: 99px; background: var(--verre-haut); overflow: hidden; }
+.cc-act-barre i { display: block; height: 100%; border-radius: 99px; background: var(--violet-clair); }
+.cc-act-barre i.ok { background: var(--vert); }
+.cc-act-barre i.moyen { background: var(--ambre); }
+.cc-act-barre i.bas { background: var(--rouge); }
+.cc-act-rythme { font-size: 12px; color: var(--txt3); }
+.cc-act-pastilles { display: flex; gap: 8px; margin-top: 4px; }
+.cc-act-pastilles span { flex: 1; display: flex; flex-direction: column; font-size: 11.5px; color: var(--txt2); padding: 8px 12px; border-radius: var(--r-petit); background: var(--verre); }
+.cc-act-pastilles b { font-size: 18px; font-weight: 600; color: var(--blanc); }
