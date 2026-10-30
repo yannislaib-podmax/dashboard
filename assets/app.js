@@ -4628,17 +4628,17 @@ async function charger() {
 
     // Cold call (Google Sheet des callers) — même isolement : ça ne bloque
     // jamais le reste du dashboard si /api/coldcall échoue.
-    // NON bloquant (Apps Script peut etre lent) : timeout 8 s, la vue Outbound
+    // NON bloquant (Apps Script peut etre lent) : timeout 30 s, la vue Outbound
     // se remplit a l'arrivee des donnees.
     COLDCALL_ERREUR = "chargement en cours…";
     (async () => {
       try {
-        const reponseCC = await fetch("/api/coldcall", { signal: AbortSignal.timeout(8000) });
+        const reponseCC = await fetch("/api/coldcall", { signal: AbortSignal.timeout(30000) });
         const donneesCC = await reponseCC.json();
         COLDCALL_ERREUR = reponseCC.ok ? null : donneesCC.erreur || "Erreur inconnue";
         if (reponseCC.ok) COLDCALL = donneesCC.callers || [];
       } catch (e) {
-        COLDCALL_ERREUR = e.name === "TimeoutError" ? "délai dépassé (Google Sheet trop lent)" : e.message;
+        COLDCALL_ERREUR = e.name === "TimeoutError" ? "délai dépassé (Google Sheet trop lent, recharge la page dans un instant)" : e.message;
       }
       vueColdCall();
     })();

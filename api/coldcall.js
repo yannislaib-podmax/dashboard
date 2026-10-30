@@ -30,7 +30,10 @@ export default async function handler(req, res) {
     }
     if (donnees.erreur) throw new Error(donnees.erreur);
 
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+    // Apps Script est lent (demarrage a froid + lecture du Sheet) : on garde la reponse
+    // 5 min au CDN et on sert l'ancienne pendant qu'elle se rafraichit (1 h), pour
+    // que la page Outbound ne depende pas de la lenteur de Google a chaque ouverture.
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=3600");
     return res.status(200).json({
       genereLe: donnees.genereLe,
       callers: donnees.callers || [],
