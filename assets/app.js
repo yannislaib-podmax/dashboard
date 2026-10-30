@@ -4870,7 +4870,7 @@ function vueColdCall() {
   document.getElementById("coldcall-taux-book").innerHTML = [
     carte("Taux de présence", part(honores, bookes), bookes ? `${nombre(honores)} honorés sur ${nombre(bookes)} bookés` : "—", null),
     carte("Taux de closing", part(ventes, honores), honores ? `${nombre(ventes)} ventes sur ${nombre(honores)} honorés` : "—", null),
-    carte("Book → vente", part(ventes, bookes), bookes ? `${nombre(ventes)} ventes sur ${nombre(bookes)} bookés` : "—", null),
+    carte("Panier moyen", ventes > 0 ? euros(ca / ventes) : "—", ventes ? `${euros(ca)} sur ${nombre(ventes)} ventes` : "—", null),
   ].join("");
 
   // Poids de l'Outbound dans les calls, les ventes et le CA tous canaux.
