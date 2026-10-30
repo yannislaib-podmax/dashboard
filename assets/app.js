@@ -4733,6 +4733,8 @@ function ccCallerPeriode(c) {
 
 // Caller choisi dans le toggle ("tout" = tous les callers).
 let COLDCALL_CALLER = "tout";
+// Perimetre de rang des rangees 2 et 3 : "r1" par defaut (comme Closing).
+let COLDCALL_RANG = "r1";
 
 // Cle de rattachement Sheet <-> Airtable : le nom du caller en A1 (= utm_content
 // du lien) si le script le renvoie (champ `utm`), sinon le nom de l'onglet
@@ -4750,7 +4752,7 @@ const ccEstOutbound = (r) => r.source === "Outbound" || /(^|, )outbound(,|$)/i.t
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-book", "coldcall-taux"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -4778,12 +4780,13 @@ function vueColdCall() {
       const p = ccCallerPeriode(c);
       return {
         assignes: a.assignes + c.assignes,
+        traites: a.traites + c.appeles, // total de l'onglet, hors periode (comme les assignes)
         appeles: a.appeles + p.appeles,
         reponse: a.reponse + p.reponse,
         callBook: a.callBook + p.callBook,
       };
     },
-    { assignes: 0, appeles: 0, reponse: 0, callBook: 0 }
+    { assignes: 0, traites: 0, appeles: 0, reponse: 0, callBook: 0 }
   );
 
   cartes.innerHTML = [
@@ -4791,6 +4794,13 @@ function vueColdCall() {
     carte("Appelés", nombre(t.appeles), t.assignes ? `${ccPct(t.appeles, t.assignes)} des assignés (Status ou État renseigné)` : "Status ou État renseigné", null),
     carte("Décrochés", nombre(t.reponse), t.appeles ? `${ccPct(t.reponse, t.appeles)} des appelés (Status = Réponse)` : "Status = Réponse", null),
     carte("Calls bookés déclarés", nombre(t.callBook), t.reponse ? `${ccPct(t.callBook, t.reponse)} des décrochés (État = Call Book)` : "État de l'appel = Call Book", null),
+  ].join("");
+
+  // Taux du travail sur le Sheet, sous les cartes Cold call.
+  document.getElementById("coldcall-taux-cc").innerHTML = [
+    carte("Taux de remplissage", ccPct(t.traites, t.assignes), t.assignes ? `${nombre(t.traites)} leads travaillés sur ${nombre(t.assignes)} assignés (total, hors période)` : "—", null),
+    carte("Taux de réponse", ccPct(t.reponse, t.appeles), t.appeles ? `${nombre(t.reponse)} décrochés sur ${nombre(t.appeles)} appels passés` : "—", null),
+    carte("Taux de call book", ccPct(t.callBook, t.reponse), t.reponse ? `${nombre(t.callBook)} calls bookés sur ${nombre(t.reponse)} décrochés` : "—", null),
   ].join("");
 
   // Rangee 2 — Airtable : du call reellement booke jusqu'a la vente et au CA.
@@ -4803,38 +4813,43 @@ function vueColdCall() {
   const avis = document.getElementById("coldcall-avis");
   if (avis) {
     avis.innerHTML = exclu
-      ? `<div class="glass message" style="padding:14px 18px;margin-bottom:14px">Les filtres Canal / Source de l'en-tête excluent l'Outbound : les rangées « Du call booké à la vente » et « Conversion » sont vides. Remets Canal et Source sur « Tout » pour les voir.</div>`
+      ? `<div class="glass message" style="padding:14px 18px;margin-bottom:14px">Les filtres Canal / Source de l'en-tête excluent l'Outbound : les rangées « Du call booké à la vente » et « Poids de l'Outbound » sont vides. Remets Canal et Source sur « Tout » pour les voir.</div>`
       : "";
   }
-  const rdvOut = exclu ? [] : TRACK_RDV.filter((r) => ccEstOutbound(r) && dansPeriode(r) && dansCallers(r) && parProduit(r));
+  // Rang des calls : R1 (1er call du prospect), R2+ (relances) ou tous. Un prospect
+  // qui signe en R2 n'a son contrat que sur le call R2 : il faut "Tous les rangs"
+  // pour retrouver ces ventes et ce CA.
+  brancherSalesRangToggle("coldcall-rang", () => COLDCALL_RANG, (v) => (COLDCALL_RANG = v), vueColdCall);
+  const duRang = (r) => rangAccepte(COLDCALL_RANG, r);
+  const rdvOut = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && dansCallers(r) && parProduit(r) && duRang(r));
   const bookes = rdvOut.length;
   const honores = rdvOut.filter((r) => (r.present || 0) > 0).length;
   const ventes = rdvOut.reduce((s, r) => s + (r.vente || 0), 0);
   const ca = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
 
   document.getElementById("coldcall-book").innerHTML = [
-    carte("Calls bookés réels", nombre(bookes), t.callBook ? `${nombre(bookes)} réservés sur ${nombre(t.callBook)} déclarés dans le Sheet` : "réservations iClosed (CALL BOOKED, 1er call)", null),
+    carte("Calls bookés réels", nombre(bookes), t.callBook && COLDCALL_RANG === "r1" ? `${nombre(bookes)} réservés sur ${nombre(t.callBook)} déclarés dans le Sheet` : `réservations iClosed (CALL BOOKED)${suffixeDeRang(COLDCALL_RANG)}`, null),
     carte("Calls honorés", nombre(honores), "le prospect s'est présenté", null),
     carte("Ventes", nombre(ventes), "calls rattachés à un contrat", null),
     carte("CA contracté", euros(ca), "montant des contrats signés", null),
   ].join("");
 
-  // Rangee 3 — taux de conversion et poids de l'Outbound dans le CA total.
-  const rdvTous = TRACK_RDV.filter((r) => dansPeriode(r) && parProduit(r));
-  const caTotal = rdvTous.reduce((s, r) => s + (r.montant || 0), 0);
-  const ventesTotal = rdvTous.reduce((s, r) => s + (r.vente || 0), 0);
+  // Taux de conversion du call booke a la vente, sous les cartes Call book.
   const part = (a, b) => (b > 0 ? pourcent(a / b) : "—");
-
-  document.getElementById("coldcall-taux").innerHTML = [
+  document.getElementById("coldcall-taux-book").innerHTML = [
     carte("Taux de présence", part(honores, bookes), bookes ? `${nombre(honores)} honorés sur ${nombre(bookes)} bookés` : "—", null),
     carte("Taux de closing", part(ventes, honores), honores ? `${nombre(ventes)} ventes sur ${nombre(honores)} honorés` : "—", null),
     carte("Book → vente", part(ventes, bookes), bookes ? `${nombre(ventes)} ventes sur ${nombre(bookes)} bookés` : "—", null),
-    carte(
-      "Part du CA Outbound",
-      part(ca, caTotal),
-      caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA contracté tous canaux (${nombre(ventes)} ventes sur ${nombre(ventesTotal)})` : "—",
-      null
-    ),
+  ].join("");
+
+  // Poids de l'Outbound dans les calls, les ventes et le CA tous canaux.
+  const rdvTous = TRACK_RDV_TOUS.filter((r) => dansPeriode(r) && parProduit(r) && duRang(r));
+  const caTotal = rdvTous.reduce((s, r) => s + (r.montant || 0), 0);
+  const ventesTotal = rdvTous.reduce((s, r) => s + (r.vente || 0), 0);
+  document.getElementById("coldcall-taux").innerHTML = [
+    carte("Part des calls bookés", part(bookes, rdvTous.length), rdvTous.length ? `${nombre(bookes)} calls Outbound sur ${nombre(rdvTous.length)} tous canaux` : "—", null),
+    carte("Part des ventes", part(ventes, ventesTotal), ventesTotal ? `${nombre(ventes)} ventes Outbound sur ${nombre(ventesTotal)} tous canaux` : "—", null),
+    carte("Part du CA Outbound", part(ca, caTotal), caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA contracté tous canaux` : "—", null),
   ].join("");
 
   // Cartes recreees (innerHTML) : leurs ".rv" (opacite 0) ne sont jamais observes
