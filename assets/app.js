@@ -4713,7 +4713,12 @@ colorerCartes();
 let COLDCALL = [];
 let COLDCALL_ERREUR = null;
 
-const ccPct = (a, b) => (b > 0 ? Math.round((a / b) * 100) + " %" : "—");
+const ccPct = (a, b) => {
+  if (!(b > 0)) return "—";
+  const p = (a / b) * 100;
+  // Sous 1 % on garde 2 decimales (1 lead travaille sur 8 673 = 0,01 %, pas « 0 % »).
+  return (p > 0 && p < 1 ? p.toFixed(2).replace(".", ",") : Math.round(p)) + " %";
+};
 
 function ccCallerPeriode(c) {
   // Sans date (lignes saisies avant le script), on ne peut pas filtrer : on
@@ -4798,6 +4803,7 @@ function vueColdCall() {
 
   // Taux du travail sur le Sheet, sous les cartes Cold call.
   document.getElementById("coldcall-taux-cc").innerHTML = [
+    '<div class="cc-vide"></div>',
     carte("Taux de remplissage", ccPct(t.traites, t.assignes), t.assignes ? `${nombre(t.traites)} leads travaillés sur ${nombre(t.assignes)} assignés (total, hors période)` : "—", null),
     carte("Taux de réponse", ccPct(t.reponse, t.appeles), t.appeles ? `${nombre(t.reponse)} décrochés sur ${nombre(t.appeles)} appels passés` : "—", null),
     carte("Taux de call book", ccPct(t.callBook, t.reponse), t.reponse ? `${nombre(t.callBook)} calls bookés sur ${nombre(t.reponse)} décrochés` : "—", null),
@@ -4837,6 +4843,7 @@ function vueColdCall() {
   // Taux de conversion du call booke a la vente, sous les cartes Call book.
   const part = (a, b) => (b > 0 ? pourcent(a / b) : "—");
   document.getElementById("coldcall-taux-book").innerHTML = [
+    '<div class="cc-vide"></div>',
     carte("Taux de présence", part(honores, bookes), bookes ? `${nombre(honores)} honorés sur ${nombre(bookes)} bookés` : "—", null),
     carte("Taux de closing", part(ventes, honores), honores ? `${nombre(ventes)} ventes sur ${nombre(honores)} honorés` : "—", null),
     carte("Book → vente", part(ventes, bookes), bookes ? `${nombre(ventes)} ventes sur ${nombre(bookes)} bookés` : "—", null),
