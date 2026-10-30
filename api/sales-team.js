@@ -206,20 +206,22 @@ export default async function handler(req, res) {
       }));
 
     const calls = callsBrut
-      .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic")
+      .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage")
       .map((c) => ({
         jour: jourParis(c.jourRdvDt),
         contactId: c.contactId ?? null,
-        typeAppel: c.typeAppel,
+        // Type "Rattrapage" (vrai booking iClosed d'un prospect disqualifie) : la page Setting le lit
+        // toujours sous "Diagnostic" + famille 2 ; "Diagnostic" = call de setting (SETTER-).
+        typeAppel: c.typeAppel === "Rattrapage" ? "Diagnostic" : c.typeAppel,
         // Famille 1 (base de données, auto-assignation) vs Famille 2
         // (rattrapage post-disqualification) — uniquement pour les calls
         // Diagnostic ; null pour les calls Closing (pas concernés).
-        famille: c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
+        famille: c.typeAppel === "Rattrapage" ? 2 : c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
         closer: c.closer,
         // Sur un call Diagnostic reserve via iClosed, le "closer" assigne EST le setter
         // (regle confirmee le 2026-10-06) : le champ Setter n'est rempli que par les
         // issues saisies par le setter lui-meme (SETTER-...).
-        setter: c.setter || (c.typeAppel === "Diagnostic" ? c.closer : null),
+        setter: c.setter || (c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage" ? c.closer : null),
         statut: c.statut,
         issue: c.issue,
         rangR: c.rangR,

@@ -983,7 +983,7 @@ function camemberts(lignes) {
   cible.innerHTML = [
     camembert("Dépense pub", lignes, "depense", euros),
     camembert("Rendez-vous", lignes, "rendezVous", nombre),
-    camembert(caLibelle(), lignes, caChamp(), euros),
+    ...(enRattrapage() && CA_MODE !== "call" ? [] : [camembert(caLibelle(), lignes, caChamp(), euros)]),
   ].join("");
 
   brancherSurvol(cible);
@@ -1242,44 +1242,56 @@ function vueEnsemble(lignes, precedentes) {
   const modeClient = CA_MODE !== "call";
   const nbClients = val("clients");
   const sansClient = modeClient && nbClients === 0 ? "aucun client rattaché sur la période" : null;
+  // Rattrapage : les chiffres par client (1er achat, LTV, cohortes) ne sont pas encore
+  // decoupes par type d'appel. On affiche du vide plutot que des chiffres de Closing.
+  const ND = enRattrapage();
+  const NA = "non découpé par type d'appel";
+  const vide = (v) => (ND ? "—" : v);
+  const noteND = (n) => (ND ? NA : n);
+  const ecartND = (e) => (ND ? null : e);
+  const caClientND = ND && modeClient;
 
   document.getElementById("perf").innerHTML = [
     carte("Dépense pub", euros(depense), depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
-    carte(caLibelle(), enEuros(val("contracte")), sansClient, ecart("contracte")),
-    carte("ROAS", enRoas(val("roas")), sansDepense || "le chiffre de pilotage", ecart("roas")),
-    carte("Nouveaux clients", nombre(nbClients), null, ecart("clients")),
+    carte(caLibelle(), caClientND ? "—" : enEuros(val("contracte")), caClientND ? NA : sansClient, caClientND ? null : ecart("contracte")),
+    carte("ROAS", caClientND ? "—" : enRoas(val("roas")), caClientND ? NA : sansDepense || "le chiffre de pilotage", caClientND ? null : ecart("roas")),
+    carte("Nouveaux clients", vide(nombre(nbClients)), noteND(null), ecartND(ecart("clients"))),
   ].join("");
 
   const sansLtv = nbClients === 0 ? "aucun client rattaché sur la période" : null;
   // Ligne 1 : ce que rapporte un client. Ligne 2 : ce que ça donne face à la dépense.
   document.getElementById("perf-ltv").innerHTML = [
-    carte("CA encaissé (tous contrats)", enEuros(val("encaisse")), sansLtv || "tout ce que ces clients ont payé à date", ecart("encaisse")),
-    carte("LTV moyenne par client", enEuros(val("ltv")), sansLtv || "encaissé à date, par client acquis", ecart("ltv")),
-    carte("LTV / 1er achat", enRoas(val("multipleLtv")), sansLtv || "combien de fois le 1er contrat est dépassé", ecart("multipleLtv")),
+    carte("CA encaissé (tous contrats)", vide(enEuros(val("encaisse"))), noteND(sansLtv || "tout ce que ces clients ont payé à date"), ecartND(ecart("encaisse"))),
+    carte("LTV moyenne par client", vide(enEuros(val("ltv"))), noteND(sansLtv || "encaissé à date, par client acquis"), ecartND(ecart("ltv"))),
+    carte("LTV / 1er achat", vide(enRoas(val("multipleLtv"))), noteND(sansLtv || "combien de fois le 1er contrat est dépassé"), ecartND(ecart("multipleLtv"))),
   ].join("");
   document.getElementById("perf-ltv-rentab").innerHTML = [
-    carte("ROAS tous contrats", enRoas(val("roasTous")), sansDepense || "encaissé total / dépense pub", ecart("roasTous")),
-    carte("Marge par client", enEuros(val("margeClient")), sansLtv || sansDepense || "LTV à date moins coût par client", ecart("margeClient")),
-    carte("LTV / coût par client", enRoas(val("ltvSurCout")), sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté", ecart("ltvSurCout")),
+    carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
+    carte("Marge par client", vide(enEuros(val("margeClient"))), noteND(sansLtv || sansDepense || "LTV à date moins coût par client"), ecartND(ecart("margeClient"))),
+    carte("LTV / coût par client", vide(enRoas(val("ltvSurCout"))), noteND(sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté"), ecartND(ecart("ltvSurCout"))),
   ].join("");
 
   const co = calculerCohortes(lignes);
   const sansCohorte = co.nbClients === 0 ? "aucun client rattaché sur la période" : null;
   document.getElementById("perf-ltv-cycle").innerHTML = [
-    carte("Taux de renouvellement", co.tauxRenouv === null ? "—" : pourcent(co.tauxRenouv), sansCohorte || "clients avec au moins 2 prestations", null),
+    carte("Taux de renouvellement", vide(co.tauxRenouv === null ? "—" : pourcent(co.tauxRenouv)), noteND(sansCohorte || "clients avec au moins 2 prestations"), null),
     carte(
       "Délai de rentabilité",
-      co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore",
-      co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données",
+      vide(co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore"),
+      noteND(co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données"),
       null
     ),
-    carte("ROAS à M+3", co.roasM3 === null ? "—" : enRoas(co.roasM3), co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense", null),
+    carte("ROAS à M+3", vide(co.roasM3 === null ? "—" : enRoas(co.roasM3)), noteND(co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense"), null),
   ].join("");
-  courbeCohortes(document.getElementById("perf-cohortes"), co);
+  if (ND) {
+    document.getElementById("perf-cohortes").innerHTML = `<div class="vide">Courbe de cohorte non découpée par type d'appel : disponible en mode Closing ou Tous.</div>`;
+  } else {
+    courbeCohortes(document.getElementById("perf-cohortes"), co);
+  }
 
   document.getElementById("perf-couts").innerHTML = [
     modeClient
-      ? carte("Coût par client", enEuros(val("coutClient")), sansClient || sansDepense, ecart("coutClient"))
+      ? carte("Coût par client", vide(enEuros(val("coutClient"))), noteND(sansClient || sansDepense), ecartND(ecart("coutClient")))
       : carte("Coût par vente", enEuros(val("coutVente")), (depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense) || noteAVenir, ecart("coutVente")),
     carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense || noteAVenir, ecart("coutAppel")),
     carte("Coût par call booké", enEuros(val("coutRdv")), sansDepense, ecart("coutRdv")),
@@ -1292,7 +1304,12 @@ function vueEnsemble(lignes, precedentes) {
     carte("CTR", impressions === 0 ? "—" : pourcent(val("ctr")), impressions === 0 ? "impressions non saisies" : `${nombre(clics)} clics sur ${nombre(impressions)} impressions`, ecart("ctr")),
   ].join("");
 
-  graphiqueCa(lignes);
+  if (ND) {
+    const g = document.getElementById("graph-ca");
+    if (g) g.innerHTML = `<div class="vide">Dépense et valeur des clients non découpées par type d'appel : disponible en mode Closing ou Tous.</div>`;
+  } else {
+    graphiqueCa(lignes);
+  }
   camemberts(lignes);
 
   requestAnimationFrame(() =>
@@ -2044,7 +2061,7 @@ function majLegende() {
     CANAL !== "tout" ? CANAL : null,
     PRODUIT !== "tout" ? PRODUIT : null,
     SOURCE !== "tout" ? SOURCE : null,
-    enRattrapage() ? "Rattrapage" : null,
+    enRattrapage() ? "Rattrapage" : enTous() ? "Closing + Rattrapage" : null,
   ].filter(Boolean);
 
   document.getElementById("filtre-note").textContent = [`${n} ligne${n > 1 ? "s" : ""}`, periode, ...restrictions].join(" · ");
@@ -2064,30 +2081,36 @@ let FUNNEL_RANG = "r1";
 // calculee sur les calls Closing, quel que soit le mode.
 let ACQ_MODE = "closing";
 const enRattrapage = () => ACQ_MODE === "rattrapage";
-// Rang applique aux calls des onglets Acquisition : ignore en Rattrapage.
-const rangAcq = (rang, c) => enRattrapage() || rangAccepte(rang, c);
+const enTous = () => ACQ_MODE === "tous"; // Closing + Rattrapage melanges
+// Rang applique aux calls des onglets Acquisition : ignore en Rattrapage. En mode
+// "Tous", le rang ne vise que les Closing ; un Diagnostic (sans rang) compte en R1 et
+// en Tous les rangs, pas en R2+.
+const rangAcq = (rang, c) =>
+  enRattrapage() || (enTous() && c.typeAppel === "Rattrapage" ? rang !== "r2" : rangAccepte(rang, c));
 const VUES_ACQ_MODE = ["ensemble", "sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
 // Substitue les compteurs de calls des lignes ACQUISITION par ceux du Diagnostic
 // (champs suffixes "D" renvoyes par /api/acquisition).
 function appliquerModeAcq(lignes) {
-  if (!lignes || !enRattrapage()) return lignes;
+  if (!lignes || ACQ_MODE === "closing") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
     CHAMPS_CALLS_RANG.forEach((f) => {
-      o[f] = l[f + "D"] || 0;
+      o[f] = enRattrapage() ? l[f + "D"] || 0 : (l[f] || 0) + (l[f + "D"] || 0);
     });
     return o;
   });
 }
 function appliquerDonneesTrack() {
-  TRACK_RDV_TOUS = enRattrapage() ? TRACK_RATT : TRACK_CLOSING_TOUS;
-  TRACK_RDV = enRattrapage() ? TRACK_RATT : TRACK_CLOSING_TOUS.filter((r) => r.rangR === 1);
+  const closingR1 = TRACK_CLOSING_TOUS.filter((r) => r.rangR === 1);
+  TRACK_RDV_TOUS = enRattrapage() ? TRACK_RATT : enTous() ? [...TRACK_CLOSING_TOUS, ...TRACK_RATT] : TRACK_CLOSING_TOUS;
+  TRACK_RDV = enRattrapage() ? TRACK_RATT : enTous() ? [...closingR1, ...TRACK_RATT] : closingR1;
 }
 function brancherAcqMode() {
   const zone = document.getElementById("acq-mode");
   if (!zone) return;
   zone.innerHTML =
-    `<button type="button" class="${!enRattrapage() ? "actif" : ""}" data-acq-mode="closing" title="Calls de closing">Closing</button>` +
+    `<button type="button" class="${ACQ_MODE === "tous" ? "actif" : ""}" data-acq-mode="tous" title="Calls Closing et Diagnostic melanges">Tous</button>` +
+    `<button type="button" class="${ACQ_MODE === "closing" ? "actif" : ""}" data-acq-mode="closing" title="Calls de closing">Closing</button>` +
     `<button type="button" class="${enRattrapage() ? "actif" : ""}" data-acq-mode="rattrapage" title="Calls Diagnostic (requalification des prospects disqualifies)">Rattrapage</button>`;
   zone.querySelectorAll("button").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -4674,8 +4697,8 @@ async function charger() {
       if (reponseTracking.ok) {
         TRACK_LEADS = donneesTracking.leads || [];
         const rdvBrut = donneesTracking.rdv || [];
-        TRACK_CLOSING_TOUS = rdvBrut.filter((r) => r.typeAppel !== "Diagnostic");
-        TRACK_RATT = rdvBrut.filter((r) => r.typeAppel === "Diagnostic");
+        TRACK_CLOSING_TOUS = rdvBrut.filter((r) => r.typeAppel !== "Rattrapage");
+        TRACK_RATT = rdvBrut.filter((r) => r.typeAppel === "Rattrapage");
         appliquerDonneesTrack();
       }
     } catch {

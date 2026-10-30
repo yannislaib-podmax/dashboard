@@ -36,6 +36,7 @@ const CHAMPS_CALL_BOOKED = {
   fldwA9cRx6qHqForP: "vente", // formule iClosed (SALE) : remplacee par les contrats, voir handler
   fld1GgVHXLLo54h8s: "montant", // idem
   fldFPd5SGaSFfImIE: "typeAppel",
+  fldhiaObnPFQjPioa: "bookingId", // prefixe "SETTER-" = call de setting synthetique (base de donnees), pas du Rattrapage
   fldTBeyP7bcOpxz4p: "rangR",
   fldszCN4DEDuhjCzh: "contrats", // lien CALL BOOKED -> CONTRATS (ids), source unique des ventes et du CA
 };
@@ -147,6 +148,9 @@ async function lireTable(token, tableId, champs, champJour) {
   return lignes;
 }
 
+const estRattrapage = (r) =>
+  r.typeAppel === "Rattrapage" || (r.typeAppel === "Diagnostic" && !String(r.bookingId || "").startsWith("SETTER-"));
+
 export default async function handler(req, res) {
   const token = process.env.AIRTABLE_TOKEN;
 
@@ -180,11 +184,15 @@ export default async function handler(req, res) {
     // `typeAppel` : le front les garde pour le toggle Closing / Rattrapage des
     // onglets Acquisition (defaut Closing = comportement historique).
     const rdv = rdvBrut
-      .filter((r) => r.typeAppel === "Closing" || r.typeAppel === "Diagnostic")
-      .map(({ _id, contrats, ...reste }) => {
+      // Diagnostic "SETTER-" = call de setting sur la base de donnees (pas d'origine pub,
+      // pas du Rattrapage) : exclu de l'acquisition. Il vit dans Sales Team > Setting.
+      // Rattrapage = type "Rattrapage" (nouveau) ou ancien "Diagnostic" sans prefixe SETTER-.
+      .filter((r) => r.typeAppel === "Closing" || estRattrapage(r))
+      .map(({ _id, contrats, bookingId, ...reste }) => {
         const ids = contratsDuCall({ contrats });
         return {
           ...reste,
+          typeAppel: reste.typeAppel === "Closing" ? "Closing" : "Rattrapage",
           vente: ids.length > 0 ? 1 : 0,
           montant: ids.reduce((t, id) => t + montantContrat.get(id), 0),
         };

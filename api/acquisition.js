@@ -58,6 +58,7 @@ const CHAMPS_CALL_BOOKED = {
   fldwA9cRx6qHqForP: "vente",
   fld1GgVHXLLo54h8s: "montant",
   fldFPd5SGaSFfImIE: "typeAppel",
+  fldhiaObnPFQjPioa: "bookingId", // "SETTER-" = call de setting synthetique, exclu du Rattrapage
   fldTBeyP7bcOpxz4p: "rangR",
   fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
 };
@@ -180,8 +181,11 @@ function recalculerDepuisCallBooked(callsBooked) {
   const parCle = {};
   for (const c of callsBooked) {
     // Rattrapage (Diagnostic) : champs suffixes "D", tous rangs confondus.
-    if (c.typeAppel !== "Closing" && c.typeAppel !== "Diagnostic") continue;
-    const suf = c.typeAppel === "Diagnostic" ? "D" : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
+    // Rattrapage = type "Rattrapage" (nouveau) ou ancien "Diagnostic" sans prefixe SETTER- ;
+    // un Diagnostic "SETTER-" est un call de setting : hors acquisition.
+    const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
+    if (c.typeAppel !== "Closing" && !rattrapage) continue;
+    const suf = rattrapage ? "D" : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
     if (suf === null) continue;
     const jour = jourParis(c.prisLe);
     if (!jour) continue;
