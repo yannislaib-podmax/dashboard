@@ -1942,7 +1942,9 @@ function afficherVue(nom) {
     ancre.after(barre);
     if (toggleMode) {
       const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #tracking-dimension");
+      const description = vue.querySelector(".convention");
       if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
+      else if (toggleMode === zoneAcq && description) description.after(toggleMode);
       else barre.after(toggleMode);
     }
   }
