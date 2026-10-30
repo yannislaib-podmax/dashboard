@@ -176,9 +176,12 @@ export default async function handler(req, res) {
     // Le Rang R (1/2/3...) reste dans la ligne : le funnel principal (cartes,
     // classement, camemberts, courbe) ne garde que le rang 1 côté app.js,
     // mais le rapport R1/R2 a besoin de voir aussi les rangs suivants.
+    // Les calls Diagnostic (rattrapage) sont renvoyes aussi, marques par
+    // `typeAppel` : le front les garde pour le toggle Closing / Rattrapage des
+    // onglets Acquisition (defaut Closing = comportement historique).
     const rdv = rdvBrut
-      .filter((r) => r.typeAppel === "Closing")
-      .map(({ typeAppel, _id, contrats, ...reste }) => {
+      .filter((r) => r.typeAppel === "Closing" || r.typeAppel === "Diagnostic")
+      .map(({ _id, contrats, ...reste }) => {
         const ids = contratsDuCall({ contrats });
         return {
           ...reste,

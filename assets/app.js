@@ -1930,9 +1930,19 @@ function afficherVue(nom) {
   if (lien) lien.classList.add("actif");
 
   const barre = document.getElementById("filtre");
+  const zoneAcq = document.getElementById("acq-mode");
+  if (zoneAcq) zoneAcq.hidden = !VUES_ACQ_MODE.includes(nom);
   // Closing : le bloc .convention peut etre masque (mode Rattrapage), on ancre sous le toggle de mode.
   const ancre = vue.querySelector("#sales-mode") || vue.querySelector(".convention") || vue.querySelector(".titre-vue");
-  if (barre && ancre) ancre.after(barre);
+  if (barre && ancre) {
+    // Vues Acquisition : toggle Closing / Rattrapage sous le titre (comme l'onglet Closing), puis la barre de filtres.
+    if (zoneAcq && VUES_ACQ_MODE.includes(nom)) {
+      ancre.after(zoneAcq);
+      zoneAcq.after(barre);
+    } else {
+      ancre.after(barre);
+    }
+  }
 
   vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
   requestAnimationFrame(() => apparitions(vue));
@@ -2028,6 +2038,7 @@ function majLegende() {
     CANAL !== "tout" ? CANAL : null,
     PRODUIT !== "tout" ? PRODUIT : null,
     SOURCE !== "tout" ? SOURCE : null,
+    enRattrapage() ? "Rattrapage" : null,
   ].filter(Boolean);
 
   document.getElementById("filtre-note").textContent = [`${n} ligne${n > 1 ? "s" : ""}`, periode, ...restrictions].join(" · ");
@@ -2039,9 +2050,53 @@ function majLegende() {
 // on substitue ici les compteurs selon le choix. Leads, dépense et clients ne
 // dépendent pas du rang. Paid Ads reste sur R1 (acquisition pure).
 let FUNNEL_RANG = "r1";
+
+// Toggle Closing / Rattrapage des onglets Acquisition (barre de filtres commune).
+// "closing" = calls Closing (comportement historique) ; "rattrapage" = calls
+// Diagnostic (requalification des prospects disqualifies), tous rangs confondus
+// (le rang R n'a pas de sens pour eux). La remuneration Outbound reste TOUJOURS
+// calculee sur les calls Closing, quel que soit le mode.
+let ACQ_MODE = "closing";
+const enRattrapage = () => ACQ_MODE === "rattrapage";
+// Rang applique aux calls des onglets Acquisition : ignore en Rattrapage.
+const rangAcq = (rang, c) => enRattrapage() || rangAccepte(rang, c);
+const VUES_ACQ_MODE = ["ensemble", "sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
+// Substitue les compteurs de calls des lignes ACQUISITION par ceux du Diagnostic
+// (champs suffixes "D" renvoyes par /api/acquisition).
+function appliquerModeAcq(lignes) {
+  if (!lignes || !enRattrapage()) return lignes;
+  return lignes.map((l) => {
+    const o = { ...l };
+    CHAMPS_CALLS_RANG.forEach((f) => {
+      o[f] = l[f + "D"] || 0;
+    });
+    return o;
+  });
+}
+function appliquerDonneesTrack() {
+  TRACK_RDV_TOUS = enRattrapage() ? TRACK_RATT : TRACK_CLOSING_TOUS;
+  TRACK_RDV = enRattrapage() ? TRACK_RATT : TRACK_CLOSING_TOUS.filter((r) => r.rangR === 1);
+}
+function brancherAcqMode() {
+  const zone = document.getElementById("acq-mode");
+  if (!zone) return;
+  zone.innerHTML =
+    `<button type="button" class="${!enRattrapage() ? "actif" : ""}" data-acq-mode="closing" title="Calls de closing">Closing</button>` +
+    `<button type="button" class="${enRattrapage() ? "actif" : ""}" data-acq-mode="rattrapage" title="Calls Diagnostic (requalification des prospects disqualifies)">Rattrapage</button>`;
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      ACQ_MODE = btn.getAttribute("data-acq-mode");
+      appliquerDonneesTrack();
+      brancherAcqMode();
+      majLegende();
+      rendre();
+    });
+  });
+}
 const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
 function appliquerRangFunnel(lignes) {
-  if (!lignes || FUNNEL_RANG === "r1") return lignes;
+  if (!lignes || FUNNEL_RANG === "r1" || enRattrapage()) return lignes;
   return lignes.map((l) => {
     const o = { ...l };
     CHAMPS_CALLS_RANG.forEach((f) => {
@@ -2053,8 +2108,8 @@ function appliquerRangFunnel(lignes) {
 }
 
 function rendre() {
-  const lignes = lignesFiltrees();
-  const precedentes = lignesPrecedentes();
+  const lignes = appliquerModeAcq(lignesFiltrees());
+  const precedentes = appliquerModeAcq(lignesPrecedentes());
   brancherSalesRangToggle("funnel-rang", () => FUNNEL_RANG, (v) => (FUNNEL_RANG = v), rendre, true);
   const lignesFunnel = appliquerRangFunnel(lignes);
   const precedentesFunnel = appliquerRangFunnel(precedentes);
@@ -2418,6 +2473,10 @@ let TRACK_RDV = [];
 // — uniquement pour le rapport R1/R2 plus bas, qui a justement besoin de voir
 // les rangs suivants pour mesurer le taux de relance par UTM.
 let TRACK_RDV_TOUS = [];
+// Sources brutes : calls Closing (base de la remuneration Outbound) et calls
+// Diagnostic (Rattrapage). TRACK_RDV(_TOUS) pointent vers l'un ou l'autre selon ACQ_MODE.
+let TRACK_CLOSING_TOUS = [];
+let TRACK_RATT = [];
 
 let TRACK_DIMENSION = "source"; // "source" | "campagne" | "content"
 let TRACK_METRIQUE = "ca"; // "ca" | "present" | "booke"
@@ -2445,7 +2504,7 @@ const parCanalEtProduitTrack = (lignes) =>
 // Toggle de rang (R1 / R2+ / Tous) : ne concerne que les RDV. Les leads ne sont
 // pas rattachés à un rang, ils restent comptés en entier.
 let TRACK_RANG = "r1";
-const trackRdvSelonRang = () => TRACK_RDV_TOUS.filter((r) => rangAccepte(TRACK_RANG, r));
+const trackRdvSelonRang = () => TRACK_RDV_TOUS.filter((r) => rangAcq(TRACK_RANG, r));
 
 const trackLignesFiltrees = () => ({
   leads: parCanalEtProduitTrack(TRACK_LEADS.filter(dansPeriode)),
@@ -2468,7 +2527,7 @@ function trackLignesPrecedentes() {
 
 // Même filtre période + Canal/Produit que trackLignesFiltrees, mais sur
 // TRACK_RDV_TOUS (tous les rangs R) : sert uniquement au rapport R1/R2.
-const trackRelancesFiltrees = () => parCanalEtProduitTrack(TRACK_RDV_TOUS.filter(dansPeriode));
+const trackRelancesFiltrees = () => parCanalEtProduitTrack(TRACK_CLOSING_TOUS.filter(dansPeriode));
 
 // Rapport R1 / R2 : par valeur de la dimension active, combien de leads ont
 // eu un 1er call Closing (R1) et combien sont repartis en relance (R2, R3...).
@@ -4603,8 +4662,10 @@ async function charger() {
       const donneesTracking = await reponseTracking.json();
       if (reponseTracking.ok) {
         TRACK_LEADS = donneesTracking.leads || [];
-        TRACK_RDV_TOUS = donneesTracking.rdv || [];
-        TRACK_RDV = TRACK_RDV_TOUS.filter((r) => r.rangR === 1);
+        const rdvBrut = donneesTracking.rdv || [];
+        TRACK_CLOSING_TOUS = rdvBrut.filter((r) => r.typeAppel !== "Diagnostic");
+        TRACK_RATT = rdvBrut.filter((r) => r.typeAppel === "Diagnostic");
+        appliquerDonneesTrack();
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.
@@ -4645,6 +4706,7 @@ async function charger() {
 
     brancherPeriode();
     brancherCanalProduit();
+    brancherAcqMode();
     brancherTracking();
     rendre();
 
@@ -4851,7 +4913,7 @@ function vueColdCall() {
   // qui signe en R2 n'a son contrat que sur le call R2 : il faut "Tous les rangs"
   // pour retrouver ces ventes et ce CA.
   brancherSalesRangToggle("coldcall-rang", () => COLDCALL_RANG, (v) => (COLDCALL_RANG = v), vueColdCall);
-  const duRang = (r) => rangAccepte(COLDCALL_RANG, r);
+  const duRang = (r) => rangAcq(COLDCALL_RANG, r);
   // rdvAll : tous les calls Outbound du perimetre (periode, produit, rang) ; rdvOut :
   // ceux du caller choisi. "Tous" garde aussi les calls sans caller reconnu.
   const rdvAll = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && duRang(r));
@@ -4917,7 +4979,7 @@ function vueColdCall() {
     return null;
   };
   // Remuneration : 30 EUR par call honore (R1), independante du toggle de rang.
-  const rdvPayes = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && r.rangR === 1 && (r.present || 0) > 0);
+  const rdvPayes = exclu ? [] : TRACK_CLOSING_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && r.rangR === 1 && (r.present || 0) > 0);
   const payesChoisis = COLDCALL_CALLER === "tout" ? rdvPayes : rdvPayes.filter(dansCallers);
   const remun = payesChoisis.length * CC_PRIME_HONORE;
   const remunParCaller = {};

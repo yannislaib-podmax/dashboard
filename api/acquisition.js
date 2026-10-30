@@ -172,15 +172,16 @@ function recalculerDepuisCallBooked(callsBooked) {
   // dans des champs suffixes "R2" : le dashboard choisit R1 / R2+ / Tous.
   const champsVides = () => {
     const o = {};
-    for (const suf of ["", "R2"]) {
+    for (const suf of ["", "R2", "D"]) {
       for (const f of ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"]) o[f + suf] = 0;
     }
     return o;
   };
   const parCle = {};
   for (const c of callsBooked) {
-    if (c.typeAppel !== "Closing") continue;
-    const suf = c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
+    // Rattrapage (Diagnostic) : champs suffixes "D", tous rangs confondus.
+    if (c.typeAppel !== "Closing" && c.typeAppel !== "Diagnostic") continue;
+    const suf = c.typeAppel === "Diagnostic" ? "D" : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
     if (suf === null) continue;
     const jour = jourParis(c.prisLe);
     if (!jour) continue;
@@ -335,6 +336,7 @@ export default async function handler(req, res) {
     const vide = {
       rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0,
       rendezVousR2: 0, rendezVousConclusR2: 0, honoresR2: 0, ventesR2: 0, contracteR2: 0, annulesR2: 0,
+      rendezVousD: 0, rendezVousConclusD: 0, honoresD: 0, ventesD: 0, contracteD: 0, annulesD: 0,
     };
     const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
@@ -386,6 +388,12 @@ export default async function handler(req, res) {
         ventesR2: r.ventesR2,
         contracteR2: r.contracteR2,
         annulesR2: r.annulesR2,
+        rendezVousD: r.rendezVousD,
+        rendezVousConclusD: r.rendezVousConclusD,
+        honoresD: r.honoresD,
+        ventesD: r.ventesD,
+        contracteD: r.contracteD,
+        annulesD: r.annulesD,
         clients: cl.clients,
         contracte1er: cl.contracte1er,
         encaisseTous: cl.encaisseTous,

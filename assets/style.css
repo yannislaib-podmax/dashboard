@@ -1902,3 +1902,6 @@ tr.total td {
 #coldcall-activite { margin-bottom: 36px; }
 .cc-separateur { display: flex; align-items: center; gap: 16px; margin: 0 0 28px; color: var(--txt3); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
 .cc-separateur::before, .cc-separateur::after { content: ""; flex: 1; height: 1px; background: var(--bord); }
+
+/* Toggle Closing / Rattrapage de la barre de filtres (onglets Acquisition). */
+#acq-mode[hidden] { display: none; }
