@@ -410,17 +410,23 @@
   <section class="vue" id="vue-sales-coldcall">
     <div class="titre-vue">
       <h1>Outbound — Cold call</h1>
-      <p class="sous-titre">Prospects contactés à froid, lus dans le Google Sheet des cold callers : leads assignés → appelés → décrochés → calls bookés. Jamais les leads déjà inscrits (suivis dans Sales Team > Setting). Une fois le call booké, le prospect entre dans iClosed (canal Cold Call).</p>
+      <p class="sous-titre">Prospection à froid, du premier appel à la vente. Le caller réserve le call avec le prospect au téléphone ; le prospect est identifié par l'UTM du lien (source outbound, content = caller).</p>
     </div>
 
-    <h3 class="sous-section">Étapes Cold call</h3>
+    <div class="toggle-granularite" id="coldcall-filtre"></div>
+    <div id="coldcall-avis"></div>
+
+    <h3 class="sous-section">Cold call</h3>
+    <p class="sous-titre rv">Le travail du caller, lu dans le Google Sheet : leads assignés → appelés → décrochés → calls bookés déclarés.</p>
     <div id="coldcall-cartes" class="cartes cols-4"></div>
 
-    <h3 class="sous-section">Taux de conversion</h3>
-    <div id="coldcall-taux" class="cartes cols-4"></div>
+    <h3 class="sous-section">Du call booké à la vente</h3>
+    <p class="sous-titre rv">Ce qui est réellement réservé dans iClosed (Airtable), jusqu'au CA contracté. Premier call de chaque prospect.</p>
+    <div id="coldcall-book" class="cartes cols-4"></div>
 
-    <h3 class="sous-section">Entonnoir</h3>
-    <div class="glass entonnoir rv" id="coldcall-entonnoir"></div>
+    <h3 class="sous-section">Conversion et poids dans le CA</h3>
+    <p class="sous-titre rv">Taux sur les calls Outbound, et part du CA contracté total qui vient de l'Outbound sur la période.</p>
+    <div id="coldcall-taux" class="cartes cols-4"></div>
   </section>
 
   <!-- ---------- Sales Team — Setting (ex Acquisition > Outbound) ---------- -->
@@ -524,6 +530,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=99"></script>
+<script src="/assets/app.js?v=101"></script>
 </body>
 </html>
