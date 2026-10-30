@@ -4798,7 +4798,8 @@ function vueColdCall() {
   // Filtres d'en-tete : la periode et le Produit s'appliquent ; Canal et Source
   // qui excluent l'Outbound (Cold call / Outbound) vident les rangees 2 et 3.
   const parProduit = (r) => PRODUIT === "tout" || r.produit === PRODUIT;
-  const exclu = (CANAL !== "tout" && CANAL !== "Cold call") || (SOURCE !== "tout" && SOURCE !== "Outbound");
+  const exclu =
+    (CANAL !== "tout" && String(CANAL).toLowerCase() !== "cold call") || (SOURCE !== "tout" && String(SOURCE).toLowerCase() !== "outbound");
   const avis = document.getElementById("coldcall-avis");
   if (avis) {
     avis.innerHTML = exclu
@@ -4835,4 +4836,14 @@ function vueColdCall() {
       null
     ),
   ].join("");
+
+  // Cartes recreees (innerHTML) : leurs ".rv" (opacite 0) ne sont jamais observes
+  // par apparitions() (1er rendu de la vue seulement). Sans re-armement elles
+  // restent invisibles, au chargement tardif des donnees comme apres un clic
+  // sur le toggle caller.
+  const cibleVue = document.getElementById("vue-sales-coldcall");
+  if (cibleVue) {
+    brancherInfobulles(cibleVue);
+    requestAnimationFrame(() => apparitions(cibleVue));
+  }
 }
