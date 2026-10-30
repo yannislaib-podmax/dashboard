@@ -4754,10 +4754,33 @@ const ccSlug = (s) =>
 const ccCle = (c) => ccSlug(c.utm || c.caller);
 const ccEstOutbound = (r) => r.source === "Outbound" || /(^|, )outbound(,|$)/i.test(r.utmSource || "");
 
+// Metriques du classement et de l'evolution (Sheet + Airtable), meme structure que
+// SALES_METRIQUES : valeur extraite d'un agregat caller, format, taux secondaire.
+let COLDCALL_METRIQUE = "bookes";
+let COLDCALL_COURBE_METRIQUE = "bookes";
+let GRANULARITE_COLDCALL = "semaine";
+const ccTaux = (a, b, suffixe) => (b > 0 ? `${Math.round((a / b) * 100)} % ${suffixe}` : null);
+const CC_METRIQUES = {
+  appeles: { libelleCourt: "Appelés", valeur: (v) => v.appeles, format: nombre, secondaire: () => null },
+  reponse: { libelleCourt: "Décrochés", valeur: (v) => v.reponse, format: nombre, secondaire: (v) => ccTaux(v.reponse, v.appeles, "de réponse") },
+  bookes: { libelleCourt: "Calls bookés", valeur: (v) => v.bookes, format: nombre, secondaire: (v) => ccTaux(v.bookes, v.reponse, "des décrochés") },
+  honores: { libelleCourt: "Honorés", valeur: (v) => v.honores, format: nombre, secondaire: (v) => ccTaux(v.honores, v.conclus, "présence") },
+  ventes: { libelleCourt: "Ventes", valeur: (v) => v.ventes, format: nombre, secondaire: (v) => ccTaux(v.ventes, v.honores, "closing") },
+  ca: { libelleCourt: "CA", valeur: (v) => v.ca, format: euros, secondaire: () => null },
+};
+const ccNouvelAgregat = () => ({ assignes: 0, appeles: 0, reponse: 0, callBook: 0, bookes: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 });
+const ccAjouterRdv = (o, r) => {
+  o.bookes += 1;
+  o.conclus += r.conclu || 0;
+  if ((r.present || 0) > 0) o.honores += 1;
+  o.ventes += r.vente || 0;
+  o.ca += r.montant || 0;
+};
+
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -4826,7 +4849,10 @@ function vueColdCall() {
   // pour retrouver ces ventes et ce CA.
   brancherSalesRangToggle("coldcall-rang", () => COLDCALL_RANG, (v) => (COLDCALL_RANG = v), vueColdCall);
   const duRang = (r) => rangAccepte(COLDCALL_RANG, r);
-  const rdvOut = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && dansCallers(r) && parProduit(r) && duRang(r));
+  // rdvAll : tous les calls Outbound du perimetre (periode, produit, rang) ; rdvOut :
+  // ceux du caller choisi. "Tous" garde aussi les calls sans caller reconnu.
+  const rdvAll = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && duRang(r));
+  const rdvOut = COLDCALL_CALLER === "tout" ? rdvAll : rdvAll.filter(dansCallers);
   const bookes = rdvOut.length;
   const honores = rdvOut.filter((r) => (r.present || 0) > 0).length;
   const ventes = rdvOut.reduce((s, r) => s + (r.vente || 0), 0);
@@ -4856,6 +4882,104 @@ function vueColdCall() {
     carte("Part des ventes", part(ventes, ventesTotal), ventesTotal ? `${nombre(ventes)} ventes Outbound sur ${nombre(ventesTotal)} tous canaux` : "—", null),
     carte("Part du CA Outbound", part(ca, caTotal), caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA contracté tous canaux` : "—", null),
   ].join("");
+
+  // ---- Entonnoir, evolution, repartition, classement (meme structure que Closing / Setting) ----
+  const suffixeRang = suffixeDeRang(COLDCALL_RANG);
+
+  // Entonnoir du perimetre choisi (caller, periode, rang) : Sheet puis Airtable.
+  entonnoir(
+    "coldcall-entonnoir",
+    [
+      { nom: "Lead assigné", cle: "assignes" },
+      { nom: "Appelé", cle: "appeles" },
+      { nom: "Décroché", cle: "reponse" },
+      { nom: "Call booké", cle: "bookes" },
+      { nom: "Call honoré", cle: "honores" },
+      { nom: "Vente", cle: "ventes" },
+    ],
+    [t.assignes, t.appeles, t.reponse, bookes, honores, ventes],
+    null,
+    [null, t.assignes, t.appeles, t.reponse, bookes, honores],
+    null
+  );
+
+  // Agregat par caller (tous les callers : le classement et les graphiques servent
+  // a les comparer, ils ne suivent donc pas le toggle caller).
+  const cleVersNom = new Map(COLDCALL.map((c) => [ccCle(c), c.caller]));
+  const nomDuRdv = (r) => {
+    for (const x of (r.utmContent || "").split(", ")) {
+      const n = cleVersNom.get(ccSlug(x));
+      if (n) return n;
+    }
+    return null;
+  };
+  const parCaller = {};
+  COLDCALL.forEach((c) => {
+    const p = ccCallerPeriode(c);
+    const o = (parCaller[c.caller] = ccNouvelAgregat());
+    o.assignes = c.assignes;
+    o.appeles = p.appeles;
+    o.reponse = p.reponse;
+    o.callBook = p.callBook;
+  });
+  rdvAll.forEach((r) => {
+    const n = nomDuRdv(r);
+    if (n) ccAjouterRdv(parCaller[n], r);
+  });
+  const lignesCaller = Object.entries(parCaller);
+  const couleurCaller = Object.fromEntries(lignesCaller.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
+
+  // Classement (podium) avec sa propre metrique.
+  brancherSalesMetrique("coldcall-metrique", CC_METRIQUES, () => COLDCALL_METRIQUE, (v) => (COLDCALL_METRIQUE = v), vueColdCall);
+  const bulleCaller = (nom, v) => `
+    <strong>${nom}${suffixeRang}</strong>
+    <span>Appelés<b>${nombre(v.appeles)}</b></span>
+    <span>Décrochés<b>${nombre(v.reponse)}</b></span>
+    <span>Calls bookés<b>${nombre(v.bookes)}</b></span>
+    <span>Honorés<b>${nombre(v.honores)}</b></span>
+    <span>Ventes<b>${nombre(v.ventes)}</b></span>
+    <span>CA contracté<b>${euros(v.ca)}</b></span>
+    ${v.appeles > 0 ? `<span class="bulle-pied">${Math.round((v.reponse / v.appeles) * 100)} % de réponse${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}</span>` : ""}`;
+  salesRenduPodium("coldcall-classement", lignesCaller, CC_METRIQUES, COLDCALL_METRIQUE, bulleCaller);
+
+  // Repartition entre callers.
+  const parts = (cle) => lignesCaller.filter(([, v]) => v[cle] > 0).map(([nom, v]) => [nom, v[cle], couleurCaller[nom]]);
+  document.getElementById("coldcall-camemberts").innerHTML = [
+    disque("Appelés par caller", parts("appeles"), nombre),
+    disque(`Calls bookés par caller${suffixeRang}`, parts("bookes"), nombre),
+    disque(`CA contracté par caller${suffixeRang}`, parts("ca"), euros),
+  ].join("");
+  brancherSurvol(document.getElementById("coldcall-camemberts"));
+
+  // Evolution : top 5 callers sur la metrique choisie, jour/semaine/mois.
+  brancherSalesMetrique("coldcall-courbe-metrique", CC_METRIQUES, () => COLDCALL_COURBE_METRIQUE, (v) => (COLDCALL_COURBE_METRIQUE = v), vueColdCall);
+  const metriqueDef = CC_METRIQUES[COLDCALL_COURBE_METRIQUE];
+  const top5 = [...lignesCaller].sort((a, b) => metriqueDef.valeur(b[1]) - metriqueDef.valeur(a[1])).slice(0, 5).map(([nom]) => nom);
+  const joursSheet = COLDCALL.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
+  const joursAll = [...new Set([...joursSheet, ...rdvAll.map((r) => r.jour).filter(Boolean)])].sort();
+  const blocs = decoupagePeriodesEtendu(joursAll, GRANULARITE_COLDCALL);
+  const statsBloc = (nom, bloc) => {
+    const o = ccNouvelAgregat();
+    const c = COLDCALL.find((x) => x.caller === nom);
+    Object.entries((c && c.jours) || {}).forEach(([jour, j]) => {
+      if (jour < bloc.debut || jour > bloc.fin || !dansPeriode({ jour })) return;
+      o.appeles += j.appeles;
+      o.reponse += j.reponse;
+      o.callBook += j.callBook;
+    });
+    rdvAll.forEach((r) => {
+      if (r.jour && r.jour >= bloc.debut && r.jour <= bloc.fin && nomDuRdv(r) === nom) ccAjouterRdv(o, r);
+    });
+    return o;
+  };
+  const series = top5.map((nom) => {
+    const st = blocs.map((b) => statsBloc(nom, b));
+    return { nom, couleur: couleurCaller[nom], points: st.map((s) => metriqueDef.valeur(s)), secondaires: st.map((s) => metriqueDef.secondaire(s)) };
+  });
+  courbeMultiSeries("coldcall-courbe", blocs, series, metriqueDef.format, GRANULARITE_COLDCALL, (g) => {
+    GRANULARITE_COLDCALL = g;
+    vueColdCall();
+  });
 
   // Cartes recreees (innerHTML) : leurs ".rv" (opacite 0) ne sont jamais observes
   // par apparitions() (1er rendu de la vue seulement). Sans re-armement elles
