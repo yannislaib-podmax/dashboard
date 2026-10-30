@@ -1933,15 +1933,13 @@ function afficherVue(nom) {
   const zoneAcq = document.getElementById("acq-mode");
   if (zoneAcq) zoneAcq.hidden = !VUES_ACQ_MODE.includes(nom);
   // Closing : le bloc .convention peut etre masque (mode Rattrapage), on ancre sous le toggle de mode.
-  const ancre = vue.querySelector("#sales-mode") || vue.querySelector(".convention") || vue.querySelector(".titre-vue");
+  // Ordre voulu partout : titre, filtres d'en-tete, puis toggle de mode
+  // (Closing / Rattrapage) sur les onglets qui en ont un.
+  const toggleMode = vue.querySelector("#sales-mode") || (VUES_ACQ_MODE.includes(nom) ? zoneAcq : null);
+  const ancre = toggleMode ? vue.querySelector(".titre-vue") : vue.querySelector(".convention") || vue.querySelector(".titre-vue");
   if (barre && ancre) {
-    // Vues Acquisition : toggle Closing / Rattrapage sous le titre (comme l'onglet Closing), puis la barre de filtres.
-    if (zoneAcq && VUES_ACQ_MODE.includes(nom)) {
-      ancre.after(zoneAcq);
-      zoneAcq.after(barre);
-    } else {
-      ancre.after(barre);
-    }
+    ancre.after(barre);
+    if (toggleMode) barre.after(toggleMode);
   }
 
   vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
