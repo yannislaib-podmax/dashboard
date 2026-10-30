@@ -3185,10 +3185,13 @@ const parFiltresBarre = (c) =>
   (PRODUIT === "tout" || c.produit === PRODUIT) &&
   (SOURCE === "tout" || c.source === SOURCE);
 
-// Closing : calls Closing de CALL BOOKED, filtrés période + closer actif + barre.
+// Page Closing : le toggle Closing / Rattrapage choisit le type de call. Le Rattrapage est un
+// call de vente avec des rangs, traite exactement comme un Closing (memes vues).
+const callDuMode = (c) => (SALES_MODE === "rattrapage" ? c.rattrapage === true : c.typeAppel === "Closing");
+// Closing : calls du mode choisi de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
   SALES_CALLS.filter(
-    (c) => c.typeAppel === "Closing" && dansPeriode(c) && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+    (c) => callDuMode(c) && dansPeriode(c) && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 
 function salesToggleHtml(noms, actif, attribut) {
@@ -3601,7 +3604,7 @@ function salesCallsClosingPrecedentes() {
   if (!plage) return null;
   const [a, b] = plage;
   return SALES_CALLS.filter(
-    (c) => c.typeAppel === "Closing" && c.jour && c.jour >= a && c.jour <= b && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
+    (c) => callDuMode(c) && c.jour && c.jour >= a && c.jour <= b && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 }
 
@@ -3756,7 +3759,7 @@ function vueSalesClosing() {
   const cible = document.getElementById("vue-sales-closing");
   if (!cible) return;
 
-  const closers = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.closer).map((c) => c.closer))].sort();
+  const closers = [...new Set(SALES_CALLS.filter((c) => callDuMode(c) && c.closer).map((c) => c.closer))].sort();
   brancherSalesToggle(
     "sales-closing-filtre",
     closers,
@@ -3802,21 +3805,26 @@ function vueSalesClosing() {
   // ratio (CA / ventes), pas un volume, donc sa place est ici plutôt que
   // dans les cartes d'en-tête. Tout le bloc suit le toggle R1/Tous comme le
   // reste de l'onglet.
-  // Repartition du CA du perimetre (R1 ou tous rangs) entre Closing direct et
-  // Rattrapage : meme definition que la carte "Part du CA" du mode Rattrapage
-  // (un Closing est un rattrapage s'il est posterieur au 1er Diagnostic du
-  // contact). Ignore le filtre setter : on regarde tous les Diagnostic.
-  const origineCa = origineCaFn();
-  const repartCa = (liste) => {
-    const total = somme(liste, "montant");
-    const direct = somme(liste.filter((c) => origineCa(c) === "direct"), "montant");
-    return { total, direct };
-  };
-  const rc = repartCa(calls);
-  const rcPrec = callsPrec ? repartCa(callsPrec) : null;
   const ecartPart = (actuel, precedent, baisseEstBonne) =>
     actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null;
-  const partDirect = ratio(rc.direct, rc.total);
+  // Part du CA du mode affiche dans le CA Closing + Rattrapage (memes filtres : periode, barre, closer, rang).
+  // Les deux modes se completent : Closing + Rattrapage = 100 %.
+  const caMode = somme(calls, "montant"); // CA du mode affiche (Closing ou Rattrapage)
+  const tousTypes = (c) =>
+    (c.typeAppel === "Closing" || c.rattrapage === true) &&
+    parFiltresBarre(c) &&
+    (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
+    rangAccepte(SALES_CLOSING_RANG, c);
+  const caClosingEtRatt = somme(SALES_CALLS.filter((c) => tousTypes(c) && dansPeriode(c)), "montant");
+  // Meme calcul sur la periode precedente (pour le badge d'evolution).
+  const plagePrec = plagePrecedente();
+  const partModePrec = (() => {
+    if (!plagePrec) return null;
+    const [pa, pb] = plagePrec;
+    const liste = SALES_CALLS.filter((c) => tousTypes(c) && c.jour && c.jour >= pa && c.jour <= pb);
+    const total = somme(liste, "montant");
+    return total ? somme(liste.filter(callDuMode), "montant") / total : null;
+  })();
 
   document.getElementById("sales-closing-cartes-etroit").innerHTML = [
     carte(
@@ -3846,12 +3854,12 @@ function vueSalesClosing() {
     // Une seule carte, uniquement la part du CA issue du Closing direct (hors
     // rattrapage). La part du rattrapage vit dans le mode Rattrapage.
     carte(
-      "Part du CA",
-      rc.total ? pourcent(partDirect) : "—",
-      rc.total
-        ? `${euros(rc.direct)} sur ${euros(rc.total)} de CA Closing${suffixeRang}`
+      SALES_MODE === "rattrapage" ? "Part du CA — Rattrapage" : "Part du CA — Closing",
+      caClosingEtRatt ? pourcent(caMode / caClosingEtRatt) : "—",
+      caClosingEtRatt
+        ? `${euros(caMode)} sur ${euros(caClosingEtRatt)} de CA Closing + Rattrapage${suffixeRang}`
         : "aucun CA sur la période" + suffixeRang,
-      rc.total && rcPrec && rcPrec.total ? ecartPart(partDirect, ratio(rcPrec.direct, rcPrec.total)) : null
+      caClosingEtRatt && partModePrec !== null ? ecartPart(caMode / caClosingEtRatt, partModePrec) : null
     ),
   ].join("");
 
@@ -3859,7 +3867,7 @@ function vueSalesClosing() {
   // (sinon des R2 a venir s'affichaient en mode R1).
   const closingsTous = SALES_CALLS.filter(
     (c) =>
-      c.typeAppel === "Closing" &&
+      callDuMode(c) &&
       parFiltresBarre(c) &&
       (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
       rangAccepte(SALES_CLOSING_RANG, c)
@@ -4478,11 +4486,12 @@ function appliquerSalesMode() {
   if (!cible || !zone) return;
   const blocClosing = document.getElementById("sales-bloc-closing");
   const blocRattrapage = document.getElementById("sales-bloc-rattrapage");
-  if (blocClosing) blocClosing.style.display = SALES_MODE === "closing" ? "" : "none";
-  if (blocRattrapage) blocRattrapage.style.display = SALES_MODE === "rattrapage" ? "" : "none";
+  // Les deux modes utilisent les memes vues (bloc Closing) ; l'ancien bloc Rattrapage (setter) reste masque.
+  if (blocClosing) blocClosing.style.display = "";
+  if (blocRattrapage) blocRattrapage.style.display = "none";
   // Ordre voulu : titre, filtres, description, toggle de mode. La description
   // vit dans chaque bloc : on pose le toggle sous celle du bloc visible.
-  const blocVisible = SALES_MODE === "closing" ? blocClosing : blocRattrapage;
+  const blocVisible = blocClosing;
   const descr = blocVisible && blocVisible.querySelector(".convention");
   if (descr) descr.after(zone);
   const sousTitre = document.getElementById("sales-mode-soustitre");
@@ -4490,7 +4499,7 @@ function appliquerSalesMode() {
     sousTitre.textContent =
       SALES_MODE === "closing"
         ? "Qui décroche les calls Closing, et ce que chacun rapporte."
-        : "Rattrapage des prospects disqualifiés : call de 15 minutes avec le setter pour booker un Closing R1.";
+        : "Qui décroche les calls de Rattrapage (prospects disqualifiés), et ce que chacun rapporte.";
   }
   zone.innerHTML =
     `<button type="button" class="${SALES_MODE === "closing" ? "actif" : ""}" data-sales-mode="closing">Closing</button>` +
@@ -4500,6 +4509,7 @@ function appliquerSalesMode() {
       if (btn.classList.contains("actif")) return;
       SALES_MODE = btn.getAttribute("data-sales-mode");
       appliquerSalesMode();
+      vueSalesClosing();
       // Le bloc qui vient d'apparaitre n'a jamais ete observe : on re-arme les ".rv".
       cible.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
       requestAnimationFrame(() => apparitions(cible));

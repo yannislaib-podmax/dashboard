@@ -216,6 +216,8 @@ export default async function handler(req, res) {
         // Famille 1 (base de données, auto-assignation) vs Famille 2
         // (rattrapage post-disqualification) — uniquement pour les calls
         // Diagnostic ; null pour les calls Closing (pas concernés).
+        // Vrai Rattrapage (call de vente, memes rangs que le Closing) : exploite par le mode Rattrapage de la page Closing.
+        rattrapage: c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-")),
         famille: c.typeAppel === "Rattrapage" ? 2 : c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
         closer: c.closer,
         // Sur un call Diagnostic reserve via iClosed, le "closer" assigne EST le setter
