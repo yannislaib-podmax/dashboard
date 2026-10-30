@@ -2082,11 +2082,9 @@ let FUNNEL_RANG = "r1";
 let ACQ_MODE = "closing";
 const enRattrapage = () => ACQ_MODE === "rattrapage";
 const enTous = () => ACQ_MODE === "tous"; // Closing + Rattrapage melanges
-// Rang applique aux calls des onglets Acquisition : ignore en Rattrapage. En mode
-// "Tous", le rang ne vise que les Closing ; un Diagnostic (sans rang) compte en R1 et
-// en Tous les rangs, pas en R2+.
-const rangAcq = (rang, c) =>
-  enRattrapage() || (enTous() && c.typeAppel === "Rattrapage" ? rang !== "r2" : rangAccepte(rang, c));
+// Rang applique aux calls des onglets Acquisition : le Rattrapage a des rangs
+// exactement comme le Closing (decision 2026-10-30).
+const rangAcq = (rang, c) => rangAccepte(rang, c);
 const VUES_ACQ_MODE = ["ensemble", "sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
 // Substitue les compteurs de calls des lignes ACQUISITION par ceux du Diagnostic
 // (champs suffixes "D" renvoyes par /api/acquisition).
@@ -2094,8 +2092,11 @@ function appliquerModeAcq(lignes) {
   if (!lignes || ACQ_MODE === "closing") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
+    // Le Rattrapage a les memes rangs que le Closing : R1 = champs "D", R2+ = champs "DR2".
     CHAMPS_CALLS_RANG.forEach((f) => {
-      o[f] = enRattrapage() ? l[f + "D"] || 0 : (l[f] || 0) + (l[f + "D"] || 0);
+      const d1 = l[f + "D"] || 0, d2 = l[f + "DR2"] || 0;
+      o[f] = enRattrapage() ? d1 : (l[f] || 0) + d1;
+      o[f + "R2"] = enRattrapage() ? d2 : (l[f + "R2"] || 0) + d2;
     });
     return o;
   });
@@ -2103,7 +2104,8 @@ function appliquerModeAcq(lignes) {
 function appliquerDonneesTrack() {
   const closingR1 = TRACK_CLOSING_TOUS.filter((r) => r.rangR === 1);
   TRACK_RDV_TOUS = enRattrapage() ? TRACK_RATT : enTous() ? [...TRACK_CLOSING_TOUS, ...TRACK_RATT] : TRACK_CLOSING_TOUS;
-  TRACK_RDV = enRattrapage() ? TRACK_RATT : enTous() ? [...closingR1, ...TRACK_RATT] : closingR1;
+  const rattR1 = TRACK_RATT.filter((r) => r.rangR === 1);
+  TRACK_RDV = enRattrapage() ? rattR1 : enTous() ? [...closingR1, ...rattR1] : closingR1;
 }
 function brancherAcqMode() {
   const zone = document.getElementById("acq-mode");
@@ -2125,7 +2127,7 @@ function brancherAcqMode() {
 }
 const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
 function appliquerRangFunnel(lignes) {
-  if (!lignes || FUNNEL_RANG === "r1" || enRattrapage()) return lignes;
+  if (!lignes || FUNNEL_RANG === "r1") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
     CHAMPS_CALLS_RANG.forEach((f) => {
@@ -3250,7 +3252,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
   const cible = document.getElementById(cibleId);
   if (!cible) return;
 
-  if (!series.length) {
+  if (!series.length || !blocs.length || series.every((x) => !x.points.length)) {
     cible.innerHTML = `${toggleGranulariteCourbeHtml(granulariteActuelle)}<div class="vide">Rien à tracer sur cette période.</div>`;
     brancherToggleGranularite(cible, onGranularite);
     return;
