@@ -2154,7 +2154,7 @@ function rendre() {
   vueDirection();
   vueTracking();
   vueSalesClosing();
-  vueSalesSetting();
+  initSalesMode();
   vueOutbound();
   vueColdCall();
 
@@ -3168,7 +3168,6 @@ let SALES_LEADS = [];
 let CLIENTS_DETAIL = [];
 let SALES_CALLS = [];
 let SALES_CLOSER = "tout";
-let SALES_SETTER = "tout";
 // Périmètre de rang R pour les métriques de PERFORMANCE de Closing (taux,
 // classement, courbe) — "r1" (par défaut) isole le 1er call sur chaque lead,
 // comme Tracking le fait déjà pour ses KPI d'acquisition (rangR === 1) ; un
@@ -4010,9 +4009,9 @@ function origineCaFn() {
     if (!m.has(c.contactId) || c.jour < m.get(c.contactId)) m.set(c.contactId, c.jour);
   };
   SALES_CALLS.forEach((c) => {
-    if (c.typeAppel !== "Diagnostic" || c.contactId == null || !c.jour) return;
-    if (c.famille === 2) maj(premierRatt, c);
-    else if (c.famille === 1 && c.issue) maj(premierSetting, c);
+    if (c.contactId == null || !c.jour) return;
+    if (c.rattrapage === true) maj(premierRatt, c);
+    else if (c.typeAppel === "Diagnostic" && c.issue) maj(premierSetting, c);
   });
   return (c) => {
     if (c.contactId == null || !c.jour) return "direct";
@@ -4020,240 +4019,6 @@ function origineCaFn() {
     if (premierSetting.has(c.contactId) && c.jour >= premierSetting.get(c.contactId)) return "setting";
     return "direct";
   };
-}
-
-let SETTING_METRIQUE = "transformes";
-// Perimetre de rang R des calls Closing (cartes, taux, entonnoir, part du CA) :
-// "tous" par defaut ici, car le Setting compte par LEAD (un lead relance ne
-// gonfle pas les volumes) et le CA du rattrapage peut tomber au R2. La
-// section Relation R1/R2 ignore ce toggle, comme dans l'onglet Closing.
-let SETTING_RANG = "tous";
-let GRANULARITE_SALES_SETTING = "semaine";
-// Metrique propre au graphique Evolution (independante du toggle du Classement).
-let SETTING_COURBE_METRIQUE = "transformes";
-
-function vueSettingRattrapage() {
-  const prefixeId = "sales-setting-f2";
-  if (!document.getElementById(`${prefixeId}-cartes`)) return;
-
-  brancherSalesRangToggle(
-    "sales-setting-rang",
-    () => SETTING_RANG,
-    (v) => (SETTING_RANG = v),
-    vueSettingRattrapage
-  );
-  const suffixeRang = suffixeDeRang(SETTING_RANG);
-  const duRang = (c) => rangAccepte(SETTING_RANG, c);
-
-  const duSetter = (c) => SALES_SETTER === "tout" || c.setter === SALES_SETTER;
-  const diagsTous = SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && duSetter(c) && parFiltresBarre(c));
-  const diags = diagsTous.filter(dansPeriode);
-
-  const closings = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null);
-  const closingsParContact = new Map();
-  closings.forEach((c) => {
-    if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
-    closingsParContact.get(c.contactId).push(c);
-  });
-
-  const agreger = (liste) => {
-    const parContact = new Map();
-    liste.forEach((c, i) => {
-      const cle = c.contactId != null ? c.contactId : `sans-id-${i}`;
-      if (!parContact.has(cle)) parContact.set(cle, { id: c.contactId, honore: false, premierHonore: null });
-      const o = parContact.get(cle);
-      if (c.present) {
-        o.honore = true;
-        if (c.jour && (!o.premierHonore || c.jour < o.premierHonore)) o.premierHonore = c.jour;
-      }
-    });
-    const contacts = [...parContact.values()];
-    // Seuls comptent les Closing posterieurs au Diagnostic honore : un Closing
-    // pris AVANT le Diagnostic n'est pas un rattrapage.
-    const apresDiag = (o) => (closingsParContact.get(o.id) || []).filter((c) => !o.premierHonore || (c.jour && c.jour >= o.premierHonore));
-    const closingsApres = (o) => apresDiag(o).filter(duRang);
-    const avecClosing = contacts.filter((o) => o.honore && o.id != null && closingsApres(o).length > 0);
-    const callsClosing = avecClosing.flatMap(closingsApres);
-    // Tous rangs confondus, jamais filtre par le toggle : sert a la section R1/R2.
-    const callsClosingTousRangs = contacts.filter((o) => o.honore && o.id != null).flatMap(apresDiag);
-    return {
-      reserves: liste.length,
-      honores: somme(liste, "present"),
-      noShow: liste.filter((c) => c.statut === "No-show").length,
-      conclus: somme(liste, "conclu"),
-      annules: liste.filter((c) => c.statut === "Annulé").length,
-      aVenir: liste.filter((c) => c.statut === "Confirmé").length,
-      contacts: contacts.length,
-      contactsHonores: contacts.filter((o) => o.honore).length,
-      closing: avecClosing.length,
-      closingHonores: avecClosing.filter((o) => closingsApres(o).some((c) => c.present)).length,
-      ventes: avecClosing.filter((o) => closingsApres(o).some((c) => c.vente)).length,
-      presentClosing: somme(callsClosing, "present"),
-      concluClosing: somme(callsClosing, "conclu"),
-      ca: somme(callsClosing, "montant"),
-      callsClosingTousRangs,
-    };
-  };
-
-  const g = agreger(diags);
-
-  // Periode precedente (fleches de tendance, comme l'onglet Closing) : null si
-  // la comparaison est desactivee ou si aucune periode n'est choisie.
-  const plage = plagePrecedente();
-  const dansPrec = (c) => c.jour && c.jour >= plage[0] && c.jour <= plage[1];
-  const gPrec = plage ? agreger(diagsTous.filter(dansPrec)) : null;
-  const ec = (actuel, precedent, baisseEstBonne) =>
-    gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null;
-
-  // Part du CA : base "jour du Closing dans la periode".
-  // Un Closing compte comme rattrapage seulement s'il est posterieur au
-  // premier Diagnostic de ce contact.
-  const origineCa = origineCaFn();
-  const partCa = (dansLaPlage) => {
-    const dansPlage = closings.filter(dansLaPlage).filter(duRang).filter(parFiltresBarre);
-    return {
-      total: somme(dansPlage, "montant"),
-      rattrapage: somme(dansPlage.filter((c) => origineCa(c) === "rattrapage"), "montant"),
-    };
-  };
-  const { total: caTotal, rattrapage: caRattrapage } = partCa(dansPeriode);
-  const caPrec = plage ? partCa(dansPrec) : null;
-
-  document.getElementById(`${prefixeId}-cartes`).innerHTML = [
-    carte("Diagnostics prévus", nombre(g.reserves), `RDV de la période · ${nombre(g.aVenir)} à venir · ${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""}`, gPrec ? ecartDe(g.reserves, gPrec.reserves, "salesRdv") : null),
-    carte("Diagnostics conclus", nombre(g.conclus), "honorés ou no-show, hors RDV à venir", gPrec ? ecartDe(g.conclus, gPrec.conclus, "salesConclus") : null),
-    carte("Honorés", nombre(g.honores), "leads venus au Diagnostic", gPrec ? ecartDe(g.honores, gPrec.honores, "salesHonores") : null),
-    carte("Closing bookés", nombre(g.closing), `leads honorés ayant pris un Closing${suffixeRang}`, gPrec ? ecartDe(g.closing, gPrec.closing, "salesClosingBooke") : null),
-    carte("Ventes générées", nombre(g.ventes), g.closing ? `sur ${nombre(g.closing)} lead${g.closing > 1 ? "s" : ""} en Closing${suffixeRang}` : `aucun lead en Closing${suffixeRang}`, gPrec ? ecartDe(g.ventes, gPrec.ventes, "salesVentes") : null),
-  ].join("");
-  document.getElementById(`${prefixeId}-taux`).innerHTML = [
-    carte("Taux d'annulation", pourcent(ratio(g.annules, g.reserves)), g.reserves ? `${nombre(g.annules)} annulé${g.annules > 1 ? "s" : ""} sur ${nombre(g.reserves)} rendez-vous pris` : "aucun rendez-vous pris sur la période", gPrec ? ec(ratio(g.annules, g.reserves), ratio(gPrec.annules, gPrec.reserves), true) : null),
-    carte("Taux de show Diagnostic", pourcent(ratio(g.honores, g.conclus)), g.conclus ? `${nombre(g.honores)} honorés sur ${nombre(g.conclus)} calls passés` : "aucun call passé", gPrec ? ec(ratio(g.honores, g.conclus), ratio(gPrec.honores, gPrec.conclus)) : null),
-    carte("Taux de rattrapage", pourcent(ratio(g.closing, g.contactsHonores)), g.contactsHonores ? `${nombre(g.closing)} Closing sur ${nombre(g.contactsHonores)} honorés${suffixeRang}` : "—", gPrec ? ec(ratio(g.closing, g.contactsHonores), ratio(gPrec.closing, gPrec.contactsHonores)) : null),
-    carte("Taux de show Closing", pourcent(ratio(g.presentClosing, g.concluClosing)), g.concluClosing ? `${nombre(g.presentClosing)} honorés sur ${nombre(g.concluClosing)} calls passés${suffixeRang}` : "aucun call Closing passé", gPrec ? ec(ratio(g.presentClosing, g.concluClosing), ratio(gPrec.presentClosing, gPrec.concluClosing)) : null),
-    carte("Part du CA", pourcent(ratio(caRattrapage, caTotal)), caTotal ? `${euros(caRattrapage)} sur ${euros(caTotal)} de CA Closing de la période${suffixeRang}` : "aucun CA Closing sur la période", caPrec ? ec(ratio(caRattrapage, caTotal), ratio(caPrec.rattrapage, caPrec.total)) : null),
-  ].join("");
-
-  // A traiter : toute date confondue.
-  const aujourdhui = AUJOURDHUI;
-  const aVenir = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= aujourdhui);
-  const passesSansStatut = diagsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < aujourdhui);
-  const conclusSansIssue = diagsTous.filter((c) => c.conclu && !c.issue);
-  const prochain = aVenir.map((c) => c.jour).sort()[0];
-  document.getElementById(`${prefixeId}-traiter`).innerHTML = [
-    carte("Diagnostics à venir", nombre(aVenir.length), prochain ? `prochain le ${jourCourt(prochain)}` : "aucun à venir"),
-    carte("Passés sans statut final", nombre(passesSansStatut.length), "restés « Confirmé » après la date"),
-    carte("Conclus sans issue", nombre(conclusSansIssue.length), "honorés ou no-show : le setter n'a pas saisi l'issue"),
-  ].join("");
-
-  entonnoir(
-    `${prefixeId}-entonnoir`,
-    [
-      { nom: "Diagnostic prévu", cle: "reserves" },
-      { nom: "Honoré", cle: "honores" },
-      { nom: "Closing booké", cle: "closing" },
-      { nom: "Closing honoré", cle: "closingHonores" },
-      { nom: "Vente", cle: "ventes" },
-    ],
-    [g.contacts, g.contactsHonores, g.closing, g.closingHonores, g.ventes],
-    null,
-    [null, g.contacts, g.contactsHonores, g.closing, g.closingHonores],
-    null
-  );
-
-  const parSetter = {};
-  diags.forEach((c) => {
-    const n = c.setter || "Non renseigné";
-    (parSetter[n] = parSetter[n] || []).push(c);
-  });
-  const lignesSetter = Object.entries(parSetter)
-    .map(([nom, liste]) => [nom, agreger(liste)])
-    .sort((x, y) => y[1].reserves - x[1].reserves);
-
-  const metriquesSetting = {
-    reserves: { libelleCourt: "Diagnostics prévus", valeur: (v) => v.reserves, format: nombre, secondaire: () => null },
-    honores: {
-      libelleCourt: "Honorés",
-      valeur: (v) => v.honores,
-      format: nombre,
-      secondaire: (v) => (v.conclus > 0 ? `${Math.round((v.honores / v.conclus) * 100)} % de show` : null),
-    },
-    transformes: {
-      libelleCourt: "Closing booké",
-      valeur: (v) => v.closing,
-      format: nombre,
-      secondaire: (v) => (v.contactsHonores > 0 ? `${Math.round((v.closing / v.contactsHonores) * 100)} % rattrapage` : null),
-    },
-    ventes: {
-      libelleCourt: "Ventes générées",
-      valeur: (v) => v.ventes,
-      format: nombre,
-      secondaire: (v) => (v.closing > 0 ? `${Math.round((v.ventes / v.closing) * 100)} % des Closing` : null),
-    },
-  };
-  brancherSalesMetrique(
-    `${prefixeId}-metrique`,
-    metriquesSetting,
-    () => SETTING_METRIQUE,
-    (v) => (SETTING_METRIQUE = v),
-    vueSettingRattrapage
-  );
-  const bulleSetter = (nom, v) => `
-    <strong>${nom}</strong>
-    <span>Prévus<b>${nombre(v.reserves)}</b></span>
-    <span>Honorés<b>${nombre(v.honores)}</b></span>
-    <span>Closing booké<b>${nombre(v.closing)}</b></span>
-    <span>Ventes<b>${nombre(v.ventes)}</b></span>
-    ${v.contactsHonores > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.contactsHonores) * 100)} % de rattrapage</span>` : ""}`;
-  salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, SETTING_METRIQUE, bulleSetter);
-
-  const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
-    disque("Diagnostics prévus par setter", lignesSetter.filter(([, p]) => p.reserves > 0).map(([nom, p]) => [nom, p.reserves, couleurSetter[nom]]), nombre),
-    disque("Calls présents par setter", lignesSetter.filter(([, p]) => p.honores > 0).map(([nom, p]) => [nom, p.honores, couleurSetter[nom]]), nombre),
-    disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
-  ].join("");
-  brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
-
-  // Evolution : top 5 des setters dans le temps, avec son PROPRE toggle de
-  // metrique (le Classement est en bas de page : un toggle partage n'aurait pas
-  // de sens).
-  brancherSalesMetrique(
-    `${prefixeId}-courbe-metrique`,
-    metriquesSetting,
-    () => SETTING_COURBE_METRIQUE,
-    (v) => (SETTING_COURBE_METRIQUE = v),
-    vueSettingRattrapage
-  );
-  const metriqueDef = metriquesSetting[SETTING_COURBE_METRIQUE];
-  const top5Setters = lignesSetter.slice(0, 5).map(([nom]) => nom);
-  const joursDiag = diags.map((c) => c.jour).filter(Boolean).sort();
-  const blocsSetter = decoupagePeriodesEtendu(joursDiag, GRANULARITE_SALES_SETTING);
-  const seriesSetter = top5Setters.map((nom) => {
-    const statsParBloc = blocsSetter.map((b) =>
-      agreger(diags.filter((c) => (c.setter || "Non renseigné") === nom && c.jour >= b.debut && c.jour <= b.fin))
-    );
-    return {
-      nom,
-      couleur: couleurSetter[nom],
-      points: statsParBloc.map((st) => metriqueDef.valeur(st)),
-      secondaires: statsParBloc.map((st) => metriqueDef.secondaire(st)),
-    };
-  });
-  courbeMultiSeries("sales-setting-f2-courbe", blocsSetter, seriesSetter, metriqueDef.format, GRANULARITE_SALES_SETTING, (gr) => {
-    GRANULARITE_SALES_SETTING = gr;
-    vueSettingRattrapage();
-  });
-
-  // Relation R1/R2 sur les seuls Closing issus du rattrapage (ignore le toggle).
-  salesGraphR1R2("sales-setting-f2-r1r2", salesStatsR1R2(g.callsClosingTousRangs));
-
-  // Tout vient d'etre reconstruit (innerHTML) : ces ".rv" ne sont jamais observes par apparitions() (qui n'observe qu'au 1er rendu de la vue). Sans ce re-armement, les sections restent invisibles apres un clic sur le toggle du classement (meme correctif que vueSalesClosing).
-  const cibleVue = document.getElementById("vue-sales-closing");
-  if (cibleVue) {
-    brancherInfobulles(cibleVue);
-    requestAnimationFrame(() => apparitions(cibleVue));
-  }
 }
 
 let OUTBOUND_METRIQUE = "transformes";
@@ -4283,10 +4048,10 @@ function vueOutbound() {
   const duRang = (c) => rangAccepte(OUTBOUND_RANG, c);
 
   const contactsFamille2 = new Set(
-    SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 2 && c.contactId != null).map((c) => c.contactId)
+    SALES_CALLS.filter((c) => c.rattrapage === true && c.contactId != null).map((c) => c.contactId)
   );
   const issuesParContact = new Map();
-  SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.famille === 1 && c.contactId != null).forEach((c) => {
+  SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.contactId != null).forEach((c) => {
     if (!issuesParContact.has(c.contactId)) issuesParContact.set(c.contactId, []);
     issuesParContact.get(c.contactId).push(c.issue);
   });
@@ -4354,7 +4119,7 @@ function vueOutbound() {
   // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
   // Setting) se partagent le meme CA et font 100 %.
   const origineCa = origineCaFn();
-  const closingsPerimetre = SALES_CALLS.filter((c) => c.typeAppel === "Closing" && parFiltresBarre(c) && duRang(c));
+  const closingsPerimetre = SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true) && parFiltresBarre(c) && duRang(c));
   const partCaSetting = (dansLaPlage) => {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
     return {
@@ -4389,9 +4154,9 @@ function vueOutbound() {
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
   ].join("");
   document.getElementById(`${prefixeId}-partca`).innerHTML = carte(
-    "Part du CA",
+    "Part du CA — Setting",
     caP.total ? pourcent(ratio(caP.setting, caP.total)) : "—",
-    caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing de la période` : "aucun CA Closing sur la période",
+    caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing + Rattrapage de la période` : "aucun CA sur la période",
     caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
   );
 
@@ -4485,10 +4250,8 @@ function appliquerSalesMode() {
   const zone = document.getElementById("sales-mode");
   if (!cible || !zone) return;
   const blocClosing = document.getElementById("sales-bloc-closing");
-  const blocRattrapage = document.getElementById("sales-bloc-rattrapage");
-  // Les deux modes utilisent les memes vues (bloc Closing) ; l'ancien bloc Rattrapage (setter) reste masque.
+  // Les deux modes (Closing / Rattrapage) utilisent les memes vues : le bloc Closing.
   if (blocClosing) blocClosing.style.display = "";
-  if (blocRattrapage) blocRattrapage.style.display = "none";
   // Ordre voulu : titre, filtres, description, toggle de mode. La description
   // vit dans chaque bloc : on pose le toggle sous celle du bloc visible.
   const blocVisible = blocClosing;
@@ -4517,28 +4280,12 @@ function appliquerSalesMode() {
   });
 }
 
-function vueSalesSetting() {
+// Initialise le toggle Closing / Rattrapage de la page Closing (appele au chargement et a chaque rendu).
+function initSalesMode() {
   const cible = document.getElementById("vue-sales-closing");
   if (!cible) return;
   appliquerSalesMode();
-
-  const setters = [...new Set(SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.setter).map((c) => c.setter))].sort();
-  brancherSalesToggle(
-    "sales-setting-filtre",
-    setters,
-    () => SALES_SETTER,
-    (v) => (SALES_SETTER = v),
-    vueSalesSetting
-  );
-
-  vueSettingRattrapage();
-
   brancherInfobulles(cible);
-
-  // Même ré-armement que vueSalesClosing : les deux blocs famille viennent
-  // d'être reconstruits (innerHTML), leurs ".rv" ne sont jamais observés par
-  // apparitions() sans ce requestAnimationFrame — sinon invisibles après un
-  // clic sur le toggle setter.
   requestAnimationFrame(() => apparitions(cible));
 }
 
@@ -4727,7 +4474,7 @@ async function charger() {
         SALES_LEADS = (donneesSales.leads || []).map(avecSource);
         SALES_CALLS = (donneesSales.calls || []).map(avecSource);
         vueSalesClosing();
-        vueSalesSetting();
+        initSalesMode();
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.

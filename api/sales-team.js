@@ -207,34 +207,33 @@ export default async function handler(req, res) {
 
     const calls = callsBrut
       .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage")
-      .map((c) => ({
-        jour: jourParis(c.jourRdvDt),
-        contactId: c.contactId ?? null,
-        // Type "Rattrapage" (vrai booking iClosed d'un prospect disqualifie) : la page Setting le lit
-        // toujours sous "Diagnostic" + famille 2 ; "Diagnostic" = call de setting (SETTER-).
-        typeAppel: c.typeAppel === "Rattrapage" ? "Diagnostic" : c.typeAppel,
-        // Famille 1 (base de données, auto-assignation) vs Famille 2
-        // (rattrapage post-disqualification) — uniquement pour les calls
-        // Diagnostic ; null pour les calls Closing (pas concernés).
-        // Vrai Rattrapage (call de vente, memes rangs que le Closing) : exploite par le mode Rattrapage de la page Closing.
-        rattrapage: c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-")),
-        famille: c.typeAppel === "Rattrapage" ? 2 : c.typeAppel === "Diagnostic" ? (String(c.bookingId || "").startsWith("SETTER-") ? 1 : 2) : null,
-        closer: c.closer,
-        // Sur un call Diagnostic reserve via iClosed, le "closer" assigne EST le setter
-        // (regle confirmee le 2026-10-06) : le champ Setter n'est rempli que par les
-        // issues saisies par le setter lui-meme (SETTER-...).
-        setter: c.setter || (c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage" ? c.closer : null),
-        statut: c.statut,
-        issue: c.issue,
-        rangR: c.rangR,
-        montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
-        source: c.source,
-        canal: c.canal,
-        produit: c.produit,
-        present: c.present || 0,
-        conclu: c.conclu || 0,
-        vente: liensContrats(c).length > 0 ? 1 : 0,
-      }));
+      .map((c) => {
+        // Rattrapage = call de VENTE (prospect disqualifie remis devant l'equipe closer), memes rangs que le
+        // Closing. Type "Rattrapage", ou ancien type "Diagnostic" sans prefixe "SETTER-" (historique).
+        const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
+        return {
+          jour: jourParis(c.jourRdvDt),
+          contactId: c.contactId ?? null,
+          // "Diagnostic" = call de SETTING uniquement (Booking ID "SETTER-"). Le Rattrapage garde son propre type.
+          typeAppel: rattrapage ? "Rattrapage" : c.typeAppel,
+          rattrapage,
+          // Famille 1 (base de donnees, auto-assignation du setter) : calls Diagnostic uniquement ; null sinon.
+          famille: c.typeAppel === "Diagnostic" && !rattrapage ? 1 : null,
+          closer: c.closer,
+          // Le champ Setter n'est rempli que par les issues saisies par le setter lui-meme (SETTER-...).
+          setter: c.setter || null,
+          statut: c.statut,
+          issue: c.issue,
+          rangR: c.rangR,
+          montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
+          source: c.source,
+          canal: c.canal,
+          produit: c.produit,
+          present: c.present || 0,
+          conclu: c.conclu || 0,
+          vente: liensContrats(c).length > 0 ? 1 : 0,
+        };
+      });
 
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
