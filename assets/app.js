@@ -1933,13 +1933,18 @@ function afficherVue(nom) {
   const zoneAcq = document.getElementById("acq-mode");
   if (zoneAcq) zoneAcq.hidden = !VUES_ACQ_MODE.includes(nom);
   // Closing : le bloc .convention peut etre masque (mode Rattrapage), on ancre sous le toggle de mode.
-  // Ordre voulu partout : titre, filtres d'en-tete, puis toggle de mode
-  // (Closing / Rattrapage) sur les onglets qui en ont un.
+  // Filtres d'en-tete sous le titre. Le toggle Closing / Rattrapage se place
+  // juste AU-DESSUS des toggles de la vue (caller, rang R1/R2...) ; Paid Ads n'en
+  // a pas : il suit la barre. Closing garde son propre toggle sous la barre.
   const toggleMode = vue.querySelector("#sales-mode") || (VUES_ACQ_MODE.includes(nom) ? zoneAcq : null);
   const ancre = toggleMode ? vue.querySelector(".titre-vue") : vue.querySelector(".convention") || vue.querySelector(".titre-vue");
   if (barre && ancre) {
     ancre.after(barre);
-    if (toggleMode) barre.after(toggleMode);
+    if (toggleMode) {
+      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #tracking-dimension");
+      if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
+      else barre.after(toggleMode);
+    }
   }
 
   vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
