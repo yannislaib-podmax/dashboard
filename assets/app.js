@@ -1936,8 +1936,9 @@ function afficherVue(nom) {
   // Filtres d'en-tete sous le titre. Le toggle Closing / Rattrapage se place
   // juste AU-DESSUS des toggles de la vue (caller, rang R1/R2...) ; Paid Ads n'en
   // a pas : il suit la barre. Closing garde son propre toggle sous la barre.
-  const toggleMode = vue.querySelector("#sales-mode") || (VUES_ACQ_MODE.includes(nom) ? zoneAcq : null);
-  const ancre = toggleMode ? vue.querySelector(".titre-vue") : vue.querySelector(".convention") || vue.querySelector(".titre-vue");
+  // Closing : #sales-mode est replace par appliquerSalesMode() sous la description du bloc visible.
+  const toggleMode = VUES_ACQ_MODE.includes(nom) ? zoneAcq : null;
+  const ancre = toggleMode || nom === "sales-closing" ? vue.querySelector(".titre-vue") : vue.querySelector(".convention") || vue.querySelector(".titre-vue");
   if (barre && ancre) {
     ancre.after(barre);
     if (toggleMode) {
@@ -4454,6 +4455,11 @@ function appliquerSalesMode() {
   const blocRattrapage = document.getElementById("sales-bloc-rattrapage");
   if (blocClosing) blocClosing.style.display = SALES_MODE === "closing" ? "" : "none";
   if (blocRattrapage) blocRattrapage.style.display = SALES_MODE === "rattrapage" ? "" : "none";
+  // Ordre voulu : titre, filtres, description, toggle de mode. La description
+  // vit dans chaque bloc : on pose le toggle sous celle du bloc visible.
+  const blocVisible = SALES_MODE === "closing" ? blocClosing : blocRattrapage;
+  const descr = blocVisible && blocVisible.querySelector(".convention");
+  if (descr) descr.after(zone);
   const sousTitre = document.getElementById("sales-mode-soustitre");
   if (sousTitre) {
     sousTitre.textContent =
