@@ -1871,11 +1871,5 @@ tr.total td {
   .cartes.cols-5 { grid-template-columns: repeat(5, 1fr); }
 }
 
-/* Outbound : une rangee de taux sous une rangee de cartes (meme ecart que la grille),
-   alignee sous les cartes qu'elle commente. La case vide ne sert qu'a decaler le
-   premier taux d'une colonne (desktop seulement). */
+/* Outbound : une rangee de taux sous une rangee de cartes, avec le meme ecart que la grille. */
 .cartes + .cartes.cartes-taux { margin-top: 16px; }
-.cc-vide { display: none; }
-@media (min-width: 1000px) {
-  .cc-vide { display: block; }
-}
