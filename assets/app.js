@@ -4009,14 +4009,17 @@ function origineCaFn() {
     if (!m.has(c.contactId) || c.jour < m.get(c.contactId)) m.set(c.contactId, c.jour);
   };
   SALES_CALLS.forEach((c) => {
-    if (c.contactId == null || !c.jour) return;
-    if (c.rattrapage === true) maj(premierRatt, c);
-    else if (c.typeAppel === "Diagnostic" && c.issue) maj(premierSetting, c);
+    if (c.contactId == null) return;
+    // Les issues setter (SETTER-...) n'ont pas de jour de RDV : on les garde quand meme (jour "").
+    if (c.typeAppel === "Diagnostic" && c.issue) {
+      if (!premierSetting.has(c.contactId) || (c.jour || "") < premierSetting.get(c.contactId)) premierSetting.set(c.contactId, c.jour || "");
+    } else if (c.rattrapage === true && c.jour) maj(premierRatt, c);
   });
   return (c) => {
     if (c.contactId == null || !c.jour) return "direct";
-    if (premierRatt.has(c.contactId) && c.jour >= premierRatt.get(c.contactId)) return "rattrapage";
+    // Un contact approuve/rejete par un setter : son call de vente (Closing ou Rattrapage) vient du Setting.
     if (premierSetting.has(c.contactId) && c.jour >= premierSetting.get(c.contactId)) return "setting";
+    if (premierRatt.has(c.contactId) && c.jour >= premierRatt.get(c.contactId)) return "rattrapage";
     return "direct";
   };
 }
@@ -4104,13 +4107,15 @@ function vueOutbound() {
       ventes: liste.filter((l) => l.vendu).length,
       present: somme(liste, "present"),
       conclu: somme(liste, "conclu"),
+      // Taux de show en LEADS (meme unite que « Closing honores ») : leads dont un call Closing est passe.
+      concluLeads: liste.filter((l) => l.conclu > 0).length,
       ca: somme(liste, "ca"),
     };
   };
 
   const g = agreger(leads);
   const gPrec = leadsPrec ? agreger(leadsPrec) : null;
-  const show = ratio(g.present, g.conclu);
+  const show = ratio(g.honores, g.concluLeads);
 
   // Part du CA : meme base que Closing et Rattrapage (CA des Closing dont le
   // JOUR est dans la periode, filtres de la barre appliques, tous rangs). Origine
@@ -4147,8 +4152,8 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
     carte("Taux de contact", pourcent(ratio(g.contactes, g.assignes)), g.assignes ? `${nombre(g.contactes)} contactés sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.contactes, g.assignes), gPrec && ratio(gPrec.contactes, gPrec.assignes))),
     carte("Taux d'issue", pourcent(ratio(g.issues, g.contactes)), g.contactes ? `${nombre(g.issues)} issues sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.issues, g.contactes), gPrec && ratio(gPrec.issues, gPrec.contactes))),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.assignes)), g.assignes ? `${nombre(g.closing)} Closing sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.closing, g.assignes), gPrec && ratio(gPrec.closing, gPrec.assignes))),
-    carte("Taux de show", pourcent(show), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls Closing passés` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.present, gPrec.conclu))),
+    carte("Taux de transfo", pourcent(ratio(g.closing, g.contactes)), g.contactes ? `${nombre(g.closing)} Closing bookés sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.closing, g.contactes), gPrec && ratio(gPrec.closing, gPrec.contactes))),
+    carte("Taux de show", pourcent(show), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call Closing passé` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
   ].join("");
   document.getElementById(`${prefixeId}-partca`).innerHTML = carte(
