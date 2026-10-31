@@ -4047,16 +4047,14 @@ function vueOutbound() {
   brancherSalesRangToggle("outbound-rang", () => OUTBOUND_RANG, (v) => (OUTBOUND_RANG = v), vueOutbound);
   const duRang = (c) => rangAccepte(OUTBOUND_RANG, c);
 
-  const contactsFamille2 = new Set(
-    SALES_CALLS.filter((c) => c.rattrapage === true && c.contactId != null).map((c) => c.contactId)
-  );
   const issuesParContact = new Map();
   SALES_CALLS.filter((c) => c.typeAppel === "Diagnostic" && c.contactId != null).forEach((c) => {
     if (!issuesParContact.has(c.contactId)) issuesParContact.set(c.contactId, []);
     issuesParContact.get(c.contactId).push(c.issue);
   });
   const closingsParContact = new Map();
-  SALES_CALLS.filter((c) => c.typeAppel === "Closing" && c.contactId != null).forEach((c) => {
+  // Le call de vente qui suit une approbation : Closing, ou Rattrapage (call de vente traite par les closers).
+  SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true) && c.contactId != null).forEach((c) => {
     if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
     closingsParContact.get(c.contactId).push(c);
   });
@@ -4065,7 +4063,7 @@ function vueOutbound() {
   // (Canal / Produit / Source) ; la période est appliquée ensuite, et la période
   // précédente (flèches ↑/↓) réutilise exactement la même base.
   const leadsBase = SALES_LEADS.filter(
-    (l) => !(l.contactId != null && contactsFamille2.has(l.contactId)) && parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
+    (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
   );
   const enrichir = (l) => {
     const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
