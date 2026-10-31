@@ -3798,18 +3798,26 @@ function vueSalesClosing() {
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
   // Mode "Tous" : la carte detaille d'ou viennent les calls (acquisition : Closing + Rattrapage ; setter).
-  const repartCalls = `${nombre(calls.filter((c) => c.typeAppel === "Closing").length)} Closing · ${nombre(calls.filter((c) => c.rattrapage === true).length)} Rattrapage · ${nombre(calls.filter((c) => c.viaSetting === true).length)} via setter`;
+  // Chaque carte detaille son chiffre par origine : Closing · Rattrapage · via setter.
+  const modeTous = SALES_MODE === "tous";
+  const parOrigine = [
+    calls.filter((c) => c.typeAppel === "Closing"),
+    calls.filter((c) => c.rattrapage === true),
+    calls.filter((c) => c.viaSetting === true),
+  ].map((liste) => salesStatsCallsClosing(liste));
+  const repart = (cle, format = nombre) => `${parOrigine.map((p) => format(p[cle])).join(" · ")} (Closing · Rattrapage · via setter)`;
+  const typeCall = SALES_MODE === "rattrapage" ? "Rattrapage" : "Closing";
   document.getElementById("sales-closing-cartes").innerHTML = [
     carte(
       "RDV prévus",
       nombre(rdv),
-      SALES_MODE === "tous" ? `${repartCalls}${suffixeRang}` : `calls ${SALES_MODE === "rattrapage" ? "Rattrapage" : "Closing"} dont le RDV tombe dans la période${suffixeRang}`,
+      modeTous ? `${repart("rdv")}${suffixeRang}` : `calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`,
       sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null
     ),
-    carte("RDV conclus", nombre(conclus), "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
-    carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
-    carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
-    carte("CA contracté", euros(ca), ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
+    carte("RDV conclus", nombre(conclus), modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
+    carte("RDV honorés", nombre(honores), modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`, sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
+    carte("Ventes", nombre(ventes), modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
+    carte("CA contracté", euros(ca), modeTous ? repart("ca", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
   ].join("");
 
   // Cartes-etroit — même traitement que #qualite en Performance (taux
