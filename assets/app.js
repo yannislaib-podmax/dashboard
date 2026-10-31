@@ -3805,13 +3805,15 @@ function vueSalesClosing() {
     calls.filter((c) => c.rattrapage === true),
     calls.filter((c) => c.viaSetting === true),
   ].map((liste) => salesStatsCallsClosing(liste));
-  const repart = (cle, format = nombre) => `${parOrigine.map((p) => format(p[cle])).join(" · ")} (Closing · Rattrapage · via setter)`;
+  // Une ligne par origine, le chiffre juste devant son nom : lisible d'un coup d'oeil.
+  const NOMS_ORIGINE = ["Closing", "Rattrapage", "via setter"];
+  const repart = (cle, format = nombre) => parOrigine.map((p, i) => `<b>${format(p[cle])}</b> ${NOMS_ORIGINE[i]}`).join("<br>");
   const typeCall = SALES_MODE === "rattrapage" ? "Rattrapage" : "Closing";
   document.getElementById("sales-closing-cartes").innerHTML = [
     carte(
       "RDV prévus",
       nombre(rdv),
-      modeTous ? `${repart("rdv")}${suffixeRang}` : `calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`,
+      modeTous ? repart("rdv") :`calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`,
       sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null
     ),
     carte("RDV conclus", nombre(conclus), modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
