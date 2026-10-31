@@ -3797,8 +3797,15 @@ function vueSalesClosing() {
   const suffixeRang = suffixeDeRang(SALES_CLOSING_RANG);
   const { rdv, conclus, honores, ventes, ca, panier } = s;
 
+  // Mode "Tous" : la carte detaille d'ou viennent les calls (acquisition : Closing + Rattrapage ; setter).
+  const repartCalls = `${nombre(calls.filter((c) => c.typeAppel === "Closing").length)} Closing · ${nombre(calls.filter((c) => c.rattrapage === true).length)} Rattrapage · ${nombre(calls.filter((c) => c.viaSetting === true).length)} via setter`;
   document.getElementById("sales-closing-cartes").innerHTML = [
-    carte("RDV prévus", nombre(rdv), `calls Closing dont le RDV tombe dans la période${suffixeRang}`, sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null),
+    carte(
+      "RDV prévus",
+      nombre(rdv),
+      SALES_MODE === "tous" ? `${repartCalls}${suffixeRang}` : `calls ${SALES_MODE === "rattrapage" ? "Rattrapage" : "Closing"} dont le RDV tombe dans la période${suffixeRang}`,
+      sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null
+    ),
     carte("RDV conclus", nombre(conclus), "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
     carte("RDV honorés", nombre(honores), "calls Closing réellement tenus", sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
@@ -4274,24 +4281,7 @@ function appliquerSalesMode() {
         : SALES_MODE === "closing"
           ? "Qui décroche les calls Closing, et ce que chacun rapporte."
           : "Qui décroche les calls de Rattrapage (prospects disqualifiés), et ce que chacun rapporte.";
-    // Repartition des calls de la periode (memes filtres que la page) : acquisition vs via setter.
-    const periode = SALES_CALLS.filter(
-      (c) =>
-        (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) &&
-        dansPeriode(c) &&
-        parFiltresBarre(c) &&
-        (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
-        rangAccepte(SALES_CLOSING_RANG, c)
-    );
-    const nClosing = periode.filter((c) => c.typeAppel === "Closing").length;
-    const nRatt = periode.filter((c) => c.rattrapage === true).length;
-    const nSetter = periode.filter((c) => c.viaSetting === true).length;
-    const total = nClosing + nRatt + nSetter;
-    sousTitre.textContent =
-      base +
-      (total
-        ? ` Sur la période : ${nombre(total)} call${total > 1 ? "s" : ""} (${nombre(nClosing)} Closing · ${nombre(nRatt)} Rattrapage · ${nombre(nSetter)} via setter).`
-        : " Aucun call sur la période.");
+    sousTitre.textContent = base;
   }
   zone.innerHTML =
     `<button type="button" class="${SALES_MODE === "tous" ? "actif" : ""}" data-sales-mode="tous" title="Closing, Rattrapage et calls via setter">Tous</button>` +
