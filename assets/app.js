@@ -3186,7 +3186,13 @@ const parFiltresBarre = (c) =>
 
 // Page Closing : le toggle Closing / Rattrapage choisit le type de call. Le Rattrapage est un
 // call de vente avec des rangs, traite exactement comme un Closing (memes vues).
-const callDuMode = (c) => (SALES_MODE === "rattrapage" ? c.rattrapage === true : c.typeAppel === "Closing");
+// "tous" = Closing + Rattrapage + calls via setter (le total de calls passes devant les closers).
+const callDuMode = (c) =>
+  SALES_MODE === "rattrapage"
+    ? c.rattrapage === true
+    : SALES_MODE === "tous"
+      ? c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true
+      : c.typeAppel === "Closing";
 // Closing : calls du mode choisi de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
   SALES_CALLS.filter(
@@ -3853,7 +3859,7 @@ function vueSalesClosing() {
     // Une seule carte, uniquement la part du CA issue du Closing direct (hors
     // rattrapage). La part du rattrapage vit dans le mode Rattrapage.
     carte(
-      SALES_MODE === "rattrapage" ? "Part du CA — Rattrapage" : "Part du CA — Closing",
+      SALES_MODE === "rattrapage" ? "Part du CA — Rattrapage" : SALES_MODE === "tous" ? "Part du CA — Tous les calls" : "Part du CA — Closing",
       caClosingEtRatt ? pourcent(caMode / caClosingEtRatt) : "—",
       caClosingEtRatt
         ? `${euros(caMode)} sur ${euros(caClosingEtRatt)} de CA Closing + Rattrapage${suffixeRang}`
@@ -4144,7 +4150,7 @@ function vueOutbound() {
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
-    carte("Closing bookés", nombre(g.closing), "appels de Closing pris", ev("closing")),
+    carte("Calls bookés via setter", nombre(g.closing), "calls en plus de l'acquisition, sur des leads déjà existants", ev("closing")),
     carte("Closing honorés", nombre(g.honores), "leads venus au Closing", ev("honores")),
     carte("Ventes", nombre(g.ventes), "contrats signés", ev("ventes")),
     carte("CA généré", euros(g.ca), "montant des contrats signés", ev("ca")),
@@ -4152,7 +4158,7 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
     carte("Taux de contact", pourcent(ratio(g.contactes, g.assignes)), g.assignes ? `${nombre(g.contactes)} contactés sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.contactes, g.assignes), gPrec && ratio(gPrec.contactes, gPrec.assignes))),
     carte("Taux d'issue", pourcent(ratio(g.issues, g.contactes)), g.contactes ? `${nombre(g.issues)} issues sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.issues, g.contactes), gPrec && ratio(gPrec.issues, gPrec.contactes))),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.contactes)), g.contactes ? `${nombre(g.closing)} Closing bookés sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.closing, g.contactes), gPrec && ratio(gPrec.closing, gPrec.contactes))),
+    carte("Taux de transfo", pourcent(ratio(g.closing, g.contactes)), g.contactes ? `${nombre(g.closing)} calls bookés sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.closing, g.contactes), gPrec && ratio(gPrec.closing, gPrec.contactes))),
     carte("Taux de show", pourcent(show), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call Closing passé` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
   ].join("");
@@ -4169,7 +4175,7 @@ function vueOutbound() {
       { nom: "Setter assigné", cle: "assignes" },
       { nom: "Lead contacté", cle: "contactes" },
       { nom: "Issue renseignée", cle: "issues" },
-      { nom: "Closing booké", cle: "closing" },
+      { nom: "Call booké via setter", cle: "closing" },
       { nom: "Closing honoré", cle: "honores" },
       { nom: "Vente", cle: "ventes" },
     ],
@@ -4203,7 +4209,7 @@ function vueOutbound() {
       secondaire: (v) => (v.contactes > 0 ? `${Math.round((v.issues / v.contactes) * 100)} % des contactés` : null),
     },
     transformes: {
-      libelleCourt: "Closing booké",
+      libelleCourt: "Call booké via setter",
       valeur: (v) => v.closing,
       format: nombre,
       secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.closing / v.assignes) * 100)} % transfo` : null),
@@ -4222,7 +4228,7 @@ function vueOutbound() {
     <span>Assignés<b>${nombre(v.assignes)}</b></span>
     <span>Contactés<b>${nombre(v.contactes)}</b></span>
     <span>Issues<b>${nombre(v.issues)}</b></span>
-    <span>Closing booké<b>${nombre(v.closing)}</b></span>
+    <span>Call booké via setter<b>${nombre(v.closing)}</b></span>
     <span>CA<b>${euros(v.ca)}</b></span>
     ${v.assignes > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.assignes) * 100)} % de transfo</span>` : ""}`;
   salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, OUTBOUND_METRIQUE, bulleSetter);
@@ -4230,7 +4236,7 @@ function vueOutbound() {
   const couleurSetter = Object.fromEntries(lignesSetter.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
   document.getElementById(`${prefixeId}-camemberts`).innerHTML = [
     disque("Leads assignés par setter", lignesSetter.filter(([, p]) => p.assignes > 0).map(([nom, p]) => [nom, p.assignes, couleurSetter[nom]]), nombre),
-    disque("Closing booké par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
+    disque("Calls bookés via setter, par setter", lignesSetter.filter(([, p]) => p.closing > 0).map(([nom, p]) => [nom, p.closing, couleurSetter[nom]]), nombre),
   ].join("");
   brancherSurvol(document.getElementById(`${prefixeId}-camemberts`));
 
@@ -4262,12 +4268,33 @@ function appliquerSalesMode() {
   if (descr) descr.after(zone);
   const sousTitre = document.getElementById("sales-mode-soustitre");
   if (sousTitre) {
+    const base =
+      SALES_MODE === "tous"
+        ? "Qui décroche tous les calls (Closing, Rattrapage et calls via setter), et ce que chacun rapporte."
+        : SALES_MODE === "closing"
+          ? "Qui décroche les calls Closing, et ce que chacun rapporte."
+          : "Qui décroche les calls de Rattrapage (prospects disqualifiés), et ce que chacun rapporte.";
+    // Repartition des calls de la periode (memes filtres que la page) : acquisition vs via setter.
+    const periode = SALES_CALLS.filter(
+      (c) =>
+        (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) &&
+        dansPeriode(c) &&
+        parFiltresBarre(c) &&
+        (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
+        rangAccepte(SALES_CLOSING_RANG, c)
+    );
+    const nClosing = periode.filter((c) => c.typeAppel === "Closing").length;
+    const nRatt = periode.filter((c) => c.rattrapage === true).length;
+    const nSetter = periode.filter((c) => c.viaSetting === true).length;
+    const total = nClosing + nRatt + nSetter;
     sousTitre.textContent =
-      SALES_MODE === "closing"
-        ? "Qui décroche les calls Closing, et ce que chacun rapporte."
-        : "Qui décroche les calls de Rattrapage (prospects disqualifiés), et ce que chacun rapporte.";
+      base +
+      (total
+        ? ` Sur la période : ${nombre(total)} call${total > 1 ? "s" : ""} (${nombre(nClosing)} Closing · ${nombre(nRatt)} Rattrapage · ${nombre(nSetter)} via setter).`
+        : " Aucun call sur la période.");
   }
   zone.innerHTML =
+    `<button type="button" class="${SALES_MODE === "tous" ? "actif" : ""}" data-sales-mode="tous" title="Closing, Rattrapage et calls via setter">Tous</button>` +
     `<button type="button" class="${SALES_MODE === "closing" ? "actif" : ""}" data-sales-mode="closing">Closing</button>` +
     `<button type="button" class="${SALES_MODE === "rattrapage" ? "actif" : ""}" data-sales-mode="rattrapage">Rattrapage</button>`;
   zone.querySelectorAll("button").forEach((btn) => {
