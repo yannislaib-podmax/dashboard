@@ -2794,8 +2794,9 @@ function trackBulleRepartition(titre, valeurs, champVal, format) {
 // Boutons Jour/Semaine/Mois/Année pour la courbe — même mécanique que
 // brancherToggleGranularite (générique sur data-granularite), gabarit à 4
 // options au lieu de 2.
-function toggleGranulariteCourbeHtml(actuelle) {
-  const options = [["jour", "Jour"], ["semaine", "Semaine"], ["mois", "Mois"], ["annee", "Année"]];
+function toggleGranulariteCourbeHtml(actuelle, autorisees) {
+  const toutes = [["jour", "Jour"], ["semaine", "Semaine"], ["mois", "Mois"], ["annee", "Année"]];
+  const options = autorisees ? toutes.filter(([v]) => autorisees.includes(v)) : toutes;
   return `<div class="toggle-granularite">${options
     .map(([v, libelle]) => `<button type="button" class="${actuelle === v ? "actif" : ""}" data-granularite="${v}">${libelle}</button>`)
     .join("")}</div>`;
@@ -3256,12 +3257,15 @@ function brancherSalesRangToggle(id, getActif, onChoix, rerender, sansR2) {
 // adaptée de trackCourbe() pour être réutilisable hors Tracking UTM : même
 // rendu visuel, mais cibleId/blocs/series/format/granularité passés en
 // paramètres au lieu de dépendre des globales TRACK_*.
-function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, onGranularite) {
+// options.points : graphique "a points" (un point par periode, trait fin, sans
+// aire). options.granularites : liste restreinte de boutons (ex jour/semaine/mois).
+function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, onGranularite, options = {}) {
   const cible = document.getElementById(cibleId);
   if (!cible) return;
+  const modePoints = !!options.points;
 
   if (!series.length || !blocs.length || series.every((x) => !x.points.length)) {
-    cible.innerHTML = `${toggleGranulariteCourbeHtml(granulariteActuelle)}<div class="vide">Rien à tracer sur cette période.</div>`;
+    cible.innerHTML = `${toggleGranulariteCourbeHtml(granulariteActuelle, options.granularites)}<div class="vide">Rien à tracer sur cette période.</div>`;
     brancherToggleGranularite(cible, onGranularite);
     return;
   }
@@ -3346,17 +3350,23 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
     .join("");
 
   const baseY = (M_HAUT + hauteurUtile).toFixed(1);
-  const aires = series
-    .map((s, i) => {
-      const pts = pointsParSerie[i];
-      const aireD = `${tracesParSerie[i]} L${pts[pts.length - 1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
-      return `<path d="${aireD}" fill="url(#courbe-degrade-${cibleId}-${i})" class="courbe-aire"></path>`;
-    })
-    .join("");
+  const aires = modePoints
+    ? ""
+    : series
+        .map((s, i) => {
+          const pts = pointsParSerie[i];
+          const aireD = `${tracesParSerie[i]} L${pts[pts.length - 1][0]},${baseY} L${pts[0][0]},${baseY} Z`;
+          return `<path d="${aireD}" fill="url(#courbe-degrade-${cibleId}-${i})" class="courbe-aire"></path>`;
+        })
+        .join("");
 
-  const lignesSvg = series
-    .map((s, i) => `<path d="${tracesParSerie[i]}" fill="none" stroke="${s.couleur}" stroke-width="2.75" class="courbe-ligne" />`)
-    .join("");
+  const lignesSvg =
+    series
+      .map((s, i) => `<path d="${tracesParSerie[i]}" fill="none" stroke="${s.couleur}" stroke-width="${modePoints ? 1.5 : 2.75}" stroke-opacity="${modePoints ? 0.4 : 1}" class="courbe-ligne" />`)
+      .join("") +
+    (modePoints
+      ? series.map((s, i) => pointsParSerie[i].map(([px, py]) => `<circle cx="${px}" cy="${py}" r="4" fill="${s.couleur}" stroke="#fff" stroke-width="1.5" class="courbe-point"></circle>`).join("")).join("")
+      : "");
 
   // `secondaires` (optionnel, par série) : un taux complémentaire déjà
   // formaté en texte (ex: "62 % présence") pour chaque point — affiché à
@@ -3386,7 +3396,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
   const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}</div>`;
 
   cible.innerHTML = `
-    ${toggleGranulariteCourbeHtml(granulariteActuelle)}
+    ${toggleGranulariteCourbeHtml(granulariteActuelle, options.granularites)}
     ${legende}
     <svg class="courbe-svg" viewBox="0 0 ${L} ${H}">
       <defs>${degrades}</defs>
@@ -4647,6 +4657,7 @@ const ccEstOutbound = (r) => r.source === "Outbound" || /(^|, )outbound(,|$)/i.t
 let COLDCALL_METRIQUE = "bookes";
 let COLDCALL_COURBE_METRIQUE = "bookes";
 let GRANULARITE_COLDCALL = "semaine";
+let GRANULARITE_COLDCALL_ACTIVITE = "jour"; // graphique a points "Activite dans le temps"
 const ccTaux = (a, b, suffixe) => (b > 0 ? `${Math.round((a / b) * 100)} % ${suffixe}` : null);
 const CC_METRIQUES = {
   appeles: { libelleCourt: "Appelés", valeur: (v) => v.appeles, format: nombre, secondaire: () => null },
@@ -4668,7 +4679,7 @@ const ccAjouterRdv = (o, r) => {
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -4853,6 +4864,33 @@ function vueColdCall() {
       </div>`;
     })
     .join("")}</div>`;
+
+  // Activite dans le temps : appels par caller, un point par jour / semaine / mois.
+  // Jours continus (les jours sans appel comptent 0), independant du filtre de periode.
+  const nbJoursAct = { jour: 30, semaine: 84 }[GRANULARITE_COLDCALL_ACTIVITE];
+  const debutAct = nbJoursAct ? new Date(auj.getTime() - (nbJoursAct - 1) * 86400000) : new Date(auj.getFullYear(), auj.getMonth() - 11, 1, 12);
+  const joursAct = [];
+  for (let d = new Date(debutAct); fmtJour(d) <= jAuj; d = new Date(d.getTime() + 86400000)) joursAct.push(fmtJour(d));
+  const blocsAct = decoupagePeriodesEtendu(joursAct, GRANULARITE_COLDCALL_ACTIVITE);
+  const seriesAct = COLDCALL.map((c, i) => ({
+    nom: c.caller,
+    couleur: PALETTE[i % PALETTE.length],
+    points: blocsAct.map((b) =>
+      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + (v.appeles || 0) : s), 0)
+    ),
+  }));
+  courbeMultiSeries(
+    "coldcall-activite-courbe",
+    blocsAct,
+    seriesAct,
+    nombre,
+    GRANULARITE_COLDCALL_ACTIVITE,
+    (g) => {
+      GRANULARITE_COLDCALL_ACTIVITE = g;
+      vueColdCall();
+    },
+    { points: true, granularites: ["jour", "semaine", "mois"] }
+  );
 
   const parCaller = {};
   COLDCALL.forEach((c) => {
