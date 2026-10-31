@@ -205,18 +205,31 @@ export default async function handler(req, res) {
         produit: l.produit,
       }));
 
+    // Premiere issue setter ("SETTER-...") par contact : un call Rattrapage pris APRES est un
+    // call du Setting, pas de l'acquisition (decision 2026-10-31). Il n'est plus "Rattrapage"
+    // (viaSetting = true) : le front le compte dans le Setting uniquement.
+    const premiereIssueSetter = new Map();
+    for (const c of callsBrut) {
+      if (c.contactId == null || c.typeAppel !== "Diagnostic" || !String(c.bookingId || "").startsWith("SETTER-")) continue;
+      const t = String(c.prisLe || "");
+      if (!premiereIssueSetter.has(c.contactId) || t < premiereIssueSetter.get(c.contactId)) premiereIssueSetter.set(c.contactId, t);
+    }
     const calls = callsBrut
       .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage")
       .map((c) => {
         // Rattrapage = call de VENTE (prospect disqualifie remis devant l'equipe closer), memes rangs que le
         // Closing. Type "Rattrapage", ou ancien type "Diagnostic" sans prefixe "SETTER-" (historique).
-        const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
+        const rattrapageBrut = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
+        const viaSetting =
+          rattrapageBrut && c.contactId != null && premiereIssueSetter.has(c.contactId) && premiereIssueSetter.get(c.contactId) <= String(c.prisLe || "");
+        const rattrapage = rattrapageBrut && !viaSetting;
         return {
           jour: jourParis(c.jourRdvDt),
           contactId: c.contactId ?? null,
           // "Diagnostic" = call de SETTING uniquement (Booking ID "SETTER-"). Le Rattrapage garde son propre type.
-          typeAppel: rattrapage ? "Rattrapage" : c.typeAppel,
+          typeAppel: viaSetting ? "Setting" : rattrapage ? "Rattrapage" : c.typeAppel,
           rattrapage,
+          viaSetting,
           // Famille 1 (base de donnees, auto-assignation du setter) : calls Diagnostic uniquement ; null sinon.
           famille: c.typeAppel === "Diagnostic" && !rattrapage ? 1 : null,
           closer: c.closer,

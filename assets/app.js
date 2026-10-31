@@ -3810,7 +3810,7 @@ function vueSalesClosing() {
   // Les deux modes se completent : Closing + Rattrapage = 100 %.
   const caMode = somme(calls, "montant"); // CA du mode affiche (Closing ou Rattrapage)
   const tousTypes = (c) =>
-    (c.typeAppel === "Closing" || c.rattrapage === true) &&
+    (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) &&
     parFiltresBarre(c) &&
     (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
     rangAccepte(SALES_CLOSING_RANG, c);
@@ -4057,7 +4057,7 @@ function vueOutbound() {
   });
   const closingsParContact = new Map();
   // Le call de vente qui suit une approbation : Closing, ou Rattrapage (call de vente traite par les closers).
-  SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true) && c.contactId != null).forEach((c) => {
+  SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && c.contactId != null).forEach((c) => {
     if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
     closingsParContact.get(c.contactId).push(c);
   });
@@ -4122,7 +4122,7 @@ function vueOutbound() {
   // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
   // Setting) se partagent le meme CA et font 100 %.
   const origineCa = origineCaFn();
-  const closingsPerimetre = SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true) && parFiltresBarre(c) && duRang(c));
+  const closingsPerimetre = SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && parFiltresBarre(c) && duRang(c));
   const partCaSetting = (dansLaPlage) => {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
     return {
