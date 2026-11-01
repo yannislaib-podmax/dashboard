@@ -1259,6 +1259,61 @@ function courbeCohortes(cible, co) {
 
 const libelleMois = (cle) => `${MOIS_LONGS[Number(cle.slice(5, 7)) - 1].slice(0, 4).toLowerCase()}. ${cle.slice(2, 4)}`;
 
+// Evolution dans le temps de tous les KPI des cartes Performance : un KPI a la fois (unites
+// differentes), en points, avec jour / semaine / mois. Les cartes de cohorte (renouvellement,
+// delai de rentabilite, ROAS M+3) sont calculees par mois d'acquisition : hors de ce graphique.
+let PERF_COURBE_METRIQUE = "roas";
+let GRANULARITE_PERF = "semaine";
+const formatKpiRoas = (v) => (v === null || v === undefined ? "—" : v.toFixed(2).replace(".", ",") + " ×");
+const PERF_METRIQUES = {
+  depense: { libelleCourt: "Dépense pub", cle: "depense", format: euros },
+  contracte: { libelleCourt: "CA", cle: "contracte", format: euros },
+  roas: { libelleCourt: "ROAS", cle: "roas", format: formatKpiRoas, decimal: true },
+  clients: { libelleCourt: "Nouveaux clients", cle: "clients", format: nombre },
+  coutClient: { libelleCourt: "Coût par client", cle: "coutClient", format: euros },
+  coutVente: { libelleCourt: "Coût par vente", cle: "coutVente", format: euros },
+  coutAppel: { libelleCourt: "Coût par appel honoré", cle: "coutAppel", format: euros },
+  coutRdv: { libelleCourt: "Coût par call booké", cle: "coutRdv", format: euros },
+  coutLead: { libelleCourt: "Coût par lead", cle: "coutLead", format: euros },
+  cpm: { libelleCourt: "CPM", cle: "cpm", format: euros },
+  cpc: { libelleCourt: "CPC", cle: "cpc", format: euros, decimal: true },
+  ctr: { libelleCourt: "CTR", cle: "ctr", format: pourcent, decimal: true },
+  encaisse: { libelleCourt: "CA encaissé", cle: "encaisse", format: euros },
+  ltv: { libelleCourt: "LTV moyenne", cle: "ltv", format: euros },
+  multipleLtv: { libelleCourt: "LTV / 1er achat", cle: "multipleLtv", format: formatKpiRoas, decimal: true },
+  roasTous: { libelleCourt: "ROAS tous contrats", cle: "roasTous", format: formatKpiRoas, decimal: true },
+  margeClient: { libelleCourt: "Marge par client", cle: "margeClient", format: euros },
+  ltvSurCout: { libelleCourt: "LTV / coût client", cle: "ltvSurCout", format: formatKpiRoas, decimal: true },
+};
+
+function courbePerformance(lignes) {
+  if (!document.getElementById("perf-courbe")) return;
+  brancherSalesMetrique("perf-courbe-metrique", PERF_METRIQUES, () => PERF_COURBE_METRIQUE, (v) => (PERF_COURBE_METRIQUE = v), () => courbePerformance(DERNIERES_LIGNES_PERF));
+  DERNIERES_LIGNES_PERF = lignes;
+  const def = PERF_METRIQUES[PERF_COURBE_METRIQUE];
+  const jours = [...new Set(lignes.map((l) => l.jour).filter(Boolean))].sort();
+  const blocs = decoupagePeriodesEtendu(jours, GRANULARITE_PERF)
+    .map((b) => ({ ...b, dedans: lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin) }))
+    .filter((b) => b.dedans.length);
+  const points = blocs.map((b) => {
+    const v = INDICATEURS[def.cle](b.dedans);
+    return v === null || v === undefined || !isFinite(v) ? 0 : v;
+  });
+  courbeMultiSeries(
+    "perf-courbe",
+    blocs,
+    [{ nom: def.libelleCourt, couleur: "#C9A6FF", points }],
+    def.format,
+    GRANULARITE_PERF,
+    (g) => {
+      GRANULARITE_PERF = g;
+      courbePerformance(DERNIERES_LIGNES_PERF);
+    },
+    { points: true, granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+  );
+}
+let DERNIERES_LIGNES_PERF = [];
+
 function vueEnsemble(lignes, precedentes) {
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
@@ -1358,6 +1413,7 @@ function vueEnsemble(lignes, precedentes) {
     graphiqueCa(lignes);
   }
   camemberts(lignes);
+  courbePerformance(lignes);
 
   requestAnimationFrame(() =>
     setTimeout(() => {
@@ -3318,7 +3374,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
     return;
   }
 
-  const max = Math.max(1, ...series.flatMap((s) => s.points));
+  const max = Math.max(options.plancherMax ?? 1, ...series.flatMap((s) => s.points));
 
   const L = 1000, H = 300, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 46, M_DROITE = 108;
   const largeurUtile = L - M_GAUCHE - M_DROITE;
@@ -3329,7 +3385,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
   const grille = [0, 0.25, 0.5, 0.75, 1]
     .map((t) => {
       const yy = (M_HAUT + hauteurUtile * (1 - t)).toFixed(1);
-      const valeurAxe = format(Math.round(max * t));
+      const valeurAxe = format(options.axeExact ? max * t : Math.round(max * t));
       return `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yy}" y2="${yy}" class="courbe-grille" />
         <text x="${M_GAUCHE - 10}" y="${yy}" class="courbe-axe-y" text-anchor="end" dominant-baseline="middle">${valeurAxe}</text>`;
     })
