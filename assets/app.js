@@ -977,16 +977,50 @@ function disque(titre, parts, format) {
   </div>`;
 }
 
+// Classement par canal d'un RATIO de performance (ROAS, CAC) : un ratio ne se repartit pas en
+// disque (la somme n'a pas de sens), on compare les canaux entre eux en barres horizontales.
+const formatRoas = (v) => (v === null || v === undefined ? "—" : v.toFixed(2).replace(".", ",") + " ×");
+function classementCanal(titre, lignes, calcul, format, meilleurHaut, note) {
+  const parCanal = {};
+  lignes.forEach((l) => {
+    const c = l.canal || "Inconnu";
+    (parCanal[c] = parCanal[c] || []).push(l);
+  });
+  const valeurs = Object.entries(parCanal)
+    .map(([nom, ls]) => [nom, calcul(ls), somme(ls, "depense")])
+    .filter(([, v, dep]) => v !== null && v !== undefined && isFinite(v) && dep > 0)
+    .sort((a, b) => (meilleurHaut ? b[1] - a[1] : a[1] - b[1]));
+
+  if (!valeurs.length) {
+    return `<div class="glass camembert rv"><h3>${titre}</h3><div class="vide">Rien à comparer sur cette période.</div></div>`;
+  }
+  const max = Math.max(...valeurs.map(([, v]) => v), 0.0001);
+  const lignesHtml = valeurs
+    .map(([nom, v, dep], i) => {
+      const bulle = `<strong>${nom}</strong><span>${titre}<b>${format(v)}</b></span><span>Dépense pub<b>${euros(dep)}</b></span>`;
+      return `<div class="part-ligne"${info(bulle)} style="display:grid;grid-template-columns:minmax(80px,1.1fr) 2fr auto;align-items:center;gap:10px;margin:8px 0">
+        <span class="nom">${i === 0 ? "★ " : ""}${nom}</span>
+        <span style="display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.07)"><i style="display:block;height:100%;width:${Math.max(3, Math.round((v / max) * 100))}%;border-radius:99px;background:${COULEUR_CANAL[nom] || "#8895A7"}"></i></span>
+        <span class="montant">${format(v)}</span>
+      </div>`;
+    })
+    .join("");
+  return `<div class="glass camembert rv">
+    <h3>${titre}</h3>
+    <div class="parts">${lignesHtml}</div>
+    <p class="note-graph">${note}</p>
+  </div>`;
+}
+
 function camemberts(lignes) {
   const cible = document.getElementById("camemberts");
   if (!cible) return;
 
   cible.innerHTML = [
-    // Repartition de la PERFORMANCE PUB (allocation du budget) : rendez-vous, ventes et CA par
-    // canal vivent deja dans Tracking UTM. Ici : ou part le budget, et ce qu'il achete en portee.
+    // Allocation du budget et efficacite par canal. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
     camembert("Dépense pub", lignes, "depense", euros),
-    camembert("Impressions", lignes, "impressions", nombre),
-    camembert("Clics", lignes, "clics", nombre),
+    classementCanal("ROAS par canal", lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, "★ = meilleur canal. CA du mode choisi / dépense pub."),
+    classementCanal("Coût par client acquis (CAC)", lignes, (ls) => INDICATEURS.coutClient(ls), euros, false, "★ = canal le moins cher. Dépense pub / nouveaux clients."),
   ].join("");
 
   brancherSurvol(cible);
