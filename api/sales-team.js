@@ -42,6 +42,7 @@ const CHAMPS_LEADS = {
   fldsTCF9f3IolFvV1: "dateAssignation",
   fldreiHMlZQd2xHX3: "nbCallsBookes",
   fldIV8czAyl8PtCln: "dateContacte", // passage au stage "Contacted" iClosed (scenario Make 8068615)
+  fldEGieq4LaubJ0Pv: "stage", // stage iClosed ACTUEL du lead (ex. "Follow-Up Scheduled"), ecrase a chaque changement (scenario Make 8068615)
   // Qualification du lead : alimente les filtres Canal / Produit / Source de la barre.
   fldPsYc33WNxnbJx5: "source",
   fldllUNg0J5M1xIhb: "canal",
@@ -196,6 +197,7 @@ export default async function handler(req, res) {
         jour: jourParis(l.capteLe),
         jourAssignation: jourParis(l.dateAssignation),
         jourContacte: jourParis(l.dateContacte),
+        stage: l.stage || null,
         contactId: l.contactId ?? null,
         setter: l.setter,
         statut: l.statut,
