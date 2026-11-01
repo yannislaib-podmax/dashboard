@@ -1033,6 +1033,14 @@ function camemberts(lignes) {
     camembertRatio(`ROAS par ${unite}`, lignes, (ls) => INDICATEURS.roas(ls), formatRoas, unite, "ROAS global"),
   ].join("");
 
+  // Les blocs viennent d'etre reconstruits : l'observateur d'apparitions ne les
+  // a jamais vus, ils resteraient invisibles (ou en transition) apres le toggle.
+  // On les affiche tout de suite, sans transition.
+  cible.querySelectorAll(".rv").forEach((e) => {
+    e.style.transition = "none";
+    e.classList.add("on");
+  });
+
   brancherSurvol(cible);
 }
 
