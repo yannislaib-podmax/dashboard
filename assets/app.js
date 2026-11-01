@@ -1294,35 +1294,44 @@ const PERF_METRIQUES = {
   ltvSurCout: { libelleCourt: "LTV / coût client", cle: "ltvSurCout", format: formatKpiRoas, decimal: true },
 };
 
+// Un menu deroulant par categorie de KPI : celui de la categorie active affiche le KPI choisi,
+// les autres affichent leur nom de categorie. Choisir un KPI dans un menu l'active.
+function menusCategoriesKpi(zoneId, groupes, metriques, actif, onChoix) {
+  const zone = document.getElementById(zoneId);
+  if (!zone) return;
+  zone.innerHTML = groupes
+    .map(([titre, cles]) => {
+      const dedans = cles.includes(actif);
+      return `<select class="choix${dedans ? " actif" : ""}" aria-label="${titre}">
+        ${dedans ? "" : `<option value="" selected disabled hidden>${titre}</option>`}
+        ${cles.map((c) => `<option value="${c}"${c === actif ? " selected" : ""}>${metriques[c].libelleCourt}</option>`).join("")}
+      </select>`;
+    })
+    .join("");
+  zone.querySelectorAll("select").forEach((sel) =>
+    sel.addEventListener("change", (e) => {
+      if (e.target.value) onChoix(e.target.value);
+    })
+  );
+}
+
 function courbePerformance(lignes) {
   if (!document.getElementById("perf-courbe")) return;
-  const zoneSel = document.getElementById("perf-courbe-metrique");
-  if (zoneSel) {
-    const groupes = [
+  menusCategoriesKpi(
+    "perf-courbe-metrique",
+    [
       ["Budget et résultats", ["depense", "contracte", "roas", "clients"]],
       ["Coûts d'acquisition", ["coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead"]],
       ["Média", ["cpm", "cpc", "ctr"]],
       ["Valeur client (LTV)", ["encaisse", "ltv", "multipleLtv", "roasTous", "margeClient", "ltvSurCout"]],
-    ];
-    // Un menu deroulant par categorie : le menu de la categorie active affiche le KPI choisi,
-    // les trois autres affichent leur nom de categorie.
-    zoneSel.innerHTML = groupes
-      .map(([titre, cles]) => {
-        const actif = cles.includes(PERF_COURBE_METRIQUE);
-        return `<select class="choix${actif ? " actif" : ""}" aria-label="${titre}">
-          ${actif ? "" : `<option value="" selected disabled hidden>${titre}</option>`}
-          ${cles.map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`).join("")}
-        </select>`;
-      })
-      .join("");
-    zoneSel.querySelectorAll("select").forEach((sel) =>
-      sel.addEventListener("change", (e) => {
-        if (!e.target.value) return;
-        PERF_COURBE_METRIQUE = e.target.value;
-        courbePerformance(DERNIERES_LIGNES_PERF);
-      })
-    );
-  }
+    ],
+    PERF_METRIQUES,
+    PERF_COURBE_METRIQUE,
+    (v) => {
+      PERF_COURBE_METRIQUE = v;
+      courbePerformance(DERNIERES_LIGNES_PERF);
+    }
+  );
   DERNIERES_LIGNES_PERF = lignes;
   const def = PERF_METRIQUES[PERF_COURBE_METRIQUE];
   const jours = [...new Set(lignes.map((l) => l.jour).filter(Boolean))].sort();
@@ -2002,6 +2011,64 @@ function camembertsDirection(contrats) {
   brancherSurvol(cible);
 }
 
+/* Evolution des KPI de la page Tableau de bord (courbe, 1 KPI a la fois) */
+let DIRECTION_COURBE_METRIQUE = "caContracte";
+let GRANULARITE_DIRECTION_COURBE = "semaine";
+const DIRECTION_METRIQUES = {
+  caContracte: { libelleCourt: "CA contracté", format: euros },
+  caEncaisse: { libelleCourt: "CA encaissé", format: euros },
+  nbClients: { libelleCourt: "Clients signés", format: nombre },
+  panierMoyen: { libelleCourt: "Panier moyen", format: euros },
+  tauxRecouvrement: { libelleCourt: "Taux de recouvrement", format: pourcent, decimal: true },
+  ltvMoyenne: { libelleCourt: "LTV moyenne", format: euros },
+  resiliations: { libelleCourt: "Résiliations", format: nombre },
+};
+let DERNIERS_DIRECTION_COURBE = null;
+
+function courbeDirection(contrats, paiements) {
+  if (!document.getElementById("direction-courbe")) return;
+  DERNIERS_DIRECTION_COURBE = { contrats, paiements };
+  menusCategoriesKpi(
+    "direction-courbe-metrique",
+    [
+      ["Ventes", ["caContracte", "nbClients", "panierMoyen"]],
+      ["Trésorerie", ["caEncaisse", "tauxRecouvrement"]],
+      ["Clients", ["ltvMoyenne", "resiliations"]],
+    ],
+    DIRECTION_METRIQUES,
+    DIRECTION_COURBE_METRIQUE,
+    (v) => {
+      DIRECTION_COURBE_METRIQUE = v;
+      courbeDirection(DERNIERS_DIRECTION_COURBE.contrats, DERNIERS_DIRECTION_COURBE.paiements);
+    }
+  );
+  const def = DIRECTION_METRIQUES[DIRECTION_COURBE_METRIQUE];
+  const datesResil = DIRECTION_CONTRATS.filter((c) => c.dateResiliation && (!DEBUT || c.dateResiliation >= DEBUT) && (!FIN || c.dateResiliation <= FIN)).map((c) => c.dateResiliation);
+  const jours = [...new Set([...contrats.map((c) => c.dateSignature), ...paiements.map((p) => p.datePaiement), ...datesResil].filter(Boolean))].sort();
+  // Un ratio sans denominateur (aucun contrat, aucune echeance echue...) n'est pas un zero : la periode n'est pas tracee.
+  const tranches = decoupagePeriodesEtendu(jours, GRANULARITE_DIRECTION_COURBE)
+    .map((b) => {
+      const c = contrats.filter((x) => x.dateSignature >= b.debut && x.dateSignature <= b.fin);
+      const p = paiements.filter((x) => x.datePaiement >= b.debut && x.datePaiement <= b.fin);
+      const m = mesuresDirection(c, p, resiliationsDansPlage(b.debut, b.fin));
+      const v = m[DIRECTION_COURBE_METRIQUE];
+      return { ...b, v: v === null || v === undefined || !isFinite(v) ? null : v };
+    })
+    .filter((b) => b.v !== null);
+  courbeMultiSeries(
+    "direction-courbe",
+    tranches,
+    [{ nom: def.libelleCourt, couleur: "#C9A6FF", points: tranches.map((b) => b.v) }],
+    def.format,
+    GRANULARITE_DIRECTION_COURBE,
+    (g) => {
+      GRANULARITE_DIRECTION_COURBE = g;
+      courbeDirection(DERNIERS_DIRECTION_COURBE.contrats, DERNIERS_DIRECTION_COURBE.paiements);
+    },
+    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+  );
+}
+
 function vueDirection() {
   const cible = document.getElementById("direction-cartes");
   if (!cible) return;
@@ -2038,6 +2105,7 @@ function vueDirection() {
     ].join("");
   }
 
+  courbeDirection(contrats, paiements);
   grapheDirection(contrats, paiements);
   camembertsDirection(contrats);
 }
