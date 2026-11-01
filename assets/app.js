@@ -1288,7 +1288,22 @@ const PERF_METRIQUES = {
 
 function courbePerformance(lignes) {
   if (!document.getElementById("perf-courbe")) return;
-  brancherSalesMetrique("perf-courbe-metrique", PERF_METRIQUES, () => PERF_COURBE_METRIQUE, (v) => (PERF_COURBE_METRIQUE = v), () => courbePerformance(DERNIERES_LIGNES_PERF));
+  const zoneSel = document.getElementById("perf-courbe-metrique");
+  if (zoneSel) {
+    const groupes = [
+      ["Budget et résultats", ["depense", "contracte", "roas", "clients"]],
+      ["Coûts d'acquisition", ["coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead"]],
+      ["Média", ["cpm", "cpc", "ctr"]],
+      ["Valeur client (LTV)", ["encaisse", "ltv", "multipleLtv", "roasTous", "margeClient", "ltvSurCout"]],
+    ];
+    zoneSel.innerHTML = `<select class="choix" aria-label="KPI à afficher">${groupes
+      .map(([titre, cles]) => `<optgroup label="${titre}">${cles.map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`).join("")}</optgroup>`)
+      .join("")}</select>`;
+    zoneSel.querySelector("select").addEventListener("change", (e) => {
+      PERF_COURBE_METRIQUE = e.target.value;
+      courbePerformance(DERNIERES_LIGNES_PERF);
+    });
+  }
   DERNIERES_LIGNES_PERF = lignes;
   const def = PERF_METRIQUES[PERF_COURBE_METRIQUE];
   const jours = [...new Set(lignes.map((l) => l.jour).filter(Boolean))].sort();
