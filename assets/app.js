@@ -982,9 +982,11 @@ function camemberts(lignes) {
   if (!cible) return;
 
   cible.innerHTML = [
+    // Repartition de la PERFORMANCE PUB (allocation du budget) : rendez-vous, ventes et CA par
+    // canal vivent deja dans Tracking UTM. Ici : ou part le budget, et ce qu'il achete en portee.
     camembert("Dépense pub", lignes, "depense", euros),
-    camembert("Rendez-vous", lignes, "rendezVous", nombre),
-    ...(enRattrapage() && CA_MODE !== "call" ? [] : [camembert(caLibelle(), lignes, caChamp(), euros)]),
+    camembert("Impressions", lignes, "impressions", nombre),
+    camembert("Clics", lignes, "clics", nombre),
   ].join("");
 
   brancherSurvol(cible);
