@@ -904,7 +904,7 @@ function camembert(titre, lignes, champ, format, dim = "canal") {
   return disque(titre, parts, format);
 }
 
-function disque(titre, parts, format) {
+function disque(titre, parts, format, centre = null) {
   const total = parts.reduce((s, [, v]) => s + v, 0);
 
   if (!total) {
@@ -978,47 +978,32 @@ function disque(titre, parts, format) {
         ${arcs}
       </svg>
       <div class="disque-centre">
-        <span class="c-valeur">${format(total)}</span>
-        <span class="c-nom">total</span>
+        <span class="c-valeur">${centre ? centre.valeur : format(total)}</span>
+        <span class="c-nom">${centre ? centre.nom : "total"}</span>
       </div>
     </div>
     <div class="parts">${legende}</div>
   </div>`;
 }
 
-// Classement par canal d'un RATIO de performance (ROAS, CAC) : un ratio ne se repartit pas en
-// disque (la somme n'a pas de sens), on compare les canaux entre eux en barres horizontales.
 const formatRoas = (v) => (v === null || v === undefined ? "—" : v.toFixed(2).replace(".", ",") + " ×");
-function classementCanal(titre, lignes, calcul, format, meilleurHaut, note, dim = "canal") {
-  const parCanal = {};
+
+// Disque d'un RATIO (ROAS, CAC) par canal ou produit : chaque tranche = la valeur de l'element
+// rapportee a la somme des valeurs (lecture relative : qui pese le plus dans l'efficacite).
+// Le centre affiche la valeur GLOBALE reelle (ratio sur l'ensemble), pas la somme des ratios.
+function camembertRatio(titre, lignes, calcul, format, dim, nomCentre) {
+  const groupes = {};
   lignes.forEach((l) => {
     const c = l[dim] || "Inconnu";
-    (parCanal[c] = parCanal[c] || []).push(l);
+    (groupes[c] = groupes[c] || []).push(l);
   });
-  const valeurs = Object.entries(parCanal)
+  const parts = Object.entries(groupes)
     .map(([nom, ls]) => [nom, calcul(ls), somme(ls, "depense")])
-    .filter(([, v, dep]) => v !== null && v !== undefined && isFinite(v) && dep > 0)
-    .sort((a, b) => (meilleurHaut ? b[1] - a[1] : a[1] - b[1]));
-
-  if (!valeurs.length) {
-    return `<div class="glass camembert rv"><h3>${titre}</h3><div class="vide">Rien à comparer sur cette période.</div></div>`;
-  }
-  const max = Math.max(...valeurs.map(([, v]) => v), 0.0001);
-  const lignesHtml = valeurs
-    .map(([nom, v, dep], i) => {
-      const bulle = `<strong>${nom}</strong><span>${titre}<b>${format(v)}</b></span><span>Dépense pub<b>${euros(dep)}</b></span>`;
-      return `<div class="part-ligne"${info(bulle)} style="display:grid;grid-template-columns:minmax(80px,1.1fr) 2fr auto;align-items:center;gap:10px;margin:8px 0">
-        <span class="nom">${i === 0 ? "★ " : ""}${nom}</span>
-        <span style="display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.07)"><i style="display:block;height:100%;width:${Math.max(3, Math.round((v / max) * 100))}%;border-radius:99px;background:${couleurDim(dim, nom)}"></i></span>
-        <span class="montant">${format(v)}</span>
-      </div>`;
-    })
-    .join("");
-  return `<div class="glass camembert rv">
-    <h3>${titre}</h3>
-    <div class="parts">${lignesHtml}</div>
-    <p class="note-graph">${note}</p>
-  </div>`;
+    .filter(([, v, dep]) => v !== null && v !== undefined && isFinite(v) && v > 0 && dep > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([nom, v, dep]) => [nom, v, couleurDim(dim, nom), `Dépense pub : ${euros(dep)}`]);
+  const global = calcul(lignes);
+  return disque(titre, parts, format, { valeur: global === null || global === undefined || !isFinite(global) ? "—" : format(global), nom: nomCentre });
 }
 
 function camemberts(lignes) {
@@ -1044,8 +1029,8 @@ function camemberts(lignes) {
   cible.innerHTML = [
     // Allocation du budget et efficacite. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
     camembert("Dépense pub", lignes, "depense", euros, unite),
-    classementCanal(`Coût par client acquis (CAC) par ${unite}`, lignes, (ls) => INDICATEURS.coutClient(ls), euros, false, `★ = ${unite} le moins cher. Dépense pub / nouveaux clients.`, unite),
-    classementCanal(`ROAS par ${unite}`, lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, `★ = meilleur ${unite}. CA du mode choisi / dépense pub.`, unite),
+    camembertRatio(`CAC par ${unite}`, lignes, (ls) => INDICATEURS.coutClient(ls), euros, unite, "CAC global"),
+    camembertRatio(`ROAS par ${unite}`, lignes, (ls) => INDICATEURS.roas(ls), formatRoas, unite, "ROAS global"),
   ].join("");
 
   brancherSurvol(cible);
