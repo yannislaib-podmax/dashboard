@@ -1019,8 +1019,8 @@ function camemberts(lignes) {
   cible.innerHTML = [
     // Allocation du budget et efficacite par canal. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
     camembert("Dépense pub", lignes, "depense", euros),
-    classementCanal("ROAS par canal", lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, "★ = meilleur canal. CA du mode choisi / dépense pub."),
     classementCanal("Coût par client acquis (CAC)", lignes, (ls) => INDICATEURS.coutClient(ls), euros, false, "★ = canal le moins cher. Dépense pub / nouveaux clients."),
+    classementCanal("ROAS par canal", lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, "★ = meilleur canal. CA du mode choisi / dépense pub."),
   ].join("");
 
   brancherSurvol(cible);
