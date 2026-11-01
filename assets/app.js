@@ -3166,6 +3166,7 @@ function brancherTracking() {
 /* ------------------------------------------------------------------ */
 
 let SALES_LEADS = [];
+let SALES_FOLLOWUPS = []; // leads au stage Follow-Up Scheduled (stock courant, setter ou non)
 let CLIENTS_DETAIL = [];
 let SALES_CALLS = [];
 let SALES_CLOSER = "tout";
@@ -4149,6 +4150,11 @@ function vueOutbound() {
     };
   };
 
+  // Stock COURANT (pas une cohorte) : respecte la barre commune et le setter choisi ; un lead
+  // sans setter n'est compte que quand aucun setter n'est selectionne.
+  const nbFollowUps = SALES_FOLLOWUPS.filter(
+    (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
+  ).length;
   const g = agreger(leads);
   const gPrec = leadsPrec ? agreger(leadsPrec) : null;
   const show = ratio(g.honores, g.concluLeads);
@@ -4176,7 +4182,7 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
     carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
-    carte("Follow-up scheduled", nombre(g.followUps), "leads actuellement au stage Follow-Up Scheduled (relance planifiée)", ev("followUps")),
+    carte("Follow-up scheduled", nombre(nbFollowUps), "leads actuellement au stage Follow-Up Scheduled (état du jour, hors période)", null),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
@@ -4515,6 +4521,7 @@ async function charger() {
         // Source : champ réel si renseigné, sinon dérivée du canal (comme TOUTES).
         const avecSource = (x) => ({ ...x, source: x.source || deriverSource(x.canal) });
         SALES_LEADS = (donneesSales.leads || []).map(avecSource);
+        SALES_FOLLOWUPS = (donneesSales.followUps || []).map(avecSource);
         SALES_CALLS = (donneesSales.calls || []).map(avecSource);
         vueSalesClosing();
         initSalesMode();

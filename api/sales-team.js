@@ -207,6 +207,12 @@ export default async function handler(req, res) {
         produit: l.produit,
       }));
 
+    // Stock de leads actuellement au stage iClosed "Follow-Up Scheduled", AVEC ou SANS setter
+    // assigne (la carte Setting est un etat courant, pas une cohorte d'assignation).
+    const followUps = leadsBrut
+      .filter((l) => /follow[\s-]*up/i.test(l.stage || ""))
+      .map((l) => ({ setter: l.setter || null, source: l.source, canal: l.canal, produit: l.produit }));
+
     // Premiere issue setter ("SETTER-...") par contact : un call Rattrapage pris APRES est un
     // call du Setting, pas de l'acquisition (decision 2026-10-31). Il n'est plus "Rattrapage"
     // (viaSetting = true) : le front le compte dans le Setting uniquement.
@@ -255,6 +261,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       genereLe: new Date().toISOString(),
       nbLeads: leads.length,
+      followUps,
       nbCalls: calls.length,
       leads,
       calls,
