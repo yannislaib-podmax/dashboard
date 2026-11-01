@@ -138,9 +138,10 @@
     <div id="perf-couts" class="cartes cartes-cout"></div>
     <div id="perf-couts-media" class="cartes cartes-cout"></div>
 
-    <h3 class="sous-section">Dépense et valeur des clients acquis</h3>
-    <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente. La dépense face à ce que les clients acquis ont rapporté : 1er achat, puis renouvellements.</p>
-    <div class="glass histo rv" id="graph-ca"></div>
+    <h3 class="sous-section">Répartition par canal</h3>
+    <p class="sous-titre rv">Où part l'argent, ce qu'il produit. L'écart entre le premier et le second disque est le signal à surveiller.</p>
+    <div class="camemberts" id="camemberts"></div>
+
 
     <h3 class="sous-section">Valeur client (LTV)</h3>
     <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
@@ -148,13 +149,13 @@
     <div id="perf-ltv-rentab" class="cartes cartes-ltv cartes-cout"></div>
     <div id="perf-ltv-cycle" class="cartes cartes-ltv cartes-cout"></div>
 
+    <h3 class="sous-section">Dépense et valeur des clients acquis</h3>
+    <p class="sous-titre rv">Par jour, semaine ou mois, de la plus ancienne à la plus récente. La dépense face à ce que les clients acquis ont rapporté : 1er achat, puis renouvellements.</p>
+    <div class="glass histo rv" id="graph-ca"></div>
+
     <h3 class="sous-section">Courbe de cohorte</h3>
     <p class="sous-titre rv">Pour chaque mois d'acquisition : l'encaissé cumulé des clients acquis, rapporté à la dépense pub de ce mois, mois après mois. C'est la courbe de vie du client : elle montre quand la dépense est remboursée et combien un client rapporte avec le temps.</p>
     <div class="glass courbe-carte rv" id="perf-cohortes"></div>
-
-    <h3 class="sous-section">Répartition par canal</h3>
-    <p class="sous-titre rv">Où part l'argent, ce qu'il produit. L'écart entre le premier et le second disque est le signal à surveiller.</p>
-    <div class="camemberts" id="camemberts"></div>
 
   </section>
 
@@ -231,7 +232,7 @@
     <div id="quot-camembert" class="camemberts"></div>
 
     <h3 class="sous-section">Historique</h3>
-    <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente. Un appel réservé il y a plusieurs jours apparaît sous sa date d'appel réelle.</p>
+    <p class="sous-titre rv">Par jour, semaine ou mois, de la plus ancienne à la plus récente. Un appel réservé il y a plusieurs jours apparaît sous sa date d'appel réelle.</p>
     <div class="glass histo rv" id="quot-graph"></div>
 
     <h3 class="sous-section">Détail</h3>
@@ -468,7 +469,7 @@
     <div id="direction-sante" class="cartes cartes-etroit"></div>
 
     <h3 class="sous-section">CA contracté et encaissé</h3>
-    <p class="sous-titre rv">Par semaine ou par mois, de la plus ancienne à la plus récente.</p>
+    <p class="sous-titre rv">Par jour, semaine ou mois, de la plus ancienne à la plus récente.</p>
     <div class="glass histo rv" id="direction-graph"></div>
 
     <h3 class="sous-section">Répartition</h3>
@@ -514,6 +515,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=144"></script>
+<script src="/assets/app.js?v=145"></script>
 </body>
 </html>

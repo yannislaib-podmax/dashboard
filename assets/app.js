@@ -210,9 +210,10 @@ function libellePeriodeEtendu(b, granularite) {
 }
 
 // Boutons "Semaine / Mois" injectés dans un graphique en bâtonnés.
-function toggleGranulariteHtml(granulariteActuelle) {
+function toggleGranulariteHtml(granulariteActuelle, avecJour = false) {
   return `
     <div class="toggle-granularite">
+      ${avecJour ? `<button type="button" class="${granulariteActuelle === "jour" ? "actif" : ""}" data-granularite="jour">Jour</button>` : ""}
       <button type="button" class="${granulariteActuelle === "semaine" ? "actif" : ""}" data-granularite="semaine">Semaine</button>
       <button type="button" class="${granulariteActuelle === "mois" ? "actif" : ""}" data-granularite="mois">Mois</button>
     </div>`;
@@ -660,7 +661,7 @@ function tranches7(lignes, granularite) {
   const jours = lignes.map((l) => l.jour).filter(Boolean).sort();
   if (!jours.length) return [];
 
-  const blocs = decoupagePeriodes(jours, granularite);
+  const blocs = decoupagePeriodesEtendu(jours, granularite); // jour | semaine | mois
 
   return blocs
     .map((b) => {
@@ -684,7 +685,7 @@ function graphiqueCa(lignes) {
 
   const granularite = GRANULARITE_CA;
   const blocs = tranches7(lignes, granularite);
-  const toggle = toggleGranulariteHtml(granularite);
+  const toggle = toggleGranulariteHtml(granularite, true);
 
   if (!blocs.length) {
     cible.innerHTML = toggle + `<div style="color:var(--txt3)">Pas encore de données.</div>`;
@@ -710,7 +711,7 @@ function graphiqueCa(lignes) {
     .map((b) => {
       const roas1 = b.depense > 0 ? (b.contracte / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
       const roasT = b.depense > 0 ? (b.total / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
-      const libelle = libellePeriode(b, granularite);
+      const libelle = libellePeriodeEtendu(b, granularite);
       const bulle = `<strong>${libelle}</strong>
         <span><i class="p-depense"></i>Dépense pub<b>${euros(b.depense)}</b></span>
         <span><i class="p-contracte"></i>1er achat<b>${euros(b.contracte)}</b></span>
