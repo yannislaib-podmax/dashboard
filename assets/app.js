@@ -1313,7 +1313,7 @@ function courbePerformance(lignes) {
       GRANULARITE_PERF = g;
       courbePerformance(DERNIERES_LIGNES_PERF);
     },
-    { points: true, granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
   );
 }
 let DERNIERES_LIGNES_PERF = [];
