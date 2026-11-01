@@ -468,17 +468,9 @@ function vueConversion(lignes, precedentes) {
   }
 
   courbeKpiPage("kpi-funnel", {
-    defaut: "ventes",
-    groupes: [
-      ["Volumes", ["leads", "rendezVous", "rendezVousConclus", "honores", "ventes"]],
-      ["Taux", ["tauxAnnulation", "tauxPresence", "tauxClosing"]],
-    ],
+    defaut: "tauxClosing",
+    groupes: [["Taux", ["tauxAnnulation", "tauxPresence", "tauxClosing"]]],
     metriques: {
-      leads: { libelleCourt: "Leads", format: nombre },
-      rendezVous: { libelleCourt: "Rendez-vous pris", format: nombre },
-      rendezVousConclus: { libelleCourt: "RDV conclus", format: nombre },
-      honores: { libelleCourt: "Rendez-vous honorés", format: nombre },
-      ventes: { libelleCourt: "Ventes", format: nombre },
       tauxAnnulation: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
       tauxPresence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
       tauxClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
@@ -4169,17 +4161,9 @@ function vueSalesClosing() {
   ].join("");
 
   courbeKpiPage("kpi-closing", {
-    defaut: "ca",
-    groupes: [
-      ["Volumes", ["rdv", "conclus", "honores", "ventes", "ca"]],
-      ["Taux", ["annulation", "presence", "closing", "panier"]],
-    ],
+    defaut: "closing",
+    groupes: [["Taux", ["annulation", "presence", "closing", "panier"]]],
     metriques: {
-      rdv: { libelleCourt: "RDV prévus", format: nombre },
-      conclus: { libelleCourt: "RDV conclus", format: nombre },
-      honores: { libelleCourt: "RDV honorés", format: nombre },
-      ventes: { libelleCourt: "Ventes", format: nombre },
-      ca: { libelleCourt: "CA contracté", format: euros },
       annulation: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
       presence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
       closing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
@@ -5356,70 +5340,6 @@ function vueColdCall() {
     <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
     ${v.appeles > 0 ? `<span class="bulle-pied">${Math.round((v.reponse / v.appeles) * 100)} % de réponse${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}</span>` : ""}`;
   salesRenduPodium("coldcall-classement", lignesCaller, CC_METRIQUES, COLDCALL_METRIQUE, bulleCaller);
-
-  // Evolution globale des KPI des cartes (callers choisis, filtres de la page).
-  const joursSheetKpi = choisis.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
-  courbeKpiPage("kpi-coldcall", {
-    defaut: "bookes",
-    groupes: [
-      ["Cold call (Sheet)", ["appeles", "reponse", "callBook", "tReponse", "tCallBook"]],
-      ["Du call booké à la vente", ["bookes", "honores", "ventes", "ca", "tPresence", "tClosing", "panier"]],
-      ["Rémunération", ["remun", "coutVente", "retour"]],
-    ],
-    metriques: {
-      appeles: { libelleCourt: "Appelés", format: nombre },
-      reponse: { libelleCourt: "Décrochés", format: nombre },
-      callBook: { libelleCourt: "Calls bookés déclarés", format: nombre },
-      tReponse: { libelleCourt: "Taux de réponse", format: pourcent, decimal: true },
-      tCallBook: { libelleCourt: "Taux de call book", format: pourcent, decimal: true },
-      bookes: { libelleCourt: "Calls bookés réels", format: nombre },
-      honores: { libelleCourt: "Calls honorés", format: nombre },
-      ventes: { libelleCourt: "Ventes", format: nombre },
-      ca: { libelleCourt: "CA contracté", format: euros },
-      tPresence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
-      tClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
-      panier: { libelleCourt: "Panier moyen", format: euros },
-      remun: { libelleCourt: "Rémunération callers", format: euros },
-      coutVente: { libelleCourt: "Coût par vente", format: euros },
-      retour: { libelleCourt: "Retour sur rémunération", format: formatKpiRoas, decimal: true },
-    },
-    jours: [...joursSheetKpi, ...rdvOut.map((r) => r.jour)],
-    calcul: (cle, b) => {
-      let appeles = 0, reponse = 0, callBook = 0;
-      choisis.forEach((c) =>
-        Object.entries(c.jours || {}).forEach(([jour, j]) => {
-          if (!dansBloc(jour, b) || !dansPeriode({ jour })) return;
-          appeles += valeurJour(j);
-          reponse += reponseJour(j);
-          callBook += callBookJour(j);
-        })
-      );
-      const r = rdvOut.filter((x) => dansBloc(x.jour, b));
-      const bk = r.length;
-      const ho = r.filter((x) => (x.present || 0) > 0).length;
-      const ve = r.reduce((sum, x) => sum + (x.vente || 0), 0);
-      const ch = r.reduce((sum, x) => sum + (x.montant || 0), 0);
-      const rm = payesChoisis.filter((x) => dansBloc(x.jour, b)).length * CC_PRIME_HONORE;
-      switch (cle) {
-        case "appeles": return appeles;
-        case "reponse": return reponse;
-        case "callBook": return callBook;
-        case "tReponse": return ratio(reponse, appeles);
-        case "tCallBook": return ratio(callBook, reponse);
-        case "bookes": return bk;
-        case "honores": return ho;
-        case "ventes": return ve;
-        case "ca": return ch;
-        case "tPresence": return ratio(ho, bk);
-        case "tClosing": return ratio(ve, ho);
-        case "panier": return ve > 0 ? ch / ve : null;
-        case "remun": return rm;
-        case "coutVente": return ve > 0 ? rm / ve : null;
-        case "retour": return rm > 0 && ch > 0 ? ch / rm : null;
-        default: return null;
-      }
-    },
-  });
 
   // Repartition entre callers.
   const parts = (cle) => lignesCaller.filter(([, v]) => v[cle] > 0).map(([nom, v]) => [nom, v[cle], couleurCaller[nom]]);
