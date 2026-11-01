@@ -38,7 +38,7 @@ const CHAMPS_CALL_BOOKED = {
   fld1GgVHXLLo54h8s: "montant", // idem
   fldFPd5SGaSFfImIE: "typeAppel",
   fldhiaObnPFQjPioa: "bookingId", // prefixe "SETTER-" = call de setting synthetique (base de donnees), pas du Rattrapage
-  fldTBeyP7bcOpxz4p: "rangR",
+  fldGrEX8JoVHL2wbD: "rangR",
   fldszCN4DEDuhjCzh: "contrats", // lien CALL BOOKED -> CONTRATS (ids), source unique des ventes et du CA
 };
 

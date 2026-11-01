@@ -58,7 +58,7 @@ const CHAMPS_CALL_BOOKED = {
   fldGgYg63q8hUIzqK: "setter",
   fldUxmqK72q9MWwJe: "statut", // Confirmé / Annulé / Honoré / No-show
   fldIJJbmVTPBFHt1o: "issue",
-  fldTBeyP7bcOpxz4p: "rangR",
+  fldGrEX8JoVHL2wbD: "rangR",
   fld1GgVHXLLo54h8s: "montant",
   fldG440Cf4HAIkHEk: "source",
   fldONsYE6GNJUI15C: "canal",

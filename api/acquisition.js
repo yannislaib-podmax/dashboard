@@ -60,7 +60,7 @@ const CHAMPS_CALL_BOOKED = {
   fld1GgVHXLLo54h8s: "montant",
   fldFPd5SGaSFfImIE: "typeAppel",
   fldhiaObnPFQjPioa: "bookingId", // "SETTER-" = call de setting synthetique, exclu du Rattrapage
-  fldTBeyP7bcOpxz4p: "rangR",
+  fldGrEX8JoVHL2wbD: "rangR",
   fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
 };
 
