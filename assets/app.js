@@ -1384,7 +1384,7 @@ function vueEnsemble(lignes, precedentes) {
   const sansClient = modeClient && nbClients === 0 ? "aucun client rattaché sur la période" : null;
   // Rattrapage : les chiffres par client (1er achat, LTV, cohortes) ne sont pas encore
   // decoupes par type d'appel. On affiche du vide plutot que des chiffres de Closing.
-  const ND = enRattrapage();
+  const ND = false; // Paid Ads montre toujours tous les calls (Closing + Rattrapage)
   const NA = "non découpé par type d'appel";
   const vide = (v) => (ND ? "—" : v);
   const noteND = (n) => (ND ? NA : n);
@@ -2202,7 +2202,7 @@ function majLegende() {
     CANAL !== "tout" ? CANAL : null,
     PRODUIT !== "tout" ? PRODUIT : null,
     SOURCE !== "tout" ? SOURCE : null,
-    enRattrapage() ? "Rattrapage" : enTous() ? "Closing + Rattrapage" : null,
+    (location.hash || "#ensemble") === "#ensemble" ? null : enRattrapage() ? "Rattrapage" : enTous() ? "Closing + Rattrapage" : null,
   ].filter(Boolean);
 
   document.getElementById("filtre-note").textContent = [`${n} ligne${n > 1 ? "s" : ""}`, periode, ...restrictions].join(" · ");
@@ -2226,18 +2226,18 @@ const enTous = () => ACQ_MODE === "tous"; // Closing + Rattrapage melanges
 // Rang applique aux calls des onglets Acquisition : le Rattrapage a des rangs
 // exactement comme le Closing (decision 2026-10-30).
 const rangAcq = (rang, c) => rangAccepte(rang, c);
-const VUES_ACQ_MODE = ["ensemble", "sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
+const VUES_ACQ_MODE = ["sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
 // Substitue les compteurs de calls des lignes ACQUISITION par ceux du Diagnostic
 // (champs suffixes "D" renvoyes par /api/acquisition).
-function appliquerModeAcq(lignes) {
-  if (!lignes || ACQ_MODE === "closing") return lignes;
+function appliquerModeAcq(lignes, mode = ACQ_MODE) {
+  if (!lignes || mode === "closing") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
     // Le Rattrapage a les memes rangs que le Closing : R1 = champs "D", R2+ = champs "DR2".
     CHAMPS_CALLS_RANG.forEach((f) => {
       const d1 = l[f + "D"] || 0, d2 = l[f + "DR2"] || 0;
-      o[f] = enRattrapage() ? d1 : (l[f] || 0) + d1;
-      o[f + "R2"] = enRattrapage() ? d2 : (l[f + "R2"] || 0) + d2;
+      o[f] = mode === "rattrapage" ? d1 : (l[f] || 0) + d1;
+      o[f + "R2"] = mode === "rattrapage" ? d2 : (l[f + "R2"] || 0) + d2;
     });
     return o;
   });
@@ -2286,7 +2286,8 @@ function rendre() {
   const lignesFunnel = appliquerRangFunnel(lignes);
   const precedentesFunnel = appliquerRangFunnel(precedentes);
 
-  vueEnsemble(lignes, precedentes);
+  // Paid Ads : toujours tous les calls issus de la pub, sans distinction Closing / Rattrapage.
+  vueEnsemble(appliquerModeAcq(lignesFiltrees(), "tous"), appliquerModeAcq(lignesPrecedentes(), "tous"));
   vueConversion(lignesFunnel, precedentesFunnel);
   simulateur(lignesFunnel);
   vueJour(lignes);
