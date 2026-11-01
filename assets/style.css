@@ -1906,3 +1906,21 @@ tr.total td {
 /* Toggle Closing / Rattrapage de la barre de filtres (onglets Acquisition). */
 #acq-mode, #sales-mode { display: flex; width: fit-content; }
 #acq-mode[hidden] { display: none; }
+
+/* Selecteur de KPI (Paid Ads > Evolution) : pastilles sur plusieurs lignes, lisibles */
+.kpi-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.kpi-chips button {
+  border: 1px solid var(--bord);
+  background: var(--verre);
+  color: var(--txt3);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.kpi-chips button:hover { color: var(--txt); }
+.kpi-chips button.actif { background: var(--violet-clair); color: #14101c; border-color: transparent; }

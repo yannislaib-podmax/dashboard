@@ -1292,13 +1292,17 @@ function courbePerformance(lignes) {
   DERNIERES_LIGNES_PERF = lignes;
   const def = PERF_METRIQUES[PERF_COURBE_METRIQUE];
   const jours = [...new Set(lignes.map((l) => l.jour).filter(Boolean))].sort();
-  const blocs = decoupagePeriodesEtendu(jours, GRANULARITE_PERF)
-    .map((b) => ({ ...b, dedans: lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin) }))
-    .filter((b) => b.dedans.length);
-  const points = blocs.map((b) => {
-    const v = INDICATEURS[def.cle](b.dedans);
-    return v === null || v === undefined || !isFinite(v) ? 0 : v;
-  });
+  // Un ratio sans denominateur (pas de depense, pas de client...) n'est pas un zero : la periode
+  // n'est tout simplement pas tracee, sinon des semaines vides ecrasent la courbe.
+  const tranches = decoupagePeriodesEtendu(jours, GRANULARITE_PERF)
+    .map((b) => {
+      const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
+      const v = dedans.length ? INDICATEURS[def.cle](dedans) : null;
+      return { ...b, v: v === null || v === undefined || !isFinite(v) ? null : v };
+    })
+    .filter((b) => b.v !== null);
+  const blocs = tranches;
+  const points = tranches.map((b) => b.v);
   courbeMultiSeries(
     "perf-courbe",
     blocs,
