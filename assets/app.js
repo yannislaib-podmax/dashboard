@@ -2237,7 +2237,8 @@ function appliquerModeAcq(lignes, mode = ACQ_MODE) {
     // Le Rattrapage a les memes rangs que le Closing : R1 = champs "D", R2+ = champs "DR2".
     CHAMPS_CALLS_RANG.forEach((f) => {
       const d1 = l[f + "D"] || 0, d2 = l[f + "DR2"] || 0;
-      o[f] = mode === "rattrapage" ? d1 : (l[f] || 0) + d1;
+      // Paid Ads ("paid") : + les rattrapages pris apres une issue setter ("S"), leads payes par la pub.
+      o[f] = mode === "rattrapage" ? d1 : (l[f] || 0) + d1 + (mode === "paid" ? l[f + "S"] || 0 : 0);
       o[f + "R2"] = mode === "rattrapage" ? d2 : (l[f + "R2"] || 0) + d2;
     });
     return o;
@@ -2288,7 +2289,7 @@ function rendre() {
   const precedentesFunnel = appliquerRangFunnel(precedentes);
 
   // Paid Ads : toujours tous les calls issus de la pub, sans distinction Closing / Rattrapage.
-  vueEnsemble(appliquerModeAcq(lignesFiltrees(), "tous"), appliquerModeAcq(lignesPrecedentes(), "tous"));
+  vueEnsemble(appliquerModeAcq(lignesFiltrees(), "paid"), appliquerModeAcq(lignesPrecedentes(), "paid"));
   vueConversion(lignesFunnel, precedentesFunnel);
   simulateur(lignesFunnel);
   vueJour(lignes);

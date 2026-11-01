@@ -174,7 +174,7 @@ function recalculerDepuisCallBooked(callsBooked) {
   // dans des champs suffixes "R2" : le dashboard choisit R1 / R2+ / Tous.
   const champsVides = () => {
     const o = {};
-    for (const suf of ["", "R2", "D", "DR2"]) {
+    for (const suf of ["", "R2", "D", "DR2", "S"]) {
       for (const f of ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"]) o[f + suf] = 0;
     }
     return o;
@@ -194,9 +194,11 @@ function recalculerDepuisCallBooked(callsBooked) {
     // un Diagnostic "SETTER-" est un call de setting : hors acquisition.
     const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
     if (c.typeAppel !== "Closing" && !rattrapage) continue;
-    if (rattrapage && c.contactId != null && premiereIssueSetter.has(c.contactId) && premiereIssueSetter.get(c.contactId) <= String(c.prisLe || "")) continue;
+    // Rattrapage pris apres une issue setter : call du Setting, exclu de l'acquisition
+    // (Funnel...) mais compte a part (suffixe "S", R1) pour Paid Ads : le lead a ete paye par la pub.
+    const viaSetter = rattrapage && c.contactId != null && premiereIssueSetter.has(c.contactId) && premiereIssueSetter.get(c.contactId) <= String(c.prisLe || "");
     // Rattrapage : meme logique de rang que le Closing (R1 -> "D", R2+ -> "DR2").
-    const suf = rattrapage ? (c.rangR === 1 ? "D" : c.rangR > 1 ? "DR2" : null) : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
+    const suf = viaSetter ? (c.rangR === 1 ? "S" : null) : rattrapage ? (c.rangR === 1 ? "D" : c.rangR > 1 ? "DR2" : null) : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
     if (suf === null) continue;
     const jour = jourParis(c.prisLe);
     if (!jour) continue;
@@ -353,6 +355,7 @@ export default async function handler(req, res) {
       rendezVousR2: 0, rendezVousConclusR2: 0, honoresR2: 0, ventesR2: 0, contracteR2: 0, annulesR2: 0,
       rendezVousD: 0, rendezVousConclusD: 0, honoresD: 0, ventesD: 0, contracteD: 0, annulesD: 0,
       rendezVousDR2: 0, rendezVousConclusDR2: 0, honoresDR2: 0, ventesDR2: 0, contracteDR2: 0, annulesDR2: 0,
+      rendezVousS: 0, rendezVousConclusS: 0, honoresS: 0, ventesS: 0, contracteS: 0, annulesS: 0,
     };
     const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
 
@@ -416,6 +419,12 @@ export default async function handler(req, res) {
         ventesDR2: r.ventesDR2,
         contracteDR2: r.contracteDR2,
         annulesDR2: r.annulesDR2,
+        rendezVousS: r.rendezVousS,
+        rendezVousConclusS: r.rendezVousConclusS,
+        honoresS: r.honoresS,
+        ventesS: r.ventesS,
+        contracteS: r.contracteS,
+        annulesS: r.annulesS,
         clients: cl.clients,
         contracte1er: cl.contracte1er,
         encaisseTous: cl.encaisseTous,
