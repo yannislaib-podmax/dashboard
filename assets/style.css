@@ -1924,4 +1924,4 @@ tr.total td {
 }
 .kpi-chips button:hover { color: var(--txt); }
 .kpi-chips button.actif { background: var(--violet-clair); color: #14101c; border-color: transparent; }
-.kpi-select { margin-bottom: 16px; }
+.kpi-select { margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px; }

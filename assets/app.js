@@ -1296,10 +1296,18 @@ function courbePerformance(lignes) {
       ["Média", ["cpm", "cpc", "ctr"]],
       ["Valeur client (LTV)", ["encaisse", "ltv", "multipleLtv", "roasTous", "margeClient", "ltvSurCout"]],
     ];
-    zoneSel.innerHTML = `<select class="choix" aria-label="KPI à afficher">${groupes
-      .map(([titre, cles]) => `<optgroup label="${titre}">${cles.map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`).join("")}</optgroup>`)
-      .join("")}</select>`;
-    zoneSel.querySelector("select").addEventListener("change", (e) => {
+    const gActif = groupes.findIndex(([, cles]) => cles.includes(PERF_COURBE_METRIQUE));
+    zoneSel.innerHTML = `<select class="choix" id="perf-cat" aria-label="Catégorie de KPI">${groupes
+      .map(([titre], i) => `<option value="${i}"${i === gActif ? " selected" : ""}>${titre}</option>`)
+      .join("")}</select>
+      <select class="choix" id="perf-kpi" aria-label="KPI à afficher">${groupes[gActif][1]
+        .map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`)
+        .join("")}</select>`;
+    zoneSel.querySelector("#perf-cat").addEventListener("change", (e) => {
+      PERF_COURBE_METRIQUE = groupes[Number(e.target.value)][1][0];
+      courbePerformance(DERNIERES_LIGNES_PERF);
+    });
+    zoneSel.querySelector("#perf-kpi").addEventListener("change", (e) => {
       PERF_COURBE_METRIQUE = e.target.value;
       courbePerformance(DERNIERES_LIGNES_PERF);
     });
