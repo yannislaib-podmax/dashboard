@@ -467,6 +467,26 @@ function vueConversion(lignes, precedentes) {
       );
   }
 
+  courbeKpiPage("kpi-funnel", {
+    defaut: "ventes",
+    groupes: [
+      ["Volumes", ["leads", "rendezVous", "rendezVousConclus", "honores", "ventes"]],
+      ["Taux", ["tauxAnnulation", "tauxPresence", "tauxClosing"]],
+    ],
+    metriques: {
+      leads: { libelleCourt: "Leads", format: nombre },
+      rendezVous: { libelleCourt: "Rendez-vous pris", format: nombre },
+      rendezVousConclus: { libelleCourt: "RDV conclus", format: nombre },
+      honores: { libelleCourt: "Rendez-vous honorés", format: nombre },
+      ventes: { libelleCourt: "Ventes", format: nombre },
+      tauxAnnulation: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
+      tauxPresence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
+      tauxClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
+    },
+    jours: lignes.map((l) => l.jour),
+    calcul: (cle, b) => INDICATEURS[cle](lignes.filter((l) => dansBloc(l.jour, b))),
+  });
+
   graphiqueTemporalite(lignes);
 
   // Base de chaque marche : la valeur de la marche précédente. Depuis l'ajout
@@ -1314,6 +1334,47 @@ function menusCategoriesKpi(zoneId, groupes, metriques, actif, onChoix) {
     })
   );
 }
+
+// Courbe "Evolution des KPI" commune a toutes les pages a cartes : un menu deroulant par
+// categorie de KPI, un KPI a la fois, jour / semaine / mois. `cfg` :
+//   defaut   cle du KPI affiche au depart
+//   groupes  [[titre, [cles]]]
+//   metriques { cle: { libelleCourt, format, decimal? } }
+//   jours    dates ISO ou le KPI peut avoir une valeur
+//   calcul   (cle, bloc) => nombre | null (null = periode non tracee)
+// Ids attendus dans la page : `${id}-courbe-metrique` et `${id}-courbe`.
+const COURBES_KPI = {};
+function courbeKpiPage(id, cfg) {
+  if (!document.getElementById(`${id}-courbe`)) return;
+  const st = (COURBES_KPI[id] = COURBES_KPI[id] || { metrique: cfg.defaut, granul: "semaine" });
+  st.cfg = cfg;
+  if (!cfg.metriques[st.metrique]) st.metrique = cfg.defaut;
+  menusCategoriesKpi(`${id}-courbe-metrique`, cfg.groupes, cfg.metriques, st.metrique, (v) => {
+    st.metrique = v;
+    courbeKpiPage(id, st.cfg);
+  });
+  const def = cfg.metriques[st.metrique];
+  const jours = [...new Set(cfg.jours.filter(Boolean))].sort();
+  const tranches = decoupagePeriodesEtendu(jours, st.granul)
+    .map((b) => {
+      const v = cfg.calcul(st.metrique, b);
+      return { ...b, v: v === null || v === undefined || !isFinite(v) ? null : v };
+    })
+    .filter((b) => b.v !== null);
+  courbeMultiSeries(
+    `${id}-courbe`,
+    tranches,
+    [{ nom: def.libelleCourt, couleur: "#C9A6FF", points: tranches.map((b) => b.v) }],
+    def.format,
+    st.granul,
+    (g) => {
+      st.granul = g;
+      courbeKpiPage(id, st.cfg);
+    },
+    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+  );
+}
+const dansBloc = (jour, b) => !!jour && jour >= b.debut && jour <= b.fin;
 
 function courbePerformance(lignes) {
   if (!document.getElementById("perf-courbe")) return;
@@ -3335,6 +3396,32 @@ function vueTracking() {
   ].join("");
   brancherInfobulles(cartesCible);
 
+  courbeKpiPage("kpi-tracking", {
+    defaut: "ca",
+    groupes: [
+      ["Volumes", ["leads", "rdv", "present", "ventes", "ca"]],
+      ["Taux", ["show", "closing"]],
+    ],
+    metriques: {
+      leads: { libelleCourt: "Leads", format: nombre },
+      rdv: { libelleCourt: "RDV booké", format: nombre },
+      present: { libelleCourt: "RDV honoré", format: nombre },
+      ventes: { libelleCourt: "Ventes", format: nombre },
+      ca: { libelleCourt: "CA contracté", format: euros },
+      show: { libelleCourt: "Taux de show", format: pourcent, decimal: true },
+      closing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
+    },
+    jours: [...leads.map((l) => l.jour), ...rdv.map((r) => r.jour)],
+    calcul: (cle, b) => {
+      const lJ = leads.filter((l) => dansBloc(l.jour, b));
+      const rJ = rdv.filter((r) => dansBloc(r.jour, b));
+      const v = { leads: lJ.length, rdv: rJ.length, present: somme(rJ, "present"), ventes: somme(rJ, "vente"), ca: somme(rJ, "montant") };
+      if (cle === "show") return ratio(v.present, somme(rJ, "conclu"));
+      if (cle === "closing") return ratio(v.ventes, v.present);
+      return v[cle];
+    },
+  });
+
   // Même agrégation que parValeur, mais sur la période précédente, pour
   // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
   // classement et les camemberts (pas juste un total global comme sur les
@@ -4108,6 +4195,27 @@ function vueSalesClosing() {
     ),
   ].join("");
 
+  courbeKpiPage("kpi-closing", {
+    defaut: "ca",
+    groupes: [
+      ["Volumes", ["rdv", "conclus", "honores", "ventes", "ca"]],
+      ["Taux", ["annulation", "presence", "closing", "panier"]],
+    ],
+    metriques: {
+      rdv: { libelleCourt: "RDV prévus", format: nombre },
+      conclus: { libelleCourt: "RDV conclus", format: nombre },
+      honores: { libelleCourt: "RDV honorés", format: nombre },
+      ventes: { libelleCourt: "Ventes", format: nombre },
+      ca: { libelleCourt: "CA contracté", format: euros },
+      annulation: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
+      presence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
+      closing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
+      panier: { libelleCourt: "Panier moyen", format: euros },
+    },
+    jours: calls.map((c) => c.jour),
+    calcul: (cle, b) => salesStatsCallsClosing(calls.filter((c) => dansBloc(c.jour, b)))[cle],
+  });
+
   // A traiter : toutes dates confondues (le filtre closer s'applique), mais le rang suit le toggle R1 / Tous les rangs
   // (sinon des R2 a venir s'affichaient en mode R1).
   const closingsTous = SALES_CALLS.filter(
@@ -4320,6 +4428,7 @@ function vueOutbound() {
     const calls = issue ? (closingsParContact.get(l.contactId) || []).filter(duRang) : [];
     return {
       setter: l.setter,
+      jour: l.jourAssignation,
       contacte: !!l.jourContacte,
       // Stage iClosed ACTUEL = "Follow-Up Scheduled" (relance planifiee par le setter).
       followUp: /follow[\s-]*up/i.test(l.stage || ""),
@@ -4445,6 +4554,49 @@ function vueOutbound() {
     caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
     ),
   ].join("");
+
+  courbeKpiPage("kpi-setting", {
+    defaut: "assignes",
+    groupes: [
+      ["Étapes Setting", ["assignes", "contactes", "issues"]],
+      ["Étapes Closing", ["closing", "honores", "ventes", "ca"]],
+      ["Taux", ["tContact", "tIssue", "tTransfo", "tShow", "tVente"]],
+      ["Poids du Setting", ["pBookes", "pPresents", "pCa"]],
+    ],
+    metriques: {
+      assignes: { libelleCourt: "Leads assignés", format: nombre },
+      contactes: { libelleCourt: "Leads contactés", format: nombre },
+      issues: { libelleCourt: "Issues renseignées", format: nombre },
+      closing: { libelleCourt: "Calls bookés via setter", format: nombre },
+      honores: { libelleCourt: "Closing honorés", format: nombre },
+      ventes: { libelleCourt: "Ventes", format: nombre },
+      ca: { libelleCourt: "CA généré", format: euros },
+      tContact: { libelleCourt: "Taux de contact", format: pourcent, decimal: true },
+      tIssue: { libelleCourt: "Taux d'issue", format: pourcent, decimal: true },
+      tTransfo: { libelleCourt: "Taux de transfo", format: pourcent, decimal: true },
+      tShow: { libelleCourt: "Taux de show", format: pourcent, decimal: true },
+      tVente: { libelleCourt: "Taux de vente", format: pourcent, decimal: true },
+      pBookes: { libelleCourt: "Part des calls bookés", format: pourcent, decimal: true },
+      pPresents: { libelleCourt: "Part des présents", format: pourcent, decimal: true },
+      pCa: { libelleCourt: "Part du CA", format: pourcent, decimal: true },
+    },
+    jours: [...leads.map((l) => l.jour), ...closingsPerimetre.filter(dansPeriode).map((c) => c.jour)],
+    calcul: (cle, b) => {
+      const a = agreger(leads.filter((l) => dansBloc(l.jour, b)));
+      const dansCall = (c) => dansBloc(c.jour, b);
+      switch (cle) {
+        case "tContact": return ratio(a.contactes, a.assignes);
+        case "tIssue": return ratio(a.issues, a.contactes);
+        case "tTransfo": return ratio(a.closing, a.contactes);
+        case "tShow": return ratio(a.honores, a.concluLeads);
+        case "tVente": return ratio(a.ventes, a.honores);
+        case "pBookes": { const c = partCalls(dansCall); return ratio(c.bookesSetting, c.bookes); }
+        case "pPresents": { const c = partCalls(dansCall); return ratio(c.presentsSetting, c.presents); }
+        case "pCa": { const c = partCaSetting(dansCall); return ratio(c.setting, c.total); }
+        default: return a[cle];
+      }
+    },
+  });
 
   entonnoir(
     `${prefixeId}-entonnoir`,
@@ -5231,6 +5383,70 @@ function vueColdCall() {
     <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
     ${v.appeles > 0 ? `<span class="bulle-pied">${Math.round((v.reponse / v.appeles) * 100)} % de réponse${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}</span>` : ""}`;
   salesRenduPodium("coldcall-classement", lignesCaller, CC_METRIQUES, COLDCALL_METRIQUE, bulleCaller);
+
+  // Evolution globale des KPI des cartes (callers choisis, filtres de la page).
+  const joursSheetKpi = choisis.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
+  courbeKpiPage("kpi-coldcall", {
+    defaut: "bookes",
+    groupes: [
+      ["Cold call (Sheet)", ["appeles", "reponse", "callBook", "tReponse", "tCallBook"]],
+      ["Du call booké à la vente", ["bookes", "honores", "ventes", "ca", "tPresence", "tClosing", "panier"]],
+      ["Rémunération", ["remun", "coutVente", "retour"]],
+    ],
+    metriques: {
+      appeles: { libelleCourt: "Appelés", format: nombre },
+      reponse: { libelleCourt: "Décrochés", format: nombre },
+      callBook: { libelleCourt: "Calls bookés déclarés", format: nombre },
+      tReponse: { libelleCourt: "Taux de réponse", format: pourcent, decimal: true },
+      tCallBook: { libelleCourt: "Taux de call book", format: pourcent, decimal: true },
+      bookes: { libelleCourt: "Calls bookés réels", format: nombre },
+      honores: { libelleCourt: "Calls honorés", format: nombre },
+      ventes: { libelleCourt: "Ventes", format: nombre },
+      ca: { libelleCourt: "CA contracté", format: euros },
+      tPresence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
+      tClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
+      panier: { libelleCourt: "Panier moyen", format: euros },
+      remun: { libelleCourt: "Rémunération callers", format: euros },
+      coutVente: { libelleCourt: "Coût par vente", format: euros },
+      retour: { libelleCourt: "Retour sur rémunération", format: formatKpiRoas, decimal: true },
+    },
+    jours: [...joursSheetKpi, ...rdvOut.map((r) => r.jour)],
+    calcul: (cle, b) => {
+      let appeles = 0, reponse = 0, callBook = 0;
+      choisis.forEach((c) =>
+        Object.entries(c.jours || {}).forEach(([jour, j]) => {
+          if (!dansBloc(jour, b) || !dansPeriode({ jour })) return;
+          appeles += valeurJour(j);
+          reponse += reponseJour(j);
+          callBook += callBookJour(j);
+        })
+      );
+      const r = rdvOut.filter((x) => dansBloc(x.jour, b));
+      const bk = r.length;
+      const ho = r.filter((x) => (x.present || 0) > 0).length;
+      const ve = r.reduce((sum, x) => sum + (x.vente || 0), 0);
+      const ch = r.reduce((sum, x) => sum + (x.montant || 0), 0);
+      const rm = payesChoisis.filter((x) => dansBloc(x.jour, b)).length * CC_PRIME_HONORE;
+      switch (cle) {
+        case "appeles": return appeles;
+        case "reponse": return reponse;
+        case "callBook": return callBook;
+        case "tReponse": return ratio(reponse, appeles);
+        case "tCallBook": return ratio(callBook, reponse);
+        case "bookes": return bk;
+        case "honores": return ho;
+        case "ventes": return ve;
+        case "ca": return ch;
+        case "tPresence": return ratio(ho, bk);
+        case "tClosing": return ratio(ve, ho);
+        case "panier": return ve > 0 ? ch / ve : null;
+        case "remun": return rm;
+        case "coutVente": return ve > 0 ? rm / ve : null;
+        case "retour": return rm > 0 && ch > 0 ? ch / rm : null;
+        default: return null;
+      }
+    },
+  });
 
   // Repartition entre callers.
   const parts = (cle) => lignesCaller.filter(([, v]) => v[cle] > 0).map(([nom, v]) => [nom, v[cle], couleurCaller[nom]]);
