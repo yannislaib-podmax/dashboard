@@ -2167,7 +2167,6 @@ function vueDirection() {
   }
 
   courbeDirection(contrats, paiements);
-  grapheDirection(contrats, paiements);
   camembertsDirection(contrats);
 }
 
