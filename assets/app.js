@@ -3395,32 +3395,6 @@ function vueTracking() {
   ].join("");
   brancherInfobulles(cartesCible);
 
-  courbeKpiPage("kpi-tracking", {
-    defaut: "ca",
-    groupes: [
-      ["Volumes", ["leads", "rdv", "present", "ventes", "ca"]],
-      ["Taux", ["show", "closing"]],
-    ],
-    metriques: {
-      leads: { libelleCourt: "Leads", format: nombre },
-      rdv: { libelleCourt: "RDV booké", format: nombre },
-      present: { libelleCourt: "RDV honoré", format: nombre },
-      ventes: { libelleCourt: "Ventes", format: nombre },
-      ca: { libelleCourt: "CA contracté", format: euros },
-      show: { libelleCourt: "Taux de show", format: pourcent, decimal: true },
-      closing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
-    },
-    jours: [...leads.map((l) => l.jour), ...rdv.map((r) => r.jour)],
-    calcul: (cle, b) => {
-      const lJ = leads.filter((l) => dansBloc(l.jour, b));
-      const rJ = rdv.filter((r) => dansBloc(r.jour, b));
-      const v = { leads: lJ.length, rdv: rJ.length, present: somme(rJ, "present"), ventes: somme(rJ, "vente"), ca: somme(rJ, "montant") };
-      if (cle === "show") return ratio(v.present, somme(rJ, "conclu"));
-      if (cle === "closing") return ratio(v.ventes, v.present);
-      return v[cle];
-    },
-  });
-
   // Même agrégation que parValeur, mais sur la période précédente, pour
   // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
   // classement et les camemberts (pas juste un total global comme sur les
