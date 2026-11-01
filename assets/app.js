@@ -4174,6 +4174,21 @@ function vueOutbound() {
   };
   const caP = partCaSetting(dansPeriode);
   const caPPrec = plagePrec ? partCaSetting((c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]) : null;
+  // Part du Setting dans les calls bookes / presents : meme perimetre que la part du CA
+  // (Closing + Rattrapage + calls via setter, filtres barre + rang), compte par JOUR DU RDV.
+  // Un call est "du Setting" quand il est pris via setter (viaSetting). Annules inclus dans les bookes.
+  const partCalls = (dansLaPlage) => {
+    const dansPlage = closingsPerimetre.filter(dansLaPlage);
+    const setting = dansPlage.filter((c) => c.viaSetting === true);
+    return {
+      bookes: dansPlage.length,
+      bookesSetting: setting.length,
+      presents: somme(dansPlage, "present"),
+      presentsSetting: somme(setting, "present"),
+    };
+  };
+  const cP = partCalls(dansPeriode);
+  const cPPrec = plagePrec ? partCalls((c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]) : null;
   const ev = (cle) => (gPrec ? ecartDe(g[cle], gPrec[cle], "salesOutbound" + cle) : null);
   const ep = (actuel, precedent) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent) : null);
 
@@ -4198,12 +4213,26 @@ function vueOutbound() {
     carte("Taux de show", pourcent(show), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call Closing passé` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
     carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
   ].join("");
-  document.getElementById(`${prefixeId}-partca`).innerHTML = carte(
+  document.getElementById(`${prefixeId}-partca`).innerHTML = [
+    carte(
+      "Part des calls bookés — Setting",
+      cP.bookes ? pourcent(ratio(cP.bookesSetting, cP.bookes)) : "—",
+      cP.bookes ? `${nombre(cP.bookesSetting)} sur ${nombre(cP.bookes)} calls bookés (Closing + Rattrapage + via setter)` : "aucun call sur la période",
+      cP.bookes && cPPrec && cPPrec.bookes ? ep(ratio(cP.bookesSetting, cP.bookes), ratio(cPPrec.bookesSetting, cPPrec.bookes)) : null
+    ),
+    carte(
+      "Part des présents — Setting",
+      cP.presents ? pourcent(ratio(cP.presentsSetting, cP.presents)) : "—",
+      cP.presents ? `${nombre(cP.presentsSetting)} sur ${nombre(cP.presents)} calls honorés (Closing + Rattrapage + via setter)` : "aucun call honoré sur la période",
+      cP.presents && cPPrec && cPPrec.presents ? ep(ratio(cP.presentsSetting, cP.presents), ratio(cPPrec.presentsSetting, cPPrec.presents)) : null
+    ),
+    carte(
     "Part du CA — Setting",
     caP.total ? pourcent(ratio(caP.setting, caP.total)) : "—",
     caP.total ? `${euros(caP.setting)} sur ${euros(caP.total)} de CA Closing + Rattrapage de la période` : "aucun CA sur la période",
     caP.total && caPPrec && caPPrec.total ? ep(ratio(caP.setting, caP.total), ratio(caPPrec.setting, caPPrec.total)) : null
-  );
+    ),
+  ].join("");
 
   entonnoir(
     `${prefixeId}-entonnoir`,
