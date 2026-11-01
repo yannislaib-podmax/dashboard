@@ -2110,6 +2110,7 @@ function afficherVue(nom) {
 
   vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
   requestAnimationFrame(() => apparitions(vue));
+  if (document.getElementById("filtre-note")) majLegende();
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
