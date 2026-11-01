@@ -1304,21 +1304,24 @@ function courbePerformance(lignes) {
       ["Média", ["cpm", "cpc", "ctr"]],
       ["Valeur client (LTV)", ["encaisse", "ltv", "multipleLtv", "roasTous", "margeClient", "ltvSurCout"]],
     ];
-    const gActif = groupes.findIndex(([, cles]) => cles.includes(PERF_COURBE_METRIQUE));
-    zoneSel.innerHTML = `<select class="choix" id="perf-cat" aria-label="Catégorie de KPI">${groupes
-      .map(([titre], i) => `<option value="${i}"${i === gActif ? " selected" : ""}>${titre}</option>`)
-      .join("")}</select>
-      <select class="choix" id="perf-kpi" aria-label="KPI à afficher">${groupes[gActif][1]
-        .map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`)
-        .join("")}</select>`;
-    zoneSel.querySelector("#perf-cat").addEventListener("change", (e) => {
-      PERF_COURBE_METRIQUE = groupes[Number(e.target.value)][1][0];
-      courbePerformance(DERNIERES_LIGNES_PERF);
-    });
-    zoneSel.querySelector("#perf-kpi").addEventListener("change", (e) => {
-      PERF_COURBE_METRIQUE = e.target.value;
-      courbePerformance(DERNIERES_LIGNES_PERF);
-    });
+    // Un menu deroulant par categorie : le menu de la categorie active affiche le KPI choisi,
+    // les trois autres affichent leur nom de categorie.
+    zoneSel.innerHTML = groupes
+      .map(([titre, cles]) => {
+        const actif = cles.includes(PERF_COURBE_METRIQUE);
+        return `<select class="choix${actif ? " actif" : ""}" aria-label="${titre}">
+          ${actif ? "" : `<option value="" selected disabled hidden>${titre}</option>`}
+          ${cles.map((c) => `<option value="${c}"${c === PERF_COURBE_METRIQUE ? " selected" : ""}>${PERF_METRIQUES[c].libelleCourt}</option>`).join("")}
+        </select>`;
+      })
+      .join("");
+    zoneSel.querySelectorAll("select").forEach((sel) =>
+      sel.addEventListener("change", (e) => {
+        if (!e.target.value) return;
+        PERF_COURBE_METRIQUE = e.target.value;
+        courbePerformance(DERNIERES_LIGNES_PERF);
+      })
+    );
   }
   DERNIERES_LIGNES_PERF = lignes;
   const def = PERF_METRIQUES[PERF_COURBE_METRIQUE];
