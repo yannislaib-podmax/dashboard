@@ -4845,13 +4845,62 @@ function vueColdCall() {
     const moy = actifs.length ? Math.round(actifs.reduce((s, [, v]) => s + v.appeles, 0) / actifs.length) : 0;
     return { nom: c.caller, d, h, moy, joursActifs: actifs.length };
   };
+  // Filtre produit de l'en-tete : le Sheet n'a un produit (colonne J) que pour les
+  // prospects interesses ; on compte alors ces appels-la. Cle normalisee ads/360/brand.
+  const cleProduit = (t) => {
+    const s = String(t || "").toLowerCase();
+    return s.includes("360") ? "360" : s.includes("brand") ? "brand" : s.includes("ads") ? "ads" : s;
+  };
+  const filtreProduit = PRODUIT !== "tout";
+  const scriptAJour = COLDCALL.some((c) => Object.values(c.jours || {}).some((v) => v.produits));
+  const sommeProduit = (obj) => {
+    const cible = cleProduit(PRODUIT);
+    return Object.entries(obj || {}).reduce((s, [p, n]) => (cleProduit(p) === cible ? s + n : s), 0);
+  };
+  const valeurJour = (v) => (!filtreProduit || !scriptAJour ? v.appeles || 0 : sommeProduit(v.produits));
+  const reponseJour = (v) => (!filtreProduit || !scriptAJour ? v.reponse || 0 : sommeProduit(v.produitsReponse));
+  const callBookJour = (v) => (!filtreProduit || !scriptAJour ? v.callBook || 0 : sommeProduit(v.produitsCallBook));
+  // Mode "periode" : des qu'un filtre de periode ou de produit est actif, les cartes
+  // montrent le cumul sur la periode au lieu d'aujourd'hui / hier.
+  const modePeriodeAct = !!(DEBUT || FIN) || filtreProduit;
+  const titreAct = document.getElementById("coldcall-activite-titre");
+  const sousTitreAct = document.getElementById("coldcall-activite-soustitre");
+  if (titreAct) titreAct.textContent = modePeriodeAct ? "Activité sur la période" : "Activité du jour";
+  if (sousTitreAct)
+    sousTitreAct.textContent = modePeriodeAct
+      ? `Cumul par caller sur la période choisie dans l'en-tête${filtreProduit ? " et le produit (prospects intéressés par ce produit, colonne J du Sheet)" : ""}. Sans filtre : aujourd'hui et hier.`
+      : "Ce que chaque caller a fait aujourd'hui et hier, lu dans le Sheet. Choisis une période ou un produit dans l'en-tête pour passer en cumul.";
+  if (modePeriodeAct) {
+    const lignesP = COLDCALL.map((c) => {
+      const jr = Object.entries(c.jours || {}).filter(([k]) => dansPeriode({ jour: k }));
+      const appeles = jr.reduce((s, [, v]) => s + valeurJour(v), 0);
+      const reponse = jr.reduce((s, [, v]) => s + reponseJour(v), 0);
+      const callBook = jr.reduce((s, [, v]) => s + callBookJour(v), 0);
+      const actifs = jr.filter(([, v]) => valeurJour(v) > 0).length;
+      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0 };
+    });
+    const maxP = Math.max(1, ...lignesP.map((l) => l.appeles));
+    document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesP
+      .map((l) => {
+        const pct = Math.round((l.appeles / maxP) * 100);
+        const etat = l.appeles === 0 ? "zero" : "ok";
+        return `<div class="glass cc-act-carte rv">
+        <div class="cc-act-tete"><span class="cc-act-nom">${l.nom}</span></div>
+        <div class="cc-act-chiffre ${etat}">${nombre(l.appeles)}<small> ${filtreProduit && scriptAJour ? "prospects sur ce produit" : "appels sur la période"}</small></div>
+        <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
+        <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
+        <div class="cc-act-pastilles"><span>Décrochés<b>${nombre(l.reponse)}</b></span><span>Calls bookés<b>${nombre(l.callBook)}</b></span></div>
+      </div>`;
+      })
+      .join("")}</div>`;
+  }
   const lignesAct = COLDCALL.map(ligneActivite);
   const flecheHier = (auj, hier) => {
     if (auj === hier) return `<span class="cc-act-var stable">= hier</span>`;
     const d = auj - hier;
     return `<span class="cc-act-var ${d > 0 ? "hausse" : "baisse"}">${d > 0 ? "▲ +" : "▼ "}${nombre(d)} vs hier (${nombre(hier)})</span>`;
   };
-  document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesAct
+  if (!modePeriodeAct) document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesAct
     .map((l, i) => {
       const pct = l.moy > 0 ? Math.round((l.d.appeles / l.moy) * 100) : l.d.appeles > 0 ? 100 : 0;
       const etat = l.d.appeles === 0 ? "zero" : pct >= 100 ? "ok" : pct >= 60 ? "moyen" : "bas";
@@ -4865,18 +4914,28 @@ function vueColdCall() {
     })
     .join("")}</div>`;
 
-  // Activite dans le temps : appels par caller, un point par jour / semaine / mois.
-  // Jours continus (les jours sans appel comptent 0), independant du filtre de periode.
-  const nbJoursAct = { jour: 30, semaine: 84 }[GRANULARITE_COLDCALL_ACTIVITE];
-  const debutAct = nbJoursAct ? new Date(auj.getTime() - (nbJoursAct - 1) * 86400000) : new Date(auj.getFullYear(), auj.getMonth() - 11, 1, 12);
+  // Activite dans le temps : appels par caller, un point par jour / semaine / mois,
+  // sur la PERIODE de l'en-tete (DEBUT/FIN ; sans filtre : de la 1re activite a aujourd'hui).
+  // Jours continus (les jours sans appel comptent 0).
+  const joursAvecActivite = COLDCALL.flatMap((c) => Object.keys(c.jours || {})).sort();
+  const debutAct = enDate(DEBUT || joursAvecActivite[0] || jAuj);
+  const finAct = enDate(FIN || jAuj);
   const joursAct = [];
-  for (let d = new Date(debutAct); fmtJour(d) <= jAuj; d = new Date(d.getTime() + 86400000)) joursAct.push(fmtJour(d));
+  for (let d = new Date(debutAct), garde = 0; fmtJour(d) <= fmtJour(finAct) && garde < 800; d = new Date(d.getTime() + 86400000), garde++) joursAct.push(fmtJour(d));
   const blocsAct = decoupagePeriodesEtendu(joursAct, GRANULARITE_COLDCALL_ACTIVITE);
+  const noteAct = document.getElementById("coldcall-activite-note");
+  if (noteAct) {
+    noteAct.textContent = !filtreProduit
+      ? ""
+      : scriptAJour
+        ? `Filtre produit actif : seuls les prospects intéressés par ce produit (colonne J du Sheet) sont comptés, pas tous les appels passés.`
+        : `Filtre produit pas encore applicable ici : le script du Sheet doit être mis à jour (colonne Produit). Le graphique montre tous les appels.`;
+  }
   const seriesAct = COLDCALL.map((c, i) => ({
     nom: c.caller,
     couleur: PALETTE[i % PALETTE.length],
     points: blocsAct.map((b) =>
-      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + (v.appeles || 0) : s), 0)
+      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + valeurJour(v) : s), 0)
     ),
   }));
   courbeMultiSeries(
