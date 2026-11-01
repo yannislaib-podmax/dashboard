@@ -880,17 +880,26 @@ function fixerCouleurs() {
   COULEUR_CANAL = Object.fromEntries(canaux.map((c, i) => [c, PALETTE[i % PALETTE.length]]));
 }
 
-function camembert(titre, lignes, champ, format) {
+// Dimension de la repartition Paid Ads : "canal" ou "produit" (selecteur au-dessus des blocs).
+let REPART_DIM = "canal";
+function couleurDim(dim, nom) {
+  if (dim === "canal") return COULEUR_CANAL[nom] || "#8895A7";
+  const noms = [...new Set(TOUTES.map((l) => l.produit).filter(Boolean))].sort();
+  const i = noms.indexOf(nom);
+  return i < 0 ? "#8895A7" : PALETTE[i % PALETTE.length];
+}
+
+function camembert(titre, lignes, champ, format, dim = "canal") {
   const parTotal = {};
   lignes.forEach((l) => {
-    const c = l.canal || "Inconnu";
+    const c = l[dim] || "Inconnu";
     parTotal[c] = (parTotal[c] || 0) + (l[champ] || 0);
   });
 
   const parts = Object.entries(parTotal)
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
-    .map(([nom, valeur]) => [nom, valeur, COULEUR_CANAL[nom] || "#8895A7"]);
+    .map(([nom, valeur]) => [nom, valeur, couleurDim(dim, nom)]);
 
   return disque(titre, parts, format);
 }
@@ -980,10 +989,10 @@ function disque(titre, parts, format) {
 // Classement par canal d'un RATIO de performance (ROAS, CAC) : un ratio ne se repartit pas en
 // disque (la somme n'a pas de sens), on compare les canaux entre eux en barres horizontales.
 const formatRoas = (v) => (v === null || v === undefined ? "—" : v.toFixed(2).replace(".", ",") + " ×");
-function classementCanal(titre, lignes, calcul, format, meilleurHaut, note) {
+function classementCanal(titre, lignes, calcul, format, meilleurHaut, note, dim = "canal") {
   const parCanal = {};
   lignes.forEach((l) => {
-    const c = l.canal || "Inconnu";
+    const c = l[dim] || "Inconnu";
     (parCanal[c] = parCanal[c] || []).push(l);
   });
   const valeurs = Object.entries(parCanal)
@@ -1000,7 +1009,7 @@ function classementCanal(titre, lignes, calcul, format, meilleurHaut, note) {
       const bulle = `<strong>${nom}</strong><span>${titre}<b>${format(v)}</b></span><span>Dépense pub<b>${euros(dep)}</b></span>`;
       return `<div class="part-ligne"${info(bulle)} style="display:grid;grid-template-columns:minmax(80px,1.1fr) 2fr auto;align-items:center;gap:10px;margin:8px 0">
         <span class="nom">${i === 0 ? "★ " : ""}${nom}</span>
-        <span style="display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.07)"><i style="display:block;height:100%;width:${Math.max(3, Math.round((v / max) * 100))}%;border-radius:99px;background:${COULEUR_CANAL[nom] || "#8895A7"}"></i></span>
+        <span style="display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.07)"><i style="display:block;height:100%;width:${Math.max(3, Math.round((v / max) * 100))}%;border-radius:99px;background:${couleurDim(dim, nom)}"></i></span>
         <span class="montant">${format(v)}</span>
       </div>`;
     })
@@ -1016,11 +1025,27 @@ function camemberts(lignes) {
   const cible = document.getElementById("camemberts");
   if (!cible) return;
 
+  const unite = REPART_DIM === "produit" ? "produit" : "canal";
+  const choix = document.getElementById("camemberts-dim");
+  if (choix) {
+    choix.innerHTML = `<div class="toggle-granularite">
+      <button type="button" class="${unite === "canal" ? "actif" : ""}" data-dim="canal">Par canal</button>
+      <button type="button" class="${unite === "produit" ? "actif" : ""}" data-dim="produit">Par produit</button>
+    </div>`;
+    choix.querySelectorAll("button").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        if (btn.classList.contains("actif")) return;
+        REPART_DIM = btn.dataset.dim;
+        camemberts(lignes);
+      })
+    );
+  }
+
   cible.innerHTML = [
-    // Allocation du budget et efficacite par canal. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
-    camembert("Dépense pub", lignes, "depense", euros),
-    classementCanal("Coût par client acquis (CAC)", lignes, (ls) => INDICATEURS.coutClient(ls), euros, false, "★ = canal le moins cher. Dépense pub / nouveaux clients."),
-    classementCanal("ROAS par canal", lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, "★ = meilleur canal. CA du mode choisi / dépense pub."),
+    // Allocation du budget et efficacite. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
+    camembert("Dépense pub", lignes, "depense", euros, unite),
+    classementCanal(`Coût par client acquis (CAC) par ${unite}`, lignes, (ls) => INDICATEURS.coutClient(ls), euros, false, `★ = ${unite} le moins cher. Dépense pub / nouveaux clients.`, unite),
+    classementCanal(`ROAS par ${unite}`, lignes, (ls) => INDICATEURS.roas(ls), formatRoas, true, `★ = meilleur ${unite}. CA du mode choisi / dépense pub.`, unite),
   ].join("");
 
   brancherSurvol(cible);
