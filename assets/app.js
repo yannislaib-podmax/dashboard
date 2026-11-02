@@ -3543,7 +3543,10 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
     return;
   }
 
-  const max = Math.max(options.plancherMax ?? 1, ...series.flatMap((s) => s.points));
+  let max = Math.max(options.plancherMax ?? 1, ...series.flatMap((s) => s.points));
+  // Petites valeurs entieres : l'axe arrondi donnait "1 1 1 0 0". On remonte
+  // l'echelle a 4 pour avoir des graduations distinctes (0 1 2 3 4).
+  if (!options.axeExact && new Set([0, 0.25, 0.5, 0.75, 1].map((t) => Math.round(max * t))).size < 5 && max < 4) max = 4;
 
   const L = 1000, H = 300, M_HAUT = 16, M_BAS = 34, M_GAUCHE = 46, M_DROITE = 108;
   const largeurUtile = L - M_GAUCHE - M_DROITE;
@@ -3654,6 +3657,13 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
     .reduce((acc, cur, i) => {
       const yPlace = i === 0 ? cur.yBrut : Math.max(cur.yBrut, acc[i - 1].yPlace + MIN_ECART_LABEL);
       acc.push({ ...cur, yPlace });
+      return acc;
+    }, [])
+    // Les libelles empiles ne doivent jamais deborder sous le graphique :
+    // on les remonte depuis le bas si la pile depasse la zone utile.
+    .reduceRight((acc, cur, i, tout) => {
+      const limite = i === tout.length - 1 ? M_HAUT + hauteurUtile : acc[0].yPlace - MIN_ECART_LABEL;
+      acc.unshift({ ...cur, yPlace: Math.min(cur.yPlace, limite) });
       return acc;
     }, [])
     .map(({ s, yPlace }) => {
