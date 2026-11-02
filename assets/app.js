@@ -5352,7 +5352,7 @@ function vueColdCall() {
       GRANULARITE_COLDCALL_ACTIVITE = g;
       vueColdCall();
     },
-    { points: true, granularites: ["jour", "semaine", "mois"] }
+    { granularites: ["jour", "semaine", "mois"] }
   );
 
   const parCaller = {};
