@@ -5054,6 +5054,12 @@ let COLDCALL_METRIQUE = "bookes";
 let COLDCALL_COURBE_METRIQUE = "bookes";
 let GRANULARITE_COLDCALL = "semaine";
 let GRANULARITE_COLDCALL_ACTIVITE = "jour"; // graphique a points "Activite dans le temps"
+let COLDCALL_ACTIVITE_METRIQUE = "appeles"; // appeles / reponse / callBook (declares, Sheet)
+const CC_ACTIVITE_METRIQUES = {
+  appeles: { libelleCourt: "Appelés" },
+  reponse: { libelleCourt: "Décrochés" },
+  callBook: { libelleCourt: "Calls bookés déclarés" },
+};
 const ccTaux = (a, b, suffixe) => (b > 0 ? `${Math.round((a / b) * 100)} % ${suffixe}` : null);
 const CC_METRIQUES = {
   appeles: { libelleCourt: "Appelés", valeur: (v) => v.appeles, format: nombre, secondaire: () => null },
@@ -5075,7 +5081,7 @@ const ccAjouterRdv = (o, r) => {
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -5327,11 +5333,13 @@ function vueColdCall() {
         ? `Filtre produit actif : seuls les prospects intéressés par ce produit (colonne J du Sheet) sont comptés, pas tous les appels passés.`
         : `Filtre produit pas encore applicable ici : le script du Sheet doit être mis à jour (colonne Produit). Le graphique montre tous les appels.`;
   }
+  brancherSalesMetrique("coldcall-activite-metrique", CC_ACTIVITE_METRIQUES, () => COLDCALL_ACTIVITE_METRIQUE, (v) => (COLDCALL_ACTIVITE_METRIQUE = v), vueColdCall);
+  const valeurAct = COLDCALL_ACTIVITE_METRIQUE === "reponse" ? reponseJour : COLDCALL_ACTIVITE_METRIQUE === "callBook" ? callBookJour : valeurJour;
   const seriesAct = COLDCALL.map((c, i) => ({
     nom: c.caller,
     couleur: PALETTE[i % PALETTE.length],
     points: blocsAct.map((b) =>
-      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + valeurJour(v) : s), 0)
+      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + valeurAct(v) : s), 0)
     ),
   }));
   courbeMultiSeries(
