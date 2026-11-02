@@ -5069,6 +5069,9 @@ const CC_METRIQUES = {
   ventes: { libelleCourt: "Ventes", valeur: (v) => v.ventes, format: nombre, secondaire: (v) => ccTaux(v.ventes, v.honores, "closing") },
   ca: { libelleCourt: "CA", valeur: (v) => v.ca, format: euros, secondaire: () => null },
 };
+// Graphique "Evolution" (top 5 callers) : demarre a l'etape call booke reel.
+// Appeles / Decroches sont deja traces dans "Activite dans le temps".
+const CC_METRIQUES_EVO = Object.fromEntries(["bookes", "honores", "ventes", "ca"].map((k) => [k, CC_METRIQUES[k]]));
 const ccNouvelAgregat = () => ({ assignes: 0, appeles: 0, reponse: 0, callBook: 0, bookes: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 });
 const ccAjouterRdv = (o, r) => {
   o.bookes += 1;
@@ -5459,8 +5462,9 @@ function vueColdCall() {
   brancherSurvol(document.getElementById("coldcall-camemberts"));
 
   // Evolution : top 5 callers sur la metrique choisie, jour/semaine/mois.
-  brancherSalesMetrique("coldcall-courbe-metrique", CC_METRIQUES, () => COLDCALL_COURBE_METRIQUE, (v) => (COLDCALL_COURBE_METRIQUE = v), vueColdCall);
-  const metriqueDef = CC_METRIQUES[COLDCALL_COURBE_METRIQUE];
+  if (!CC_METRIQUES_EVO[COLDCALL_COURBE_METRIQUE]) COLDCALL_COURBE_METRIQUE = "bookes";
+  brancherSalesMetrique("coldcall-courbe-metrique", CC_METRIQUES_EVO, () => COLDCALL_COURBE_METRIQUE, (v) => (COLDCALL_COURBE_METRIQUE = v), vueColdCall);
+  const metriqueDef = CC_METRIQUES_EVO[COLDCALL_COURBE_METRIQUE];
   const top5 = [...lignesCaller].sort((a, b) => metriqueDef.valeur(b[1]) - metriqueDef.valeur(a[1])).slice(0, 5).map(([nom]) => nom);
   const joursSheet = COLDCALL.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
   const joursAll = [...new Set([...joursSheet, ...rdvAll.map((r) => r.jour).filter(Boolean)])].sort();
