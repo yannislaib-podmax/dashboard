@@ -3666,7 +3666,16 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
     .map((s, i) => `<circle class="courbe-curseur-point" data-i="${i}" r="4.5" fill="${s.couleur}" cx="${x(0)}" cy="${y(s.points[0])}" opacity="0"></circle>`)
     .join("");
 
-  const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}</div>`;
+  // Moyenne de la periode affichee : ligne verte en pointille sur toutes les
+  // courbes KPI (moyenne de tous les points de toutes les series).
+  const COULEUR_MOYENNE = "#16a34a";
+  const tousPoints = series.flatMap((s) => s.points).filter((v) => Number.isFinite(v));
+  const moyenne = tousPoints.length ? tousPoints.reduce((a, b) => a + b, 0) / tousPoints.length : 0;
+  const yMoy = y(moyenne);
+  const ligneMoyenne = `<line x1="${M_GAUCHE}" x2="${L - M_DROITE}" y1="${yMoy.toFixed(1)}" y2="${yMoy.toFixed(1)}" stroke="${COULEUR_MOYENNE}" stroke-width="1.75" stroke-dasharray="6 5" class="courbe-moyenne" />
+      <text x="${M_GAUCHE + 6}" y="${(yMoy - 6).toFixed(1)}" class="courbe-label" fill="${COULEUR_MOYENNE}">Moy. ${format(moyenne)}</text>`;
+
+  const legende = `<div class="legende-graph">${series.map((s) => `<span><i style="background:${s.couleur}"></i>${s.nom}</span>`).join("")}<span><i class="legende-moyenne"></i>Moyenne</span></div>`;
 
   cible.innerHTML = `
     ${toggleGranulariteCourbeHtml(granulariteActuelle, options.granularites)}
@@ -3676,6 +3685,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
       ${grille}
       ${aires}
       ${lignesSvg}
+      ${ligneMoyenne}
       <line class="courbe-curseur-ligne" x1="${x(0)}" x2="${x(0)}" y1="${M_HAUT}" y2="${M_HAUT + hauteurUtile}" opacity="0"></line>
       ${pointsCurseur}
       <rect class="courbe-survol" x="${M_GAUCHE}" y="${M_HAUT}" width="${largeurUtile}" height="${hauteurUtile}" fill="transparent"></rect>

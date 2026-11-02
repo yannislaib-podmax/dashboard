@@ -660,6 +660,12 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   border-radius: 3px;
   display: inline-block;
 }
+.legende-graph i.legende-moyenne {
+  width: 18px;
+  height: 0;
+  border-radius: 0;
+  border-top: 2px dashed #16a34a;
+}
 
 .barre-col .jour {
   flex: 0 0 auto;
