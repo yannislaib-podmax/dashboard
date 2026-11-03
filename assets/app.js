@@ -4388,9 +4388,42 @@ let OUTBOUND_RANG = "tous";
 // Filtre par setter de la page Setting ("tout" = tous les setters).
 let OUTBOUND_SETTER = "tout";
 
+// Onglet de la page Setting : "cohorte" (performance du setter, leads assignes dans la periode)
+// ou "cycle" (activite du cycle de vente, calls via setter par jour de rendez-vous).
+let OUTBOUND_VUE = "cohorte";
+
+function appliquerOutboundVue() {
+  const zone = document.getElementById("outbound-mode");
+  const blocCohorte = document.getElementById("outbound-bloc-cohorte");
+  const blocCycle = document.getElementById("outbound-bloc-cycle");
+  if (!zone || !blocCohorte || !blocCycle) return;
+  blocCohorte.style.display = OUTBOUND_VUE === "cohorte" ? "" : "none";
+  blocCycle.style.display = OUTBOUND_VUE === "cycle" ? "" : "none";
+  const sousTitre = document.getElementById("outbound-mode-soustitre");
+  if (sousTitre) {
+    sousTitre.textContent =
+      OUTBOUND_VUE === "cohorte"
+        ? "Performance du setter : on suit les leads assignés dans la période jusqu'à la vente. Les périodes récentes sont encore en cours : l'aval n'a pas fini de se remplir."
+        : "Cycle de vente : les calls pris via setter dont le rendez-vous tombe dans la période, comme sur la page Closing.";
+  }
+  zone.innerHTML =
+    `<button type="button" class="${OUTBOUND_VUE === "cohorte" ? "actif" : ""}" data-outbound-vue="cohorte">Performance du setter</button>` +
+    `<button type="button" class="${OUTBOUND_VUE === "cycle" ? "actif" : ""}" data-outbound-vue="cycle">Cycle de vente</button>`;
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      OUTBOUND_VUE = btn.getAttribute("data-outbound-vue");
+      appliquerOutboundVue();
+      // Le bloc qui vient d'apparaitre est rendu a nouveau (largeurs des graphiques) et ses ".rv" re-armes.
+      vueOutbound();
+    });
+  });
+}
+
 function vueOutbound() {
   const prefixeId = "outbound";
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
+  appliquerOutboundVue();
 
   const settersOutbound = [...new Set(SALES_LEADS.filter((l) => l.setter).map((l) => l.setter))].sort();
   brancherSalesToggle("outbound-filtre", settersOutbound, () => OUTBOUND_SETTER, (v) => (OUTBOUND_SETTER = v), vueOutbound);
@@ -4445,7 +4478,9 @@ function vueOutbound() {
     const issues = liste.filter((l) => l.issue).length;
     const approuves = liste.filter((l) => l.approuve).length;
     const closing = liste.filter((l) => l.closing).length;
+    const closingContacte = liste.filter((l) => l.closing && l.contacte).length;
     return {
+      closingContacte,
       assignes: liste.length,
       contactes: liste.filter((l) => l.contacte).length,
       followUps: liste.filter((l) => l.followUp).length,
@@ -4471,7 +4506,6 @@ function vueOutbound() {
   ).length;
   const g = agreger(leads);
   const gPrec = leadsPrec ? agreger(leadsPrec) : null;
-  const show = ratio(g.honores, g.concluLeads);
 
   // Part du CA : meme base que Closing et Rattrapage (CA des Closing dont le
   // JOUR est dans la periode, filtres de la barre appliques, tous rangs). Origine
@@ -4503,6 +4537,28 @@ function vueOutbound() {
   };
   const cP = partCalls(dansPeriode);
   const cPPrec = plagePrec ? partCalls((c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]) : null;
+  // Etapes Closing du Setting : comptees PAR JOUR DU CALL (meme axe que la part du Setting, meme perimetre
+  // closingsPerimetre), pas par cohorte de leads assignes. Un call via setter pris hier sur un lead assigne
+  // la semaine derniere compte donc hier, comme dans « Part des calls bookes ».
+  const setterParContact = new Map(SALES_LEADS.filter((l) => l.contactId != null && l.setter).map((l) => [l.contactId, l.setter]));
+  const appelsSetter = (dansLaPlage) => {
+    const liste = closingsPerimetre.filter(
+      (c) =>
+        c.viaSetting === true &&
+        dansLaPlage(c) &&
+        (OUTBOUND_SETTER === "tout" || setterParContact.get(c.contactId) === OUTBOUND_SETTER)
+    );
+    return {
+      closing: liste.length,
+      conclus: liste.filter((c) => c.conclu).length,
+      honores: liste.filter((c) => c.present).length,
+      ventes: liste.filter((c) => c.vente).length,
+      ca: somme(liste, "montant"),
+    };
+  };
+  const cj = appelsSetter(dansPeriode);
+  const cjPrec = plagePrec ? appelsSetter((c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]) : null;
+  const evj = (cle) => (cjPrec ? ecartDe(cj[cle], cjPrec[cle], "salesOutboundJour" + cle) : null);
   const ev = (cle) => (gPrec ? ecartDe(g[cle], gPrec[cle], "salesOutbound" + cle) : null);
   const ep = (actuel, precedent) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent) : null);
 
@@ -4515,17 +4571,22 @@ function vueOutbound() {
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
-    carte("Calls bookés via setter", nombre(g.closing), "calls en plus de l'acquisition, sur des leads déjà existants", ev("closing")),
-    carte("Closing honorés", nombre(g.honores), "leads venus au Closing", ev("honores")),
-    carte("Ventes", nombre(g.ventes), "contrats signés", ev("ventes")),
-    carte("CA généré", euros(g.ca), "montant des contrats signés", ev("ca")),
+    carte("Calls bookés via setter", nombre(cj.closing), "calls via setter dont le rendez-vous tombe sur la période", evj("closing")),
+    carte("Closing honorés", nombre(cj.honores), "calls via setter honorés sur la période", evj("honores")),
+    carte("Ventes", nombre(cj.ventes), "contrats signés sur ces calls", evj("ventes")),
+    carte("CA généré", euros(cj.ca), "montant des contrats signés sur ces calls", evj("ca")),
   ].join("");
-  document.getElementById(`${prefixeId}-taux`).innerHTML = [
+  // Taux du Setting : cohorte des leads assignes sur la periode. La transfo ne compte que les leads
+  // contactes qui ont un call (closingContacte), donc elle ne depasse jamais 100 %.
+  document.getElementById(`${prefixeId}-taux-setting`).innerHTML = [
     carte("Taux de contact", pourcent(ratio(g.contactes, g.assignes)), g.assignes ? `${nombre(g.contactes)} contactés sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.contactes, g.assignes), gPrec && ratio(gPrec.contactes, gPrec.assignes))),
     carte("Taux d'issue", pourcent(ratio(g.issues, g.contactes)), g.contactes ? `${nombre(g.issues)} issues sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.issues, g.contactes), gPrec && ratio(gPrec.issues, gPrec.contactes))),
-    carte("Taux de transfo", pourcent(ratio(g.closing, g.contactes)), g.contactes ? `${nombre(g.closing)} calls bookés sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.closing, g.contactes), gPrec && ratio(gPrec.closing, gPrec.contactes))),
-    carte("Taux de show", pourcent(show), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call Closing passé` : "aucun call Closing passé", ep(show, gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
-    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
+    carte("Taux de transfo", pourcent(ratio(g.closingContacte, g.contactes)), g.contactes ? `${nombre(g.closingContacte)} contactés ayant booké un call, sur ${nombre(g.contactes)} contactés (cohorte)` : "—", ep(ratio(g.closingContacte, g.contactes), gPrec && ratio(gPrec.closingContacte, gPrec.contactes))),
+  ].join("");
+  // Taux du cycle de vente : calls via setter dont le rendez-vous tombe sur la periode (meme axe que les cartes au-dessus).
+  document.getElementById(`${prefixeId}-taux`).innerHTML = [
+    carte("Taux de show", pourcent(ratio(cj.honores, cj.conclus)), cj.conclus ? `${nombre(cj.honores)} honorés sur ${nombre(cj.conclus)} calls passés (calls de la période)` : "aucun call passé sur la période", ep(ratio(cj.honores, cj.conclus), cjPrec && ratio(cjPrec.honores, cjPrec.conclus))),
+    carte("Taux de vente", pourcent(ratio(cj.ventes, cj.honores)), cj.honores ? `${nombre(cj.ventes)} ventes sur ${nombre(cj.honores)} honorés (calls de la période)` : "—", ep(ratio(cj.ventes, cj.honores), cjPrec && ratio(cjPrec.ventes, cjPrec.honores))),
   ].join("");
   document.getElementById(`${prefixeId}-partca`).innerHTML = [
     carte(
@@ -4548,15 +4609,19 @@ function vueOutbound() {
     ),
   ].join("");
 
-  courbeKpiPage("kpi-setting", {
-    defaut: "assignes",
-    groupes: [
-      ["Étapes Setting", ["assignes", "contactes", "issues"]],
-      ["Étapes Closing", ["closing", "honores", "ventes", "ca"]],
-      ["Taux", ["tContact", "tIssue", "tTransfo", "tShow", "tVente"]],
-      ["Poids du Setting", ["pBookes", "pPresents", "pCa"]],
-    ],
-    metriques: {
+  // Vue « Performance » : devenir de la COHORTE des leads assignes (aval cherche sans limite de date).
+  document.getElementById(`${prefixeId}-cartes-cohorte`).innerHTML = [
+    carte("Calls bookés via setter", nombre(g.closing), "leads de la cohorte ayant un call de vente", ev("closing")),
+    carte("Closing honorés", nombre(g.honores), "leads de la cohorte venus au call", ev("honores")),
+    carte("Ventes", nombre(g.ventes), "contrats signés par la cohorte", ev("ventes")),
+    carte("CA généré", euros(g.ca), "montant des contrats signés par la cohorte", ev("ca")),
+  ].join("");
+  document.getElementById(`${prefixeId}-taux-cohorte`).innerHTML = [
+    carte("Taux de show", pourcent(ratio(g.honores, g.concluLeads)), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call passé` : "aucun call passé", ep(ratio(g.honores, g.concluLeads), gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
+    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
+  ].join("");
+
+  const metriquesCourbe = {
       assignes: { libelleCourt: "Leads assignés", format: nombre },
       contactes: { libelleCourt: "Leads contactés", format: nombre },
       issues: { libelleCourt: "Issues renseignées", format: nombre },
@@ -4572,21 +4637,52 @@ function vueOutbound() {
       pBookes: { libelleCourt: "Part des calls bookés", format: pourcent, decimal: true },
       pPresents: { libelleCourt: "Part des présents", format: pourcent, decimal: true },
       pCa: { libelleCourt: "Part du CA", format: pourcent, decimal: true },
-    },
-    jours: [...leads.map((l) => l.jour), ...closingsPerimetre.filter(dansPeriode).map((c) => c.jour)],
+  };
+
+  // Courbe de la vue Performance : tout en cohorte (jour d'assignation du lead).
+  courbeKpiPage("kpi-setting", {
+    defaut: "assignes",
+    groupes: [
+      ["Travail du setter", ["assignes", "contactes", "issues"]],
+      ["Taux du Setting", ["tContact", "tIssue", "tTransfo"]],
+      ["Devenir de la cohorte", ["closing", "honores", "ventes", "ca"]],
+      ["Taux de la cohorte", ["tShow", "tVente"]],
+    ],
+    metriques: metriquesCourbe,
+    jours: leads.map((l) => l.jour),
     calcul: (cle, b) => {
       const a = agreger(leads.filter((l) => dansBloc(l.jour, b)));
-      const dansCall = (c) => dansBloc(c.jour, b);
       switch (cle) {
         case "tContact": return ratio(a.contactes, a.assignes);
         case "tIssue": return ratio(a.issues, a.contactes);
-        case "tTransfo": return ratio(a.closing, a.contactes);
+        case "tTransfo": return ratio(a.closingContacte, a.contactes);
         case "tShow": return ratio(a.honores, a.concluLeads);
         case "tVente": return ratio(a.ventes, a.honores);
+        default: return a[cle];
+      }
+    },
+  });
+
+  // Courbe de la vue Cycle de vente : calls via setter par JOUR DU CALL.
+  courbeKpiPage("kpi-setting-cycle", {
+    defaut: "closing",
+    groupes: [
+      ["Calls via setter", ["closing", "honores", "ventes", "ca"]],
+      ["Taux du cycle de vente", ["tShow", "tVente"]],
+      ["Poids du Setting", ["pBookes", "pPresents", "pCa"]],
+    ],
+    metriques: metriquesCourbe,
+    jours: closingsPerimetre.filter(dansPeriode).map((c) => c.jour),
+    calcul: (cle, b) => {
+      const dansCall = (c) => dansBloc(c.jour, b);
+      switch (cle) {
+        case "tShow": { const j = appelsSetter(dansCall); return ratio(j.honores, j.conclus); }
+        case "tVente": { const j = appelsSetter(dansCall); return ratio(j.ventes, j.honores); }
+        case "closing": case "honores": case "ventes": case "ca": return appelsSetter(dansCall)[cle];
         case "pBookes": { const c = partCalls(dansCall); return ratio(c.bookesSetting, c.bookes); }
         case "pPresents": { const c = partCalls(dansCall); return ratio(c.presentsSetting, c.presents); }
         case "pCa": { const c = partCaSetting(dansCall); return ratio(c.setting, c.total); }
-        default: return a[cle];
+        default: return null;
       }
     },
   });
@@ -4666,6 +4762,7 @@ function vueOutbound() {
   const cibleVue = document.getElementById("vue-sales-setting");
   if (cibleVue) {
     brancherInfobulles(cibleVue);
+    cibleVue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
     requestAnimationFrame(() => apparitions(cibleVue));
   }
 }

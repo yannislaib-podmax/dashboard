@@ -1874,6 +1874,7 @@ tr.total td {
 /* Blocs de cartes sans trou : N cartes qui remplissent exactement la ligne (desktop seulement,
    en dessous le auto-fit des .cartes reprend la main). */
 @media (min-width: 1000px) {
+  .cartes.cols-2 { grid-template-columns: repeat(2, 1fr); }
   .cartes.cols-3 { grid-template-columns: repeat(3, 1fr); }
   .cartes.cols-4 { grid-template-columns: repeat(4, 1fr); }
   .cartes.cols-5 { grid-template-columns: repeat(5, 1fr); }
@@ -1910,7 +1911,7 @@ tr.total td {
 .cc-separateur::before, .cc-separateur::after { content: ""; flex: 1; height: 1px; background: var(--bord); }
 
 /* Toggle Closing / Rattrapage de la barre de filtres (onglets Acquisition). */
-#acq-mode, #sales-mode { display: flex; width: fit-content; }
+#acq-mode, #sales-mode, #outbound-mode { display: flex; width: fit-content; }
 #acq-mode[hidden] { display: none; }
 
 /* Selecteur de KPI (Paid Ads > Evolution) : pastilles sur plusieurs lignes, lisibles */
