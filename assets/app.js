@@ -4437,18 +4437,24 @@ function vueOutbound() {
   // (Closing ou Rattrapage) d'un contact dont un setter a saisi une issue, pris apres cette issue. Avant, on ne
   // comptait que les Rattrapage (viaSetting) : un Closing booke apres une issue APPROVED (Famille 1) etait oublie,
   // d'ou « 2 issues approuvees, 0 call booke ».
-  const jourIssueParContact = new Map();
+  // Debut du travail du setter sur un contact : jour d'assignation du lead (a defaut, jour de la 1re issue). Un call de
+  // vente dont le RDV tombe ce jour-la ou apres compte pour le Setting (meme jour inclus : assigne, approuve et honore le meme jour).
+  const jourDebutParContact = new Map();
+  leadsPerimetre.forEach((l) => {
+    if (l.contactId == null) return;
+    const j = l.jourAssignation || "";
+    if (!jourDebutParContact.has(l.contactId) || j < jourDebutParContact.get(l.contactId)) jourDebutParContact.set(l.contactId, j);
+  });
   SALES_CALLS.forEach((c) => {
-    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter) return;
-    const j = c.jourPris || "";
-    if (!jourIssueParContact.has(c.contactId) || j < jourIssueParContact.get(c.contactId)) jourIssueParContact.set(c.contactId, j);
+    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter || jourDebutParContact.has(c.contactId)) return;
+    jourDebutParContact.set(c.contactId, c.jourPris || "");
   });
   const estCallSetting = (c) => {
     if (c.viaSetting === true) return true;
-    if (c.contactId == null || !jourIssueParContact.has(c.contactId)) return false;
+    if (c.contactId == null || !jourDebutParContact.has(c.contactId)) return false;
     if (c.typeAppel !== "Closing" && c.rattrapage !== true) return false;
-    const issue = jourIssueParContact.get(c.contactId);
-    return !issue || !c.jourPris || c.jourPris >= issue;
+    const debut = jourDebutParContact.get(c.contactId);
+    return !debut || !c.jour || c.jour >= debut;
   };
 
   const settersOutbound = [...new Set(leadsPerimetre.filter((l) => l.setter).map((l) => l.setter))].sort();
