@@ -4399,13 +4399,6 @@ function appliquerOutboundVue() {
   if (!zone || !blocCohorte || !blocCycle) return;
   blocCohorte.style.display = OUTBOUND_VUE === "cohorte" ? "" : "none";
   blocCycle.style.display = OUTBOUND_VUE === "cycle" ? "" : "none";
-  const sousTitre = document.getElementById("outbound-mode-soustitre");
-  if (sousTitre) {
-    sousTitre.textContent =
-      OUTBOUND_VUE === "cohorte"
-        ? "Performance du setter : on suit les leads assignés dans la période jusqu'à la vente. Les périodes récentes sont encore en cours : l'aval n'a pas fini de se remplir."
-        : "Cycle de vente : les calls pris via setter dont le rendez-vous tombe dans la période, comme sur la page Closing.";
-  }
   zone.innerHTML =
     `<button type="button" class="${OUTBOUND_VUE === "cohorte" ? "actif" : ""}" data-outbound-vue="cohorte">Performance du setter</button>` +
     `<button type="button" class="${OUTBOUND_VUE === "cycle" ? "actif" : ""}" data-outbound-vue="cycle">Cycle de vente</button>`;
