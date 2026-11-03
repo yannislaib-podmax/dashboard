@@ -4444,8 +4444,13 @@ function vueOutbound() {
   const enrichir = (l) => {
     const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
     const issue = !!(issues && issues.length);
-    const calls = issue ? (closingsParContact.get(l.contactId) || []).filter(duRang) : [];
+    // Memes calls que l'onglet « Cycle de vente » et que la page Closing (colonne « via setter ») :
+    // uniquement les calls viaSetting. Un Closing direct d'un contact qui a eu une issue n'est pas compte ici.
+    const calls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => c.viaSetting === true && duRang(c));
     return {
+      nbCalls: calls.length,
+      nbAnnules: calls.filter((c) => c.statut === "Annulé").length,
+      nbVentes: somme(calls, "vente"),
       setter: l.setter,
       jour: l.jourAssignation,
       contacte: !!l.jourContacte,
@@ -4474,6 +4479,10 @@ function vueOutbound() {
     const closingContacte = liste.filter((l) => l.closing && l.contacte).length;
     return {
       closingContacte,
+      // En CALLS (pas en leads), comme l'onglet Cycle de vente : un lead peut avoir plusieurs calls (R2+, annules).
+      callsBookes: somme(liste, "nbCalls"),
+      annules: somme(liste, "nbAnnules"),
+      callsVentes: somme(liste, "nbVentes"),
       assignes: liste.length,
       contactes: liste.filter((l) => l.contacte).length,
       followUps: liste.filter((l) => l.followUp).length,
@@ -4543,6 +4552,7 @@ function vueOutbound() {
     );
     return {
       closing: liste.length,
+      annules: liste.filter((c) => c.statut === "Annulé").length,
       conclus: liste.filter((c) => c.conclu).length,
       honores: liste.filter((c) => c.present).length,
       ventes: liste.filter((c) => c.vente).length,
@@ -4565,6 +4575,7 @@ function vueOutbound() {
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
     carte("Calls bookés via setter", nombre(cj.closing), "calls via setter dont le rendez-vous tombe sur la période", evj("closing")),
+    carte("Appels conclus", nombre(cj.conclus), "Honoré ou No-show (hors RDV encore à venir)", evj("conclus")),
     carte("Closing honorés", nombre(cj.honores), "calls via setter honorés sur la période", evj("honores")),
     carte("Ventes", nombre(cj.ventes), "contrats signés sur ces calls", evj("ventes")),
     carte("CA généré", euros(cj.ca), "montant des contrats signés sur ces calls", evj("ca")),
@@ -4578,6 +4589,7 @@ function vueOutbound() {
   ].join("");
   // Taux du cycle de vente : calls via setter dont le rendez-vous tombe sur la periode (meme axe que les cartes au-dessus).
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
+    carte("Taux d'annulation", pourcent(ratio(cj.annules, cj.closing)), cj.closing ? `${nombre(cj.annules)} annulés sur ${nombre(cj.closing)} calls bookés` : "aucun call booké sur la période", cjPrec && ratio(cj.annules, cj.closing) !== null && ratio(cjPrec.annules, cjPrec.closing) !== null ? ecartPoints(ratio(cj.annules, cj.closing), ratio(cjPrec.annules, cjPrec.closing), true) : null),
     carte("Taux de show", pourcent(ratio(cj.honores, cj.conclus)), cj.conclus ? `${nombre(cj.honores)} honorés sur ${nombre(cj.conclus)} calls passés (calls de la période)` : "aucun call passé sur la période", ep(ratio(cj.honores, cj.conclus), cjPrec && ratio(cjPrec.honores, cjPrec.conclus))),
     carte("Taux de vente", pourcent(ratio(cj.ventes, cj.honores)), cj.honores ? `${nombre(cj.ventes)} ventes sur ${nombre(cj.honores)} honorés (calls de la période)` : "—", ep(ratio(cj.ventes, cj.honores), cjPrec && ratio(cjPrec.ventes, cjPrec.honores))),
   ].join("");
@@ -4603,15 +4615,20 @@ function vueOutbound() {
   ].join("");
 
   // Vue « Performance » : devenir de la COHORTE des leads assignes (aval cherche sans limite de date).
+  // Memes definitions et memes unites (calls) que l'onglet Cycle de vente : seule la POPULATION change
+  // (calls des leads assignes dans la periode, a n'importe quelle date, au lieu des calls dont le RDV tombe dans la periode).
+  const epc = (actuel, precedent, baisseEstBonne) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null);
   document.getElementById(`${prefixeId}-cartes-cohorte`).innerHTML = [
-    carte("Calls bookés via setter", nombre(g.closing), "leads de la cohorte ayant un call de vente", ev("closing")),
-    carte("Closing honorés", nombre(g.honores), "leads de la cohorte venus au call", ev("honores")),
-    carte("Ventes", nombre(g.ventes), "contrats signés par la cohorte", ev("ventes")),
-    carte("CA généré", euros(g.ca), "montant des contrats signés par la cohorte", ev("ca")),
+    carte("Calls bookés via setter", nombre(g.callsBookes), "calls via setter des leads assignés sur la période", ev("callsBookes")),
+    carte("Appels conclus", nombre(g.conclu), "Honoré ou No-show (hors RDV encore à venir)", ev("conclu")),
+    carte("Closing honorés", nombre(g.present), "calls via setter réellement tenus", ev("present")),
+    carte("Ventes", nombre(g.callsVentes), "contrats signés sur ces calls", ev("callsVentes")),
+    carte("CA généré", euros(g.ca), "montant des contrats signés sur ces calls", ev("ca")),
   ].join("");
   document.getElementById(`${prefixeId}-taux-cohorte`).innerHTML = [
-    carte("Taux de show", pourcent(ratio(g.honores, g.concluLeads)), g.concluLeads ? `${nombre(g.honores)} honorés sur ${nombre(g.concluLeads)} leads au call passé` : "aucun call passé", ep(ratio(g.honores, g.concluLeads), gPrec && ratio(gPrec.honores, gPrec.concluLeads))),
-    carte("Taux de vente", pourcent(ratio(g.ventes, g.honores)), g.honores ? `${nombre(g.ventes)} ventes sur ${nombre(g.honores)} honorés` : "—", ep(ratio(g.ventes, g.honores), gPrec && ratio(gPrec.ventes, gPrec.honores))),
+    carte("Taux d'annulation", pourcent(ratio(g.annules, g.callsBookes)), g.callsBookes ? `${nombre(g.annules)} annulés sur ${nombre(g.callsBookes)} calls bookés` : "aucun call booké", epc(ratio(g.annules, g.callsBookes), gPrec && ratio(gPrec.annules, gPrec.callsBookes), true)),
+    carte("Taux de show", pourcent(ratio(g.present, g.conclu)), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls conclus` : "aucun call conclu", epc(ratio(g.present, g.conclu), gPrec && ratio(gPrec.present, gPrec.conclu))),
+    carte("Taux de vente", pourcent(ratio(g.callsVentes, g.present)), g.present ? `${nombre(g.callsVentes)} ventes sur ${nombre(g.present)} honorés` : "—", epc(ratio(g.callsVentes, g.present), gPrec && ratio(gPrec.callsVentes, gPrec.present))),
   ].join("");
 
   const metriquesCourbe = {
@@ -4619,6 +4636,8 @@ function vueOutbound() {
       contactes: { libelleCourt: "Leads contactés", format: nombre },
       issues: { libelleCourt: "Issues renseignées", format: nombre },
       closing: { libelleCourt: "Calls bookés via setter", format: nombre },
+      conclus: { libelleCourt: "Appels conclus", format: nombre },
+      tAnnul: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
       honores: { libelleCourt: "Closing honorés", format: nombre },
       ventes: { libelleCourt: "Ventes", format: nombre },
       ca: { libelleCourt: "CA généré", format: euros },
@@ -4638,8 +4657,8 @@ function vueOutbound() {
     groupes: [
       ["Travail du setter", ["assignes", "contactes", "issues"]],
       ["Taux du Setting", ["tContact", "tIssue", "tTransfo"]],
-      ["Devenir de la cohorte", ["closing", "honores", "ventes", "ca"]],
-      ["Taux de la cohorte", ["tShow", "tVente"]],
+      ["Devenir de la cohorte", ["closing", "conclus", "honores", "ventes", "ca"]],
+      ["Taux de la cohorte", ["tAnnul", "tShow", "tVente"]],
     ],
     metriques: metriquesCourbe,
     jours: leads.map((l) => l.jour),
@@ -4649,8 +4668,13 @@ function vueOutbound() {
         case "tContact": return ratio(a.contactes, a.assignes);
         case "tIssue": return ratio(a.issues, a.contactes);
         case "tTransfo": return ratio(a.closingContacte, a.contactes);
-        case "tShow": return ratio(a.honores, a.concluLeads);
-        case "tVente": return ratio(a.ventes, a.honores);
+        case "closing": return a.callsBookes;
+        case "conclus": return a.conclu;
+        case "honores": return a.present;
+        case "ventes": return a.callsVentes;
+        case "tAnnul": return ratio(a.annules, a.callsBookes);
+        case "tShow": return ratio(a.present, a.conclu);
+        case "tVente": return ratio(a.callsVentes, a.present);
         default: return a[cle];
       }
     },
@@ -4660,8 +4684,8 @@ function vueOutbound() {
   courbeKpiPage("kpi-setting-cycle", {
     defaut: "closing",
     groupes: [
-      ["Calls via setter", ["closing", "honores", "ventes", "ca"]],
-      ["Taux du cycle de vente", ["tShow", "tVente"]],
+      ["Calls via setter", ["closing", "conclus", "honores", "ventes", "ca"]],
+      ["Taux du cycle de vente", ["tAnnul", "tShow", "tVente"]],
       ["Poids du Setting", ["pBookes", "pPresents", "pCa"]],
     ],
     metriques: metriquesCourbe,
@@ -4671,7 +4695,8 @@ function vueOutbound() {
       switch (cle) {
         case "tShow": { const j = appelsSetter(dansCall); return ratio(j.honores, j.conclus); }
         case "tVente": { const j = appelsSetter(dansCall); return ratio(j.ventes, j.honores); }
-        case "closing": case "honores": case "ventes": case "ca": return appelsSetter(dansCall)[cle];
+        case "tAnnul": { const j = appelsSetter(dansCall); return ratio(j.annules, j.closing); }
+        case "closing": case "conclus": case "honores": case "ventes": case "ca": return appelsSetter(dansCall)[cle];
         case "pBookes": { const c = partCalls(dansCall); return ratio(c.bookesSetting, c.bookes); }
         case "pPresents": { const c = partCalls(dansCall); return ratio(c.presentsSetting, c.presents); }
         case "pCa": { const c = partCaSetting(dansCall); return ratio(c.setting, c.total); }
