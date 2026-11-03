@@ -233,6 +233,9 @@ export default async function handler(req, res) {
         const rattrapage = rattrapageBrut && !viaSetting;
         return {
           jour: jourParis(c.jourRdvDt),
+          // Jour ou la ligne a ete creee (prise du RDV / saisie de l'issue par le setter) : sert a dater
+          // les contacts travailles par un setter sans ligne LEADS assignee.
+          jourPris: jourParis(c.prisLe),
           contactId: c.contactId ?? null,
           // "Diagnostic" = call de SETTING uniquement (Booking ID "SETTER-"). Le Rattrapage garde son propre type.
           typeAppel: viaSetting ? "Setting" : rattrapage ? "Rattrapage" : c.typeAppel,

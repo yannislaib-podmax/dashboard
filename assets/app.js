@@ -4418,7 +4418,40 @@ function vueOutbound() {
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
   appliquerOutboundVue();
 
-  const settersOutbound = [...new Set(SALES_LEADS.filter((l) => l.setter).map((l) => l.setter))].sort();
+  // Population de l'onglet Performance : les leads assignes a un setter + les contacts dont un setter a saisi
+  // une issue sans qu'aucune ligne LEADS assignee n'existe (ex. 14 contacts de Thibault au 2026-11-04). Sans eux,
+  // leurs calls « via setter » apparaissaient dans Cycle de vente mais pas ici. Date d'assignation = jour de la 1re issue.
+  const idsAvecLead = new Set(SALES_LEADS.filter((l) => l.contactId != null).map((l) => l.contactId));
+  const sansLead = new Map();
+  SALES_CALLS.forEach((c) => {
+    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter || idsAvecLead.has(c.contactId)) return;
+    const j = c.jourPris || c.jour || null;
+    const ex = sansLead.get(c.contactId);
+    if (!ex || (j && (!ex.jourAssignation || j < ex.jourAssignation))) {
+      sansLead.set(c.contactId, { contactId: c.contactId, setter: c.setter, jourAssignation: j, jourContacte: j, stage: null, source: c.source, canal: c.canal, produit: c.produit });
+    }
+  });
+  const leadsPerimetre = [...SALES_LEADS, ...sansLead.values()];
+
+  // Definition UNIQUE d'un « call du Setting » (partagee par les deux onglets et les cartes Poids) : un call de vente
+  // (Closing ou Rattrapage) d'un contact dont un setter a saisi une issue, pris apres cette issue. Avant, on ne
+  // comptait que les Rattrapage (viaSetting) : un Closing booke apres une issue APPROVED (Famille 1) etait oublie,
+  // d'ou « 2 issues approuvees, 0 call booke ».
+  const jourIssueParContact = new Map();
+  SALES_CALLS.forEach((c) => {
+    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter) return;
+    const j = c.jourPris || "";
+    if (!jourIssueParContact.has(c.contactId) || j < jourIssueParContact.get(c.contactId)) jourIssueParContact.set(c.contactId, j);
+  });
+  const estCallSetting = (c) => {
+    if (c.viaSetting === true) return true;
+    if (c.contactId == null || !jourIssueParContact.has(c.contactId)) return false;
+    if (c.typeAppel !== "Closing" && c.rattrapage !== true) return false;
+    const issue = jourIssueParContact.get(c.contactId);
+    return !issue || !c.jourPris || c.jourPris >= issue;
+  };
+
+  const settersOutbound = [...new Set(leadsPerimetre.filter((l) => l.setter).map((l) => l.setter))].sort();
   brancherSalesToggle("outbound-filtre", settersOutbound, () => OUTBOUND_SETTER, (v) => (OUTBOUND_SETTER = v), vueOutbound);
   brancherSalesRangToggle("outbound-rang", () => OUTBOUND_RANG, (v) => (OUTBOUND_RANG = v), vueOutbound);
   const duRang = (c) => rangAccepte(OUTBOUND_RANG, c);
@@ -4438,7 +4471,7 @@ function vueOutbound() {
   // Leads du périmètre (hors Famille 2) filtrés par la barre commune
   // (Canal / Produit / Source) ; la période est appliquée ensuite, et la période
   // précédente (flèches ↑/↓) réutilise exactement la même base.
-  const leadsBase = SALES_LEADS.filter(
+  const leadsBase = leadsPerimetre.filter(
     (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
   );
   const enrichir = (l) => {
@@ -4446,7 +4479,7 @@ function vueOutbound() {
     const issue = !!(issues && issues.length);
     // Memes calls que l'onglet « Cycle de vente » et que la page Closing (colonne « via setter ») :
     // uniquement les calls viaSetting. Un Closing direct d'un contact qui a eu une issue n'est pas compte ici.
-    const calls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => c.viaSetting === true && duRang(c));
+    const calls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => estCallSetting(c) && duRang(c));
     return {
       nbCalls: calls.length,
       nbAnnules: calls.filter((c) => c.statut === "Annulé").length,
@@ -4513,13 +4546,23 @@ function vueOutbound() {
   // JOUR est dans la periode, filtres de la barre appliques, tous rangs). Origine
   // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
   // Setting) se partagent le meme CA et font 100 %.
-  const origineCa = origineCaFn();
   const closingsPerimetre = SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && parFiltresBarre(c) && duRang(c));
+  // Setter d'un contact : celui de la ligne LEADS, a defaut celui qui a saisi l'issue (ligne CALL BOOKED « SETTER- »).
+  // Les calls de vente eux-memes n'ont pas de setter : on remonte au contact.
+  const setterParContact = new Map();
+  SALES_CALLS.forEach((c) => {
+    if (c.contactId != null && c.setter && c.typeAppel === "Diagnostic") setterParContact.set(c.contactId, c.setter);
+  });
+  SALES_LEADS.forEach((l) => {
+    if (l.contactId != null && l.setter) setterParContact.set(l.contactId, l.setter);
+  });
+  // Le filtre setter de la page s'applique a TOUTES les cartes « du Setting » (numerateur) ; les totaux restent ceux de l'acquisition.
+  const duSetter = (c) => OUTBOUND_SETTER === "tout" || setterParContact.get(c.contactId) === OUTBOUND_SETTER;
   const partCaSetting = (dansLaPlage) => {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
     return {
       total: somme(dansPlage, "montant"),
-      setting: somme(dansPlage.filter((c) => origineCa(c) === "setting"), "montant"),
+      setting: somme(dansPlage.filter((c) => estCallSetting(c) && duSetter(c)), "montant"),
     };
   };
   const caP = partCaSetting(dansPeriode);
@@ -4529,7 +4572,7 @@ function vueOutbound() {
   // Un call est "du Setting" quand il est pris via setter (viaSetting). Annules inclus dans les bookes.
   const partCalls = (dansLaPlage) => {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
-    const setting = dansPlage.filter((c) => c.viaSetting === true);
+    const setting = dansPlage.filter((c) => estCallSetting(c) && duSetter(c));
     return {
       bookes: dansPlage.length,
       bookesSetting: setting.length,
@@ -4542,13 +4585,12 @@ function vueOutbound() {
   // Etapes Closing du Setting : comptees PAR JOUR DU CALL (meme axe que la part du Setting, meme perimetre
   // closingsPerimetre), pas par cohorte de leads assignes. Un call via setter pris hier sur un lead assigne
   // la semaine derniere compte donc hier, comme dans « Part des calls bookes ».
-  const setterParContact = new Map(SALES_LEADS.filter((l) => l.contactId != null && l.setter).map((l) => [l.contactId, l.setter]));
   const appelsSetter = (dansLaPlage) => {
     const liste = closingsPerimetre.filter(
       (c) =>
-        c.viaSetting === true &&
+        estCallSetting(c) &&
         dansLaPlage(c) &&
-        (OUTBOUND_SETTER === "tout" || setterParContact.get(c.contactId) === OUTBOUND_SETTER)
+        duSetter(c)
     );
     return {
       closing: liste.length,
