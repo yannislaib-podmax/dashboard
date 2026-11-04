@@ -2994,7 +2994,7 @@ function trackClassement(valeurs, parValeurPrec) {
         <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
         <div class="classement-chiffres">
           <span class="classement-valeur">${def.format(val)}${ecart ? `<span class="ecart-inline ${ecart.classe}">${ecart.texte}</span>` : ""}</span>
-          ${[partDuCa(val), secondaire].filter(Boolean).length ? `<span class="classement-secondaire">${[partDuCa(val), secondaire].filter(Boolean).join(" · ")}</span>` : ""}
+          ${partDuCa(val) ? `<span class="classement-secondaire">${partDuCa(val)}</span>` : ""}
         </div>
       </div>`;
     })
