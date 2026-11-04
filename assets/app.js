@@ -3461,12 +3461,31 @@ const parFiltresBarre = (c) =>
 // Page Closing : le toggle Closing / Rattrapage choisit le type de call. Le Rattrapage est un
 // call de vente avec des rangs, traite exactement comme un Closing (memes vues).
 // "tous" = Closing + Rattrapage + calls via setter (le total de calls passes devant les closers).
-const callDuMode = (c) =>
-  SALES_MODE === "rattrapage"
-    ? c.rattrapage === true
-    : SALES_MODE === "tous"
-      ? c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true
-      : c.typeAppel === "Closing";
+// ORIGINE d'un call de vente, UNE SEULE definition pour les pages Closing et Setting (les trois parts font 100 %) :
+//  - "setter"     : call (Closing, Rattrapage ou Setting) d'un contact dont le Setter Owner iClosed est un setter
+//                   (= lead de SALES_LEADS avec setter), quel que soit le statut du call, annules inclus ;
+//  - "closing"    : call Closing d'un contact sans setter ;
+//  - "rattrapage" : call Rattrapage d'un contact sans setter (les lignes « Diagnostic » = issues du setter, jamais comptees).
+let _contactsSetterSrc = null;
+let _contactsSetter = new Set();
+const contactsDuSetter = () => {
+  if (_contactsSetterSrc !== SALES_LEADS) {
+    _contactsSetterSrc = SALES_LEADS;
+    _contactsSetter = new Set(SALES_LEADS.filter((l) => l.contactId != null && l.setter).map((l) => l.contactId));
+  }
+  return _contactsSetter;
+};
+const origineCall = (c) => {
+  if (c.typeAppel === "Diagnostic") return null;
+  if (c.contactId != null && contactsDuSetter().has(c.contactId)) return "setter";
+  if (c.typeAppel === "Closing") return "closing";
+  if (c.rattrapage === true || c.viaSetting === true) return "rattrapage";
+  return null;
+};
+const callDuMode = (c) => {
+  const o = origineCall(c);
+  return SALES_MODE === "rattrapage" ? o === "rattrapage" : SALES_MODE === "tous" ? o !== null : o === "closing";
+};
 // Closing : calls du mode choisi de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
   SALES_CALLS.filter(
@@ -4104,9 +4123,9 @@ function vueSalesClosing() {
   // Chaque carte detaille son chiffre par origine : Closing · Rattrapage · via setter.
   const modeTous = SALES_MODE === "tous";
   const parOrigine = [
-    calls.filter((c) => c.typeAppel === "Closing"),
-    calls.filter((c) => c.rattrapage === true),
-    calls.filter((c) => c.viaSetting === true),
+    calls.filter((c) => origineCall(c) === "closing"),
+    calls.filter((c) => origineCall(c) === "rattrapage"),
+    calls.filter((c) => origineCall(c) === "setter"),
   ].map((liste) => salesStatsCallsClosing(liste));
   // Une ligne par origine, le chiffre juste devant son nom : lisible d'un coup d'oeil.
   const NOMS_ORIGINE = ["Closing", "Rattrapage", "via setter"];
@@ -4425,8 +4444,8 @@ function vueOutbound() {
   // Definition UNIQUE d'un « call booke via le setter » (partagee par les deux onglets et les cartes Poids) : tout call de
   // vente (Closing, Rattrapage ou Setting) d'un contact dont le setter est Thibault ou Ryan, quel que soit son statut
   // (annule inclus). Les lignes « Diagnostic » sont les issues saisies par le setter, pas des prises de RDV : jamais comptees.
-  const contactsSetter = new Set(leadsPerimetre.filter((l) => l.contactId != null && l.setter).map((l) => l.contactId));
-  const estCallSetting = (c) => c.contactId != null && c.typeAppel !== "Diagnostic" && contactsSetter.has(c.contactId);
+  // Meme definition que la page Closing (colonne « via setter ») : voir origineCall().
+  const estCallSetting = (c) => origineCall(c) === "setter";
 
   const settersOutbound = [...new Set(leadsPerimetre.filter((l) => l.setter).map((l) => l.setter))].sort();
   brancherSalesToggle("outbound-filtre", settersOutbound, () => OUTBOUND_SETTER, (v) => (OUTBOUND_SETTER = v), vueOutbound);
