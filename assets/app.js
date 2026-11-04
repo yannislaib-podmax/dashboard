@@ -4527,6 +4527,7 @@ function vueOutbound() {
     const closingContacte = liste.filter((l) => l.closing && (l.contacte || l.approuve)).length;
     return {
       closingContacte,
+      closingLeads: liste.filter((l) => l.closing).length,
       // En CALLS (pas en leads), comme l'onglet Cycle de vente : un lead peut avoir plusieurs calls (R2+, annules).
       callsBookes: somme(liste, "nbCalls"),
       annules: somme(liste, "nbAnnules"),
@@ -4604,6 +4605,7 @@ function vueOutbound() {
     );
     return {
       closing: liste.length,
+      leadsCall: new Set(liste.map((c) => c.contactId)).size,
       annules: liste.filter((c) => c.statut === "Annulé").length,
       conclus: liste.filter((c) => c.conclu).length,
       honores: liste.filter((c) => c.present).length,
@@ -4626,7 +4628,7 @@ function vueOutbound() {
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
-    carte("Calls bookés via setter", nombre(cj.closing), "calls via setter dont le rendez-vous tombe sur la période", evj("closing")),
+    carte("Calls bookés via setter", nombre(cj.closing), `sur ${nombre(cj.leadsCall)} leads · RDV dans la période`, evj("closing")),
     carte("Appels conclus", nombre(cj.conclus), "Honoré ou No-show (hors RDV encore à venir)", evj("conclus")),
     carte("Closing honorés", nombre(cj.honores), "calls via setter honorés sur la période", evj("honores")),
     carte("Ventes", nombre(cj.ventes), "contrats signés sur ces calls", evj("ventes")),
@@ -4671,7 +4673,7 @@ function vueOutbound() {
   // (calls des leads assignes dans la periode, a n'importe quelle date, au lieu des calls dont le RDV tombe dans la periode).
   const epc = (actuel, precedent, baisseEstBonne) => (gPrec && actuel !== null && precedent !== null ? ecartPoints(actuel, precedent, baisseEstBonne) : null);
   document.getElementById(`${prefixeId}-cartes-cohorte`).innerHTML = [
-    carte("Calls bookés via setter", nombre(g.callsBookes), "calls via setter des leads assignés sur la période", ev("callsBookes")),
+    carte("Calls bookés via setter", nombre(g.callsBookes), `sur ${nombre(g.closingLeads)} leads · assignés sur la période`, ev("callsBookes")),
     carte("Appels conclus", nombre(g.conclu), "Honoré ou No-show (hors RDV encore à venir)", ev("conclu")),
     carte("Closing honorés", nombre(g.present), "calls via setter réellement tenus", ev("present")),
     carte("Ventes", nombre(g.callsVentes), "contrats signés sur ces calls", ev("callsVentes")),
