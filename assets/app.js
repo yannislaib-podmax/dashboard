@@ -4469,7 +4469,7 @@ function vueOutbound() {
       nbVentes: somme(calls, "vente"),
       setter: l.setter,
       jour: l.jourAssignation,
-      contacte: stage ? stage === "contacted" || issueStage : issue,
+      contacte: stage ? stage === "contacted" || /^follow[\s-]*up/.test(stage) || issueStage : issue,
       // Stage iClosed ACTUEL = "Follow-Up Scheduled" (relance planifiee par le setter).
       followUp: /follow[\s-]*up/i.test(l.stage || ""),
       issue,
@@ -4517,11 +4517,6 @@ function vueOutbound() {
     };
   };
 
-  // Stock COURANT (pas une cohorte) : respecte la barre commune et le setter choisi ; un lead
-  // sans setter n'est compte que quand aucun setter n'est selectionne.
-  const nbFollowUps = SALES_FOLLOWUPS.filter(
-    (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
-  ).length;
   const g = agreger(leads);
   const gPrec = leadsPrec ? agreger(leadsPrec) : null;
 
@@ -4594,8 +4589,7 @@ function vueOutbound() {
   // etapes Setting, etapes Closing, puis taux de conversion + part du CA.
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
-    carte("Leads contactés", nombre(g.contactes), "passés au stage Contacted", ev("contactes")),
-    carte("Follow-up scheduled", nombre(nbFollowUps), "leads actuellement au stage Follow-Up Scheduled (état du jour, hors période)", null),
+    carte("Leads contactés", nombre(g.contactes), "Contacted, Follow-Up, Approved ou Rejected", ev("contactes")),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
