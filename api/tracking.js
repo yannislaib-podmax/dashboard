@@ -19,7 +19,6 @@ const CHAMPS_LEADS = {
   fldllUNg0J5M1xIhb: "canal",
   fldGQUwkMl7QTDgQP: "produit",
   fldZdsEwaqcwqjqtg: "utmSource",
-  fldMR8iFUnOjv3svV: "utmMedium",
   fldptIrzRFTSHlI97: "utmCampaign",
   fldSuIDEn4U2QuUPv: "utmContent",
 };
@@ -31,7 +30,6 @@ const CHAMPS_CALL_BOOKED = {
   fldONsYE6GNJUI15C: "canal",
   fldChsnbeVQFDCmjy: "produit",
   fldpmUNWfCbtLJFpv: "utmSource",
-  fldMwFYDRawbXErDX: "utmMedium",
   fldSwOg00BaGNc9eH: "utmCampaign",
   fldTeh1hsGiPQGpN8: "utmContent",
   fldS2brPeHHyuCRf3: "present",
