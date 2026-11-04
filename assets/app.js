@@ -2444,9 +2444,11 @@ function brancherCanalProduit() {
     return select;
   };
 
-  const canaux = [...new Set(TOUTES.map((l) => l.canal).filter(Boolean))].sort();
-  const produits = [...new Set(TOUTES.map((l) => l.produit).filter(Boolean))].sort();
-  const sources = [...new Set(TOUTES.map((l) => l.source).filter(Boolean))].sort();
+  // "Autre" n'est pas une vraie valeur a filtrer : retiree des propositions.
+  const pasAutre = (v) => v && String(v).toLowerCase() !== "autre";
+  const canaux = [...new Set(TOUTES.map((l) => l.canal).filter(pasAutre))].sort();
+  const produits = [...new Set(TOUTES.map((l) => l.produit).filter(pasAutre))].sort();
+  const sources = [...new Set(TOUTES.map((l) => l.source).filter(pasAutre))].sort();
 
   const sCanal = remplir("canal", canaux, "Tous les canaux");
   const sProduit = remplir("produit", produits, "Tous les produits");
@@ -2796,12 +2798,19 @@ const TRACK_NON_RENSEIGNE = "Non renseigné";
 // commune) que le reste du dashboard, pour que les trois se répercutent aussi
 // ici. Ici `l.source` est le vrai champ de qualification du lead/RDV (pas une
 // dérivation depuis Canal comme pour les lignes ACQUISITION).
+// Filtres UTM propres a l'onglet Tracking (valeurs brutes des liens, pas la
+// qualification Source/Canal) : permettent d'isoler ce que rapporte une
+// campagne ou un medium. Les champs UTM peuvent etre multiples ("a, b").
+const TRACK_UTM = { utmSource: "tout", utmMedium: "tout", utmCampaign: "tout" };
+const aUtm = (l, champ) => String(l[champ] || "").split(", ").includes(TRACK_UTM[champ]);
+
 const parCanalEtProduitTrack = (lignes) =>
   lignes.filter(
     (l) =>
       (CANAL === "tout" || l.canal === CANAL) &&
       (PRODUIT === "tout" || l.produit === PRODUIT) &&
-      (SOURCE === "tout" || l.source === SOURCE)
+      (SOURCE === "tout" || l.source === SOURCE) &&
+      Object.keys(TRACK_UTM).every((c) => TRACK_UTM[c] === "tout" || aUtm(l, c))
   );
 
 // Toggle de rang (R1 / R2+ / Tous) : ne concerne que les RDV. Les leads ne sont
@@ -3435,6 +3444,27 @@ function brancherTracking() {
       });
     });
   };
+
+  // Selects UTM : options construites depuis les lignes brutes (valeurs reelles).
+  const brancherUtm = (id, champ, libelleTout) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const valeurs = new Set();
+    [...TRACK_LEADS, ...TRACK_RDV_TOUS].forEach((l) =>
+      String(l[champ] || "").split(", ").filter(Boolean).forEach((v) => valeurs.add(v))
+    );
+    select.innerHTML =
+      `<option value="tout">${libelleTout}</option>` +
+      [...valeurs].sort().map((v) => `<option value="${v}">${v}</option>`).join("");
+    select.value = TRACK_UTM[champ];
+    select.onchange = () => {
+      TRACK_UTM[champ] = select.value;
+      vueTracking();
+    };
+  };
+  brancherUtm("tracking-utm-source", "utmSource", "Toutes les utm_source");
+  brancherUtm("tracking-utm-medium", "utmMedium", "Tous les utm_medium");
+  brancherUtm("tracking-utm-campagne", "utmCampaign", "Toutes les utm_campaign");
 
   brancherToggle("tracking-dimension", "dimension", (v) => (TRACK_DIMENSION = v));
   brancherToggle("tracking-metrique", "metrique", (v) => (TRACK_METRIQUE = v));
