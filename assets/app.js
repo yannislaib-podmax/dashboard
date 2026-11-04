@@ -4590,6 +4590,7 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-cartes`).innerHTML = [
     carte("Leads assignés", nombre(g.assignes), "à un setter sur la période", ev("assignes")),
     carte("Leads contactés", nombre(g.contactes), "Contacted, Follow-Up, Approved ou Rejected", ev("contactes")),
+    carte("Contactés sans issue", nombre(g.sansIssue), `dont ${nombre(g.followUps)} en Follow-Up Scheduled`, ev("sansIssue")),
     carte("Issues renseignées", nombre(g.issues), `${nombre(g.approuves)} approuvées · ${nombre(g.rejetes)} rejetées`, ev("issues")),
   ].join("");
   document.getElementById(`${prefixeId}-cartes-closing`).innerHTML = [
