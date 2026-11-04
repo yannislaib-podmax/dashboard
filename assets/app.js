@@ -4449,9 +4449,19 @@ function vueOutbound() {
     if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter || jourDebutParContact.has(c.contactId)) return;
     jourDebutParContact.set(c.contactId, c.jourPris || "");
   });
+  // Seuls les contacts APPROUVES par le setter alimentent des calls de vente : stage iClosed Approved, ou (sans stage)
+  // une ligne d'issue APPROVED. Un contact rejete / Not a Fit / Budget Issue n'a pas de call « via setter ».
+  const contactsApprouves = new Set();
+  leadsPerimetre.forEach((l) => {
+    if (l.contactId != null && String(l.stage || "").trim().toLowerCase() === "approved") contactsApprouves.add(l.contactId);
+  });
+  const contactsAvecStage = new Set(leadsPerimetre.filter((l) => l.contactId != null && l.stage).map((l) => l.contactId));
+  SALES_CALLS.forEach((c) => {
+    if (c.contactId != null && c.typeAppel === "Diagnostic" && c.setter && c.issue === "APPROVED" && !contactsAvecStage.has(c.contactId)) contactsApprouves.add(c.contactId);
+  });
   const estCallSetting = (c) => {
-    if (c.viaSetting === true) return true;
-    if (c.contactId == null || !jourDebutParContact.has(c.contactId)) return false;
+    if (c.contactId == null || !contactsApprouves.has(c.contactId)) return false;
+    if (!jourDebutParContact.has(c.contactId)) return false;
     if (c.typeAppel !== "Closing" && c.rattrapage !== true) return false;
     const debut = jourDebutParContact.get(c.contactId);
     return !debut || !c.jour || c.jour >= debut;
@@ -4481,8 +4491,14 @@ function vueOutbound() {
     (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
   );
   const enrichir = (l) => {
-    const issues = l.contactId != null ? issuesParContact.get(l.contactId) : null;
-    const issue = !!(issues && issues.length);
+    // Etapes valides du setter (decision 2026-11-04) : assigne (New Lead) -> Contacted -> Approved / Rejected.
+    // Les autres etapes iClosed (Follow-Up, Not a Fit, Budget Issue...) ne sont pas du travail du setter. Le stage iClosed
+    // ACTUEL fait foi ; sans stage (contact sans fiche LEADS), on retombe sur la ligne d'issue saisie par le setter.
+    const lignesIssue = l.contactId != null ? issuesParContact.get(l.contactId) : null;
+    const stage = String(l.stage || "").trim().toLowerCase();
+    const issueStage = stage === "approved" || stage === "rejected";
+    const issue = stage ? issueStage : !!(lignesIssue && lignesIssue.length);
+    const issues = stage ? [stage === "approved" ? "APPROVED" : "REJECTED"] : lignesIssue;
     // Memes calls que l'onglet « Cycle de vente » et que la page Closing (colonne « via setter ») :
     // uniquement les calls viaSetting. Un Closing direct d'un contact qui a eu une issue n'est pas compte ici.
     const calls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => estCallSetting(c) && duRang(c));
@@ -4492,7 +4508,7 @@ function vueOutbound() {
       nbVentes: somme(calls, "vente"),
       setter: l.setter,
       jour: l.jourAssignation,
-      contacte: !!l.jourContacte,
+      contacte: stage ? stage === "contacted" || issueStage : issue,
       // Stage iClosed ACTUEL = "Follow-Up Scheduled" (relance planifiee par le setter).
       followUp: /follow[\s-]*up/i.test(l.stage || ""),
       issue,
