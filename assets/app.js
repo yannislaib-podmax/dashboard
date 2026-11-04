@@ -4522,7 +4522,9 @@ function vueOutbound() {
     const issues = liste.filter((l) => l.issue).length;
     const approuves = liste.filter((l) => l.approuve).length;
     const closing = liste.filter((l) => l.closing).length;
-    const closingContacte = liste.filter((l) => l.closing && l.contacte).length;
+    // Le setter n'est remunere que s'il a travaille le lead : call Closing/Rattrapage attribue au setter ET lead contacte
+    // (contacte = Contacted, Follow-Up, Approved ou Rejected, donc Approved inclus).
+    const closingContacte = liste.filter((l) => l.closing && (l.contacte || l.approuve)).length;
     return {
       closingContacte,
       // En CALLS (pas en leads), comme l'onglet Cycle de vente : un lead peut avoir plusieurs calls (R2+, annules).
@@ -4635,7 +4637,7 @@ function vueOutbound() {
   document.getElementById(`${prefixeId}-taux-setting`).innerHTML = [
     carte("Taux de contact", pourcent(ratio(g.contactes, g.assignes)), g.assignes ? `${nombre(g.contactes)} contactés sur ${nombre(g.assignes)} assignés` : "—", ep(ratio(g.contactes, g.assignes), gPrec && ratio(gPrec.contactes, gPrec.assignes))),
     carte("Taux d'issue", pourcent(ratio(g.issues, g.contactes)), g.contactes ? `${nombre(g.issues)} issues sur ${nombre(g.contactes)} contactés` : "—", ep(ratio(g.issues, g.contactes), gPrec && ratio(gPrec.issues, gPrec.contactes))),
-    carte("Taux de transfo", pourcent(ratio(g.closingContacte, g.contactes)), g.contactes ? `${nombre(g.closingContacte)} contactés ayant booké un call, sur ${nombre(g.contactes)} contactés (cohorte)` : "—", ep(ratio(g.closingContacte, g.contactes), gPrec && ratio(gPrec.closingContacte, gPrec.contactes))),
+    carte("Taux de transfo", pourcent(ratio(g.closingContacte, g.contactes)), g.contactes ? `${nombre(g.closingContacte)} contactés ou approuvés ayant un call Closing/Rattrapage via setter, sur ${nombre(g.contactes)} contactés (cohorte)` : "—", ep(ratio(g.closingContacte, g.contactes), gPrec && ratio(gPrec.closingContacte, gPrec.contactes))),
   ].join("");
   // Taux du cycle de vente : calls via setter dont le rendez-vous tombe sur la periode (meme axe que les cartes au-dessus).
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
