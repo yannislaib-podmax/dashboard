@@ -4418,54 +4418,15 @@ function vueOutbound() {
   if (!document.getElementById(`${prefixeId}-cartes`)) return;
   appliquerOutboundVue();
 
-  // Population de l'onglet Performance : les leads assignes a un setter + les contacts dont un setter a saisi
-  // une issue sans qu'aucune ligne LEADS assignee n'existe (ex. 14 contacts de Thibault au 2026-11-04). Sans eux,
-  // leurs calls « via setter » apparaissaient dans Cycle de vente mais pas ici. Date d'assignation = jour de la 1re issue.
-  const idsAvecLead = new Set(SALES_LEADS.filter((l) => l.contactId != null).map((l) => l.contactId));
-  const sansLead = new Map();
-  SALES_CALLS.forEach((c) => {
-    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter || idsAvecLead.has(c.contactId)) return;
-    const j = c.jourPris || c.jour || null;
-    const ex = sansLead.get(c.contactId);
-    if (!ex || (j && (!ex.jourAssignation || j < ex.jourAssignation))) {
-      sansLead.set(c.contactId, { contactId: c.contactId, setter: c.setter, jourAssignation: j, jourContacte: j, stage: null, source: c.source, canal: c.canal, produit: c.produit });
-    }
-  });
-  const leadsPerimetre = [...SALES_LEADS, ...sansLead.values()];
+  // Perimetre du Setting = les leads dont le Setter Owner iClosed est un setter (meme base que l'export iClosed).
+  // Les contacts qui n'ont qu'une ligne d'issue saisie par le setter, sans lead assigne, n'en font pas partie.
+  const leadsPerimetre = SALES_LEADS;
 
-  // Definition UNIQUE d'un « call du Setting » (partagee par les deux onglets et les cartes Poids) : un call de vente
-  // (Closing ou Rattrapage) d'un contact dont un setter a saisi une issue, pris apres cette issue. Avant, on ne
-  // comptait que les Rattrapage (viaSetting) : un Closing booke apres une issue APPROVED (Famille 1) etait oublie,
-  // d'ou « 2 issues approuvees, 0 call booke ».
-  // Debut du travail du setter sur un contact : jour d'assignation du lead (a defaut, jour de la 1re issue). Un call de
-  // vente dont le RDV tombe ce jour-la ou apres compte pour le Setting (meme jour inclus : assigne, approuve et honore le meme jour).
-  const jourDebutParContact = new Map();
-  leadsPerimetre.forEach((l) => {
-    if (l.contactId == null) return;
-    const j = l.jourAssignation || "";
-    if (!jourDebutParContact.has(l.contactId) || j < jourDebutParContact.get(l.contactId)) jourDebutParContact.set(l.contactId, j);
-  });
-  SALES_CALLS.forEach((c) => {
-    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !c.setter || jourDebutParContact.has(c.contactId)) return;
-    jourDebutParContact.set(c.contactId, c.jourPris || "");
-  });
-  // Seuls les contacts APPROUVES par le setter alimentent des calls de vente : stage iClosed Approved, ou (sans stage)
-  // une ligne d'issue APPROVED. Un contact rejete / Not a Fit / Budget Issue n'a pas de call « via setter ».
-  const contactsApprouves = new Set();
-  leadsPerimetre.forEach((l) => {
-    if (l.contactId != null && String(l.stage || "").trim().toLowerCase() === "approved") contactsApprouves.add(l.contactId);
-  });
-  const contactsAvecStage = new Set(leadsPerimetre.filter((l) => l.contactId != null && l.stage).map((l) => l.contactId));
-  SALES_CALLS.forEach((c) => {
-    if (c.contactId != null && c.typeAppel === "Diagnostic" && c.setter && c.issue === "APPROVED" && !contactsAvecStage.has(c.contactId)) contactsApprouves.add(c.contactId);
-  });
-  const estCallSetting = (c) => {
-    if (c.contactId == null || !contactsApprouves.has(c.contactId)) return false;
-    if (!jourDebutParContact.has(c.contactId)) return false;
-    if (c.typeAppel !== "Closing" && c.rattrapage !== true) return false;
-    const debut = jourDebutParContact.get(c.contactId);
-    return !debut || !c.jour || c.jour >= debut;
-  };
+  // Definition UNIQUE d'un « call booke via le setter » (partagee par les deux onglets et les cartes Poids) : tout call de
+  // vente (Closing, Rattrapage ou Setting) d'un contact dont le setter est Thibault ou Ryan, quel que soit son statut
+  // (annule inclus). Les lignes « Diagnostic » sont les issues saisies par le setter, pas des prises de RDV : jamais comptees.
+  const contactsSetter = new Set(leadsPerimetre.filter((l) => l.contactId != null && l.setter).map((l) => l.contactId));
+  const estCallSetting = (c) => c.contactId != null && c.typeAppel !== "Diagnostic" && contactsSetter.has(c.contactId);
 
   const settersOutbound = [...new Set(leadsPerimetre.filter((l) => l.setter).map((l) => l.setter))].sort();
   brancherSalesToggle("outbound-filtre", settersOutbound, () => OUTBOUND_SETTER, (v) => (OUTBOUND_SETTER = v), vueOutbound);
