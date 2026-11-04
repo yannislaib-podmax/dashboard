@@ -3482,9 +3482,18 @@ const origineCall = (c) => {
   if (c.rattrapage === true || c.viaSetting === true) return "rattrapage";
   return null;
 };
+// NATURE d'un call de vente (pour la page Closing) : independante de l'origine. Un call d'un lead du setter reste
+// un Closing ou un Rattrapage, de sorte que les taux de la page Closing portent sur TOUS les calls ; la part « via setter »
+// n'est qu'une information supplementaire (voir origineCall).
+const natureCall = (c) => {
+  if (c.typeAppel === "Diagnostic") return null;
+  if (c.typeAppel === "Closing") return "closing";
+  if (c.rattrapage === true || c.viaSetting === true) return "rattrapage";
+  return null;
+};
 const callDuMode = (c) => {
-  const o = origineCall(c);
-  return SALES_MODE === "rattrapage" ? o === "rattrapage" : SALES_MODE === "tous" ? o !== null : o === "closing";
+  const n = natureCall(c);
+  return SALES_MODE === "rattrapage" ? n === "rattrapage" : SALES_MODE === "tous" ? n !== null : n === "closing";
 };
 // Closing : calls du mode choisi de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
@@ -4122,26 +4131,28 @@ function vueSalesClosing() {
   // Mode "Tous" : la carte detaille d'ou viennent les calls (acquisition : Closing + Rattrapage ; setter).
   // Chaque carte detaille son chiffre par origine : Closing · Rattrapage · via setter.
   const modeTous = SALES_MODE === "tous";
-  const parOrigine = [
-    calls.filter((c) => origineCall(c) === "closing"),
-    calls.filter((c) => origineCall(c) === "rattrapage"),
-    calls.filter((c) => origineCall(c) === "setter"),
+  // Les chiffres portent sur TOUS les calls du mode, quelle que soit leur origine. En mode Tous, une ligne par nature
+  // (Closing, Rattrapage) ; dans tous les modes, une petite ligne precise la part « via setter » (lead d'un setter).
+  const parNature = [
+    calls.filter((c) => natureCall(c) === "closing"),
+    calls.filter((c) => natureCall(c) === "rattrapage"),
   ].map((liste) => salesStatsCallsClosing(liste));
-  // Une ligne par origine, le chiffre juste devant son nom : lisible d'un coup d'oeil.
-  const NOMS_ORIGINE = ["Closing", "Rattrapage", "via setter"];
-  const repart = (cle, format = nombre) => parOrigine.map((p, i) => `<b>${format(p[cle])}</b> ${NOMS_ORIGINE[i]}`).join("<br>");
+  const NOMS_NATURE = ["Closing", "Rattrapage"];
+  const repart = (cle, format = nombre) => parNature.map((p, i) => `<b>${format(p[cle])}</b> ${NOMS_NATURE[i]}`).join("<br>");
+  const viaSetter = salesStatsCallsClosing(calls.filter((c) => origineCall(c) === "setter"));
+  const ligneSetter = (cle, format = nombre) => `<br><span style="opacity:.65;font-size:.85em">dont <b>${format(viaSetter[cle])}</b> via setter</span>`;
   const typeCall = SALES_MODE === "rattrapage" ? "Rattrapage" : "Closing";
   document.getElementById("sales-closing-cartes").innerHTML = [
     carte(
       "RDV prévus",
       nombre(rdv),
-      modeTous ? repart("rdv") :`calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`,
+      (modeTous ? repart("rdv") : `calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`) + ligneSetter("rdv"),
       sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null
     ),
-    carte("RDV conclus", nombre(conclus), modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)", sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
-    carte("RDV honorés", nombre(honores), modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`, sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
-    carte("Ventes", nombre(ventes), modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré", sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
-    carte("CA contracté", euros(ca), modeTous ? repart("ca", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente", sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
+    carte("RDV conclus", nombre(conclus), (modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)") + ligneSetter("conclus"), sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
+    carte("RDV honorés", nombre(honores), (modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`) + ligneSetter("honores"), sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
+    carte("Ventes", nombre(ventes), (modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré") + ligneSetter("ventes"), sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
+    carte("CA contracté", euros(ca), (modeTous ? repart("ca", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente") + ligneSetter("ca", euros), sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
   ].join("");
 
   // Cartes-etroit — même traitement que #qualite en Performance (taux
