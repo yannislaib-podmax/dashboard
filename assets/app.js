@@ -2964,6 +2964,11 @@ function trackClassement(valeurs, parValeurPrec) {
 
   const max = classe[0][1];
 
+  // Part de chaque valeur dans le total de la metrique (calculee sur TOUTES les valeurs, pas seulement le top 8).
+  // Pour le classement par CA : « x % du CA » = ce que vaut le canal / la source / la campagne / le content.
+  const totalMetrique = valeurs.reduce((s, [, v]) => s + def.valeur(v), 0);
+  const partDuCa = (val) => (TRACK_METRIQUE === "ca" && totalMetrique > 0 ? `${pourcent(val / totalMetrique)} du CA` : null);
+
   const bulle = (nom, v) => `
     <strong>${nom}</strong>
     <span>Leads<b>${nombre(v.leads)}</b></span>
@@ -2988,7 +2993,7 @@ function trackClassement(valeurs, parValeurPrec) {
         <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
         <div class="classement-chiffres">
           <span class="classement-valeur">${def.format(val)}${ecart ? `<span class="ecart-inline ${ecart.classe}">${ecart.texte}</span>` : ""}</span>
-          ${secondaire ? `<span class="classement-secondaire">${secondaire}</span>` : ""}
+          ${secondaire || partDuCa(val) ? `<span class="classement-secondaire">${secondaire || partDuCa(val)}</span>` : ""}
         </div>
       </div>`;
     })
@@ -3035,11 +3040,12 @@ function trackCamemberts(valeurs, parValeurPrec) {
 // Carte de stat avec infobulle au survol (même gabarit que carte(), avec
 // un attribut data-info en plus — carte() elle-même n'en a pas besoin
 // ailleurs, donc on ne la modifie pas globalement).
-const carteInfo = (libelle, chiffre, infoHtml, ecart) => `
+const carteInfo = (libelle, chiffre, infoHtml, ecart, sousLigne) => `
   <div class="glass carte rv"${info(infoHtml)}>
     <div class="libelle">${libelle}</div>
     <div class="chiffre">${chiffre}</div>
     ${ecart ? `<div class="ecart ${ecart.classe}">${ecart.texte}</div>` : ""}
+    ${sousLigne ? `<div style="opacity:.65;font-size:.85em;margin-top:4px">${sousLigne}</div>` : ""}
   </div>`;
 
 // Répartition d'une carte de synthèse par la dimension active : top 6
@@ -3385,13 +3391,19 @@ function vueTracking() {
   const ecartVentes = precedentes ? ecartDe(totalVentes, somme(precedentes.rdv, "vente"), "ventes") : null;
   const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "montant"), "contracte") : null;
 
+  // Part rattrapee par la sequence e-mail post-optin : calls dont la campagne UTM est « post-optin-ads »
+  // (le lead vient de la pub, le call est reserve depuis un e-mail E1..E4). Ces calls restent comptes dans
+  // les totaux ; la ligne « dont » n'est qu'un repere, comme « dont via setter » sur la page Closing.
+  const rdvSequence = rdv.filter((r) => /post-optin/i.test(r.utmCampaign || ""));
+  const ligneSequence = (valeur) => `dont <b>${valeur}</b> via séquence e-mail`;
+
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
     carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads),
-    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
-    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
-    carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes),
-    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros), ecartCa),
+    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv, ligneSequence(nombre(rdvSequence.length))),
+    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent, ligneSequence(nombre(somme(rdvSequence, "present")))),
+    carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes, ligneSequence(nombre(somme(rdvSequence, "vente")))),
+    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros), ecartCa, ligneSequence(euros(somme(rdvSequence, "montant")))),
   ].join("");
   brancherInfobulles(cartesCible);
 
