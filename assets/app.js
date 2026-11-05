@@ -5455,7 +5455,7 @@ function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
   appliquerOngletColdcall();
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "coldcall-cartes-caller", "simu-outbound"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "simu-outbound"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -5463,7 +5463,7 @@ function vueColdCall() {
       ? "Aucun caller détecté dans le Sheet."
       : null;
   if (message) {
-    ids.forEach((id) => (document.getElementById(id).innerHTML = ""));
+    ids.forEach((id) => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
     document.getElementById("coldcall-filtre").innerHTML = "";
     document.getElementById("coldcall-cartes").innerHTML = vide(message);
     return;
