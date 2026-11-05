@@ -149,20 +149,6 @@
     <div class="camemberts" id="camemberts"></div>
 
 
-    <h3 class="sous-section">Valeur client (LTV)</h3>
-    <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
-    <div id="perf-ltv" class="cartes cartes-ltv"></div>
-    <div id="perf-ltv-rentab" class="cartes cartes-ltv cartes-cout"></div>
-    <div id="perf-ltv-cycle" class="cartes cartes-ltv cartes-cout"></div>
-
-    <h3 class="sous-section">Dépense et valeur des clients acquis</h3>
-    <p class="sous-titre rv">Par jour, semaine ou mois, de la plus ancienne à la plus récente. La dépense face à ce que les clients acquis ont rapporté : 1er achat, puis renouvellements.</p>
-    <div class="glass histo rv" id="graph-ca"></div>
-
-    <h3 class="sous-section">Courbe de cohorte</h3>
-    <p class="sous-titre rv">Pour chaque mois d'acquisition : l'encaissé cumulé des clients acquis, rapporté à la dépense pub de ce mois, mois après mois. C'est la courbe de vie du client : elle montre quand la dépense est remboursée et combien un client rapporte avec le temps.</p>
-    <div class="glass courbe-carte rv" id="perf-cohortes"></div>
-
     <h2 class="section">Simulateur</h2>
     <p class="sous-titre rv">Tu donnes un objectif, il remonte la chaîne à l'envers et dit ce qu'il faut produire à chaque étape — et combien dépenser en pub pour l'obtenir.</p>
 
@@ -176,6 +162,20 @@
     </p>
 
     <div class="glass simu rv" id="simu"></div>
+
+    <h3 class="sous-section">Valeur client (LTV)</h3>
+    <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
+    <div id="perf-ltv" class="cartes cartes-ltv"></div>
+    <div id="perf-ltv-rentab" class="cartes cartes-ltv cartes-cout"></div>
+    <div id="perf-ltv-cycle" class="cartes cartes-ltv cartes-cout"></div>
+
+    <h3 class="sous-section">Dépense et valeur des clients acquis</h3>
+    <p class="sous-titre rv">Par jour, semaine ou mois, de la plus ancienne à la plus récente. La dépense face à ce que les clients acquis ont rapporté : 1er achat, puis renouvellements.</p>
+    <div class="glass histo rv" id="graph-ca"></div>
+
+    <h3 class="sous-section">Courbe de cohorte</h3>
+    <p class="sous-titre rv">Pour chaque mois d'acquisition : l'encaissé cumulé des clients acquis, rapporté à la dépense pub de ce mois, mois après mois. C'est la courbe de vie du client : elle montre quand la dépense est remboursée et combien un client rapporte avec le temps.</p>
+    <div class="glass courbe-carte rv" id="perf-cohortes"></div>
 
   </section>
 
@@ -390,6 +390,16 @@
     <div class="toggle-granularite" id="coldcall-activite-metrique"></div>
     <p class="sous-titre" id="coldcall-activite-note"></p>
     <div class="glass courbe-carte rv" id="coldcall-activite-courbe"></div>
+    <h2 class="section">Simulateur Outbound</h2>
+    <p class="sous-titre rv">Tu donnes un objectif de CA contracté, il remonte la chaîne à l'envers (vente → honoré → conclu → booké → décroché → appelé) et dit ce qu'il faut produire à chaque étape, combien de jours de travail cela représente et ce que cela coûte en rémunération des callers.</p>
+    <p class="convention rv">
+      <strong>Les hypothèses viennent de la période, du caller et du rang choisis dans l'analyse filtrée ci-dessous.</strong>
+      Chaque hypothèse est modifiable : remplace-la pour tester un scénario
+      — « et si mes callers décrochent à 20 % » — et remets le champ à vide pour
+      revenir au mesuré.
+    </p>
+    <div class="glass simu rv" id="simu-outbound"></div>
+
     <div class="cc-separateur" aria-hidden="true"><span>Analyse filtrée</span></div>
 
     <div class="toggle-granularite" id="coldcall-filtre"></div>
@@ -436,15 +446,6 @@
     <div class="toggle-granularite" id="coldcall-metrique"></div>
     <div class="glass classement podium-carte rv" id="coldcall-classement"></div>
 
-    <h2 class="section">Simulateur Outbound</h2>
-    <p class="sous-titre rv">Tu donnes un objectif de CA contracté, il remonte la chaîne à l'envers (vente → honoré → conclu → booké → décroché → appelé) et dit ce qu'il faut produire à chaque étape, combien de jours de travail cela représente et ce que cela coûte en rémunération des callers.</p>
-    <p class="convention rv">
-      <strong>Les hypothèses viennent de la période, du caller et du rang choisis ci-dessus.</strong>
-      Chaque hypothèse est modifiable : remplace-la pour tester un scénario
-      — « et si mes callers décrochent à 20 % » — et remets le champ à vide pour
-      revenir au mesuré.
-    </p>
-    <div class="glass simu rv" id="simu-outbound"></div>
   </section>
 
   <!-- ---------- Sales Team — Setting (ex Acquisition > Outbound) ---------- -->
@@ -575,6 +576,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=176"></script>
+<script src="/assets/app.js?v=178"></script>
 </body>
 </html>
