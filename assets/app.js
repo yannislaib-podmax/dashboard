@@ -2402,7 +2402,7 @@ function afficherVue(nom) {
   if (barre && ancre) {
     ancre.after(barre);
     if (toggleMode) {
-      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #tracking-dimension");
+      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
       const description = vue.querySelector(".convention");
       if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
       else if (toggleMode === zoneAcq && description) description.after(toggleMode);
@@ -2529,7 +2529,7 @@ const enTous = () => ACQ_MODE === "tous"; // Closing + Rattrapage melanges
 // Rang applique aux calls des onglets Acquisition : le Rattrapage a des rangs
 // exactement comme le Closing (decision 2026-10-30).
 const rangAcq = (rang, c) => rangAccepte(rang, c);
-const VUES_ACQ_MODE = ["sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
+const VUES_ACQ_MODE = ["ensemble", "sales-coldcall", "conversion", "tracking"]; // Paid Ads, Outbound, Funnel, Tracking UTM
 // Substitue les compteurs de calls des lignes ACQUISITION par ceux du Diagnostic
 // (champs suffixes "D" renvoyes par /api/acquisition).
 function appliquerModeAcq(lignes, mode = ACQ_MODE) {
@@ -2571,13 +2571,14 @@ function brancherAcqMode() {
   });
 }
 const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
-function appliquerRangFunnel(lignes) {
-  if (!lignes || FUNNEL_RANG === "r1") return lignes;
+let PAID_RANG = "r1";
+function appliquerRangFunnel(lignes, rang = FUNNEL_RANG) {
+  if (!lignes || rang === "r1") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
     CHAMPS_CALLS_RANG.forEach((f) => {
       const r2 = l[f + "R2"] || 0;
-      o[f] = FUNNEL_RANG === "r2" ? r2 : (l[f] || 0) + r2;
+      o[f] = rang === "r2" ? r2 : (l[f] || 0) + r2;
     });
     return o;
   });
@@ -2590,11 +2591,16 @@ function rendre() {
   const lignesFunnel = appliquerRangFunnel(lignes);
   const precedentesFunnel = appliquerRangFunnel(precedentes);
 
-  // Paid Ads : toujours tous les calls issus de la pub, sans distinction Closing / Rattrapage.
-  vueEnsemble(appliquerModeAcq(lignesFiltrees(), "paid"), appliquerModeAcq(lignesPrecedentes(), "paid"));
+  // Paid Ads : filtres Tous / Closing / Rattrapage et R1 / R2+ / Tous. "Tous" = Closing + Rattrapage
+  // + rattrapages apres issue setter (leads payes par la pub).
+  brancherSalesRangToggle("paid-rang", () => PAID_RANG, (v) => (PAID_RANG = v), rendre, false);
+  const modePaid = ACQ_MODE === "tous" ? "paid" : ACQ_MODE;
+  const lignesPaid = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), modePaid), PAID_RANG);
+  const precedentesPaid = appliquerRangFunnel(appliquerModeAcq(lignesPrecedentes(), modePaid), PAID_RANG);
+  vueEnsemble(lignesPaid, precedentesPaid);
   vueConversion(lignesFunnel, precedentesFunnel);
-  // Le simulateur vit dans Paid Ads : mêmes lignes (tous les calls issus de la pub).
-  simulateur(appliquerModeAcq(lignesFiltrees(), "paid"));
+  // Le simulateur vit dans Paid Ads : mêmes lignes et mêmes filtres que la page.
+  simulateur(lignesPaid);
   vueJour(lignes);
   vueCanal(lignes);
   vueDepenses(lignes);
