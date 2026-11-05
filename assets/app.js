@@ -1862,6 +1862,180 @@ function resultatSimulation(m) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Simulateur Outbound                                                */
+/* ------------------------------------------------------------------ */
+// Même principe que le simulateur Paid Ads : un objectif de CA contracté, la chaîne
+// remontée à l'envers (vente → honoré → conclu → booké → décroché → appelé), mais le
+// "budget" est la rémunération des callers (prime par call honoré) et non une dépense pub.
+
+let OUT_OBJECTIF = 20000;
+const OUT_HYP = { tReponse: null, tBook: null, tConclusion: null, tPresence: null, tClosing: null, panier: null, prime: null, appelsJour: null };
+
+const OUT_HYPOTHESES = [
+  { cle: "tReponse", nom: "Taux de réponse (décrochés / appelés)", unite: "%", groupe: "taux" },
+  { cle: "tBook", nom: "Appel décroché → call booké", unite: "%", groupe: "taux" },
+  { cle: "tConclusion", nom: "Call booké → conclu", unite: "%", groupe: "taux" },
+  { cle: "tPresence", nom: "Taux de présence", unite: "%", groupe: "taux" },
+  { cle: "tClosing", nom: "Taux de closing", unite: "%", groupe: "taux" },
+  { cle: "panier", nom: "Panier moyen", unite: "€", groupe: "eco" },
+  { cle: "prime", nom: "Prime par call honoré (R1)", unite: "€", groupe: "eco" },
+  { cle: "appelsJour", nom: "Appels par jour travaillé (par caller)", unite: "", groupe: "eco" },
+];
+
+function simulateurOutbound(m) {
+  const cible = document.getElementById("simu-outbound");
+  if (!cible) return;
+
+  const valeur = (cle) => (OUT_HYP[cle] !== null ? OUT_HYP[cle] : m[cle]);
+  const lisible = (h, v) => (v === null ? "" : h.unite === "%" ? Math.round(v * 1000) / 10 : Math.round(v * 100) / 100);
+
+  const champ = (h) => {
+    const v = valeur(h.cle);
+    const base = m.bases[h.cle] || 0;
+    const maigre = base < SEUIL_FIABILITE;
+    const mesure = m[h.cle] === null ? "aucun repère" : h.unite === "%" ? Math.round(m[h.cle] * 100) + " %" : h.unite === "€" ? euros(m[h.cle]) : String(Math.round(m[h.cle]));
+    return `<label class="hyp${OUT_HYP[h.cle] !== null ? " forcee" : ""}">
+      <span class="hyp-nom">${h.nom}</span>
+      <span class="hyp-saisie">
+        <input type="number" step="any" min="0" data-out-hyp="${h.cle}" value="${lisible(h, v)}" placeholder="${v === null ? "non mesuré" : ""}">
+        <em>${h.unite}</em>
+      </span>
+      <span class="hyp-note${maigre ? " maigre" : ""}">${
+        OUT_HYP[h.cle] !== null
+          ? "forcé · mesuré : " + mesure
+          : maigre
+          ? `mesuré sur ${nombre(base)} — trop peu`
+          : `mesuré sur ${nombre(base)}`
+      }</span>
+    </label>`;
+  };
+
+  const groupe = (nom, g) => {
+    const html = OUT_HYPOTHESES.filter((h) => h.groupe === g).map(champ).join("");
+    return html ? `<div class="hyp-groupe"><h4>${nom}</h4><div class="hypotheses">${html}</div></div>` : "";
+  };
+
+  const nbForcees = () => OUT_HYPOTHESES.filter((h) => OUT_HYP[h.cle] !== null).length;
+  const forcees = nbForcees();
+
+  cible.innerHTML = `
+    <div class="simu-objectif">
+      <label>
+        <span class="hyp-nom">Objectif de CA contracté (Outbound)</span>
+        <span class="hyp-saisie grand">
+          <input type="number" step="1000" min="0" id="simu-out-cible" value="${OUT_OBJECTIF}">
+          <em>€</em>
+        </span>
+      </label>
+      <button type="button" class="synchro${forcees ? " active" : ""}" id="simu-out-synchro" ${forcees ? "" : "disabled"}>
+        Synchroniser au réel${forcees ? ` · ${forcees} forcée${forcees > 1 ? "s" : ""}` : ""}
+      </button>
+    </div>
+    ${groupe("Taux de conversion", "taux")}
+    ${groupe("Hypothèses économiques et rythme", "eco")}
+    <div id="simu-out-resultat"></div>`;
+
+  const recalculer = () => resultatSimulationOutbound(m);
+
+  cible.querySelector("#simu-out-synchro").addEventListener("click", () => {
+    OUT_HYPOTHESES.forEach((h) => (OUT_HYP[h.cle] = null));
+    simulateurOutbound(m);
+  });
+  cible.querySelector("#simu-out-cible").addEventListener("input", (e) => {
+    OUT_OBJECTIF = Number(e.target.value) || 0;
+    recalculer();
+  });
+  cible.querySelectorAll("[data-out-hyp]").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const cle = e.target.dataset.outHyp;
+      const brut = e.target.value.trim();
+      const h = OUT_HYPOTHESES.find((x) => x.cle === cle);
+      OUT_HYP[cle] = brut === "" ? null : h.unite === "%" ? Number(brut) / 100 : Number(brut);
+      e.target.closest(".hyp").classList.toggle("forcee", OUT_HYP[cle] !== null);
+      const n = nbForcees();
+      const bouton = cible.querySelector("#simu-out-synchro");
+      bouton.disabled = n === 0;
+      bouton.classList.toggle("active", n > 0);
+      bouton.textContent = n ? `Synchroniser au réel · ${n} forcée${n > 1 ? "s" : ""}` : "Synchroniser au réel";
+      recalculer();
+    });
+  });
+
+  recalculer();
+}
+
+function resultatSimulationOutbound(m) {
+  const cible = document.getElementById("simu-out-resultat");
+  if (!cible) return;
+
+  const v = (cle) => (OUT_HYP[cle] !== null ? OUT_HYP[cle] : m[cle]);
+  // Le rythme (appels / jour) sert seulement à convertir en jours de travail : il n'est pas bloquant.
+  const manquantes = OUT_HYPOTHESES.filter((h) => h.cle !== "appelsJour" && (v(h.cle) === null || v(h.cle) === 0));
+  if (manquantes.length) {
+    cible.innerHTML = `<div class="simu-bloque">
+      <strong>Chaîne incomplète.</strong> Impossible de remonter l'entonnoir sans
+      ${manquantes.map((h) => h.nom.toLowerCase()).join(", ")}.
+      Force ces valeurs à la main, ou élargis la période / choisis « Tous les rangs ».
+    </div>`;
+    return;
+  }
+
+  const ventes = OUT_OBJECTIF / v("panier");
+  const honores = ventes / v("tClosing");
+  const conclus = honores / v("tPresence");
+  const bookes = conclus / v("tConclusion");
+  const reponse = bookes / v("tBook");
+  const appeles = reponse / v("tReponse");
+  const remun = honores * v("prime");
+  const arrondi = (x) => Math.ceil(x - 1e-9);
+
+  const etages = [
+    ["Ventes", ventes, m.reel.ventes],
+    ["Calls honorés", honores, m.reel.honores],
+    ["Calls conclus", conclus, m.reel.conclus],
+    ["Calls bookés", bookes, m.reel.bookes],
+    ["Appels décrochés", reponse, m.reel.reponse],
+    ["Appels passés", appeles, m.reel.appeles],
+  ];
+
+  const lignesHtml = etages
+    .map(([nom, requis, reel]) => {
+      const e = avancement(reel, requis, false);
+      const barre = requis ? Math.min(100, Math.round((reel / requis) * 100)) : 0;
+      return `<div class="simu-ligne">
+        <span class="s-nom">${nom}</span>
+        <span class="s-requis">${nombre(arrondi(requis))}</span>
+        <span class="s-jauge"><i style="width:${barre}%"></i></span>
+        <span class="s-reel">${nombre(reel)}</span>
+        ${e ? `<span class="ecart-inline ${e.classe}">${e.texte}</span>` : "<span></span>"}
+      </div>`;
+    })
+    .join("");
+
+  const eRemun = avancement(m.reel.remun, remun, true);
+  const joursCaller = v("appelsJour") > 0 ? appeles / v("appelsJour") : null;
+  const retour = remun > 0 ? OUT_OBJECTIF / remun : null;
+
+  cible.innerHTML = `
+    <div class="simu-tableau">
+      <div class="simu-entete"><span></span><span>Nécessaire</span><span></span><span>Réalisé</span><span></span></div>
+      ${lignesHtml}
+      <div class="simu-ligne budget">
+        <span class="s-nom">Rémunération des callers</span>
+        <span class="s-requis">${euros(remun)}</span>
+        <span class="s-jauge"><i style="width:${remun ? Math.min(100, Math.round((m.reel.remun / remun) * 100)) : 0}%"></i></span>
+        <span class="s-reel">${euros(m.reel.remun)}</span>
+        ${eRemun ? `<span class="ecart-inline ${eRemun.classe}">${eRemun.texte}</span>` : "<span></span>"}
+      </div>
+    </div>
+    <div class="simu-pied">
+      ${joursCaller !== null ? `≈ <strong>${nombre(arrondi(joursCaller))} jour${arrondi(joursCaller) > 1 ? "s" : ""} de travail</strong> (un caller à ${nombre(Math.round(v("appelsJour")))} appels / jour)<br>` : ""}
+      Retour sur rémunération attendu <strong>${retour !== null ? "x" + retour.toFixed(1).replace(".", ",") : "—"}</strong>
+      · coût par vente <strong>${euros(remun / ventes)}</strong>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Direction — Tableau de bord                                        */
 /* ------------------------------------------------------------------ */
 
@@ -2419,7 +2593,8 @@ function rendre() {
   // Paid Ads : toujours tous les calls issus de la pub, sans distinction Closing / Rattrapage.
   vueEnsemble(appliquerModeAcq(lignesFiltrees(), "paid"), appliquerModeAcq(lignesPrecedentes(), "paid"));
   vueConversion(lignesFunnel, precedentesFunnel);
-  simulateur(lignesFunnel);
+  // Le simulateur vit dans Paid Ads : mêmes lignes (tous les calls issus de la pub).
+  simulateur(appliquerModeAcq(lignesFiltrees(), "paid"));
   vueJour(lignes);
   vueCanal(lignes);
   vueDepenses(lignes);
@@ -5259,10 +5434,45 @@ const ccAjouterRdv = (o, r) => {
   o.ca += r.montant || 0;
 };
 
+// Onglets de la page Outbound : Aujourd'hui / Période / Par caller / Simulateur
+// (même principe que le toggle Closing / Rattrapage de la page Closing).
+let COLDCALL_ONGLET = "jour";
+const CC_ONGLETS = [
+  ["jour", "Activité du jour"],
+  ["periode", "Période · graphiques et cartes"],
+  ["caller", "Par caller"],
+  ["simu", "Simulateur"],
+];
+function appliquerOngletColdcall() {
+  const zone = document.getElementById("coldcall-onglet");
+  if (!zone) return;
+  zone.innerHTML = CC_ONGLETS.map(([cle, nom]) => `<button type="button" class="${COLDCALL_ONGLET === cle ? "actif" : ""}" data-cc-onglet="${cle}">${nom}</button>`).join("");
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      COLDCALL_ONGLET = btn.getAttribute("data-cc-onglet");
+      appliquerOngletColdcall();
+      const vue = document.getElementById("vue-sales-coldcall");
+      if (vue) {
+        vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
+        requestAnimationFrame(() => apparitions(vue));
+      }
+    });
+  });
+  CC_ONGLETS.forEach(([cle]) => {
+    const bloc = document.getElementById("cc-onglet-" + cle);
+    if (bloc) bloc.style.display = COLDCALL_ONGLET === cle ? "" : "none";
+  });
+  // Les filtres caller / rang ne servent pas à l'activité du jour (toujours tous les callers).
+  const filtres = document.getElementById("cc-filtres");
+  if (filtres) filtres.style.display = COLDCALL_ONGLET === "jour" ? "none" : "";
+}
+
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement"];
+  appliquerOngletColdcall();
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "coldcall-cartes-caller", "simu-outbound"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -5556,6 +5766,62 @@ function vueColdCall() {
   });
   const lignesCaller = Object.entries(parCaller);
   const couleurCaller = Object.fromEntries(lignesCaller.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
+
+  // ---- Onglet "Par caller" : une carte par caller (période, produit et rang choisis) ----
+  const cibleCartesCaller = document.getElementById("coldcall-cartes-caller");
+  if (cibleCartesCaller) {
+    const caMax = Math.max(1, ...lignesCaller.map(([, v]) => v.ca));
+    cibleCartesCaller.innerHTML = lignesCaller.length
+      ? `<div class="cc-act-grille">${lignesCaller
+          .map(([nom, v]) => {
+            const pct = Math.round((v.ca / caMax) * 100);
+            const etat = v.ca > 0 ? "ok" : "zero";
+            const tPres = v.conclus > 0 ? `${Math.round((v.honores / v.conclus) * 100)} % de présence` : "aucun call conclu";
+            const tClos = v.honores > 0 ? `${Math.round((v.ventes / v.honores) * 100)} % de closing` : "aucun call honoré";
+            return `<div class="glass cc-act-carte rv">
+              <div class="cc-act-tete"><span class="cc-act-nom" style="color:${couleurCaller[nom]}">${nom}</span><span class="cc-act-var stable">${tPres} · ${tClos}</span></div>
+              <div class="cc-act-chiffre ${etat}">${euros(v.ca)}<small> de CA contracté${suffixeDeRang(COLDCALL_RANG)}</small></div>
+              <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
+              <div class="cc-act-rythme">${v.appeles > 0 ? `${ccTaux(v.reponse, v.appeles, "de réponse") || "—"}${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}` : "Aucun appel sur la période"}</div>
+              <div class="cc-act-pastilles">
+                <span>Appelés<b>${nombre(v.appeles)}</b></span>
+                <span>Décrochés<b>${nombre(v.reponse)}</b></span>
+                <span>Calls bookés<b>${nombre(v.bookes)}</b></span>
+                <span>Honorés<b>${nombre(v.honores)}</b></span>
+                <span>Ventes<b>${nombre(v.ventes)}</b></span>
+                <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
+              </div>
+            </div>`;
+          })
+          .join("")}</div>`
+      : vide("Aucun caller détecté dans le Sheet.");
+  }
+
+  // ---- Onglet "Simulateur" : mêmes mesures que les cartes ci-dessus (callers, période, rang choisis) ----
+  let appelsTotalSimu = 0;
+  let joursCallerSimu = 0;
+  choisis.forEach((c) =>
+    Object.entries(c.jours || {}).forEach(([jour, j]) => {
+      if (!dansPeriode({ jour })) return;
+      const a = valeurJour(j);
+      if (a > 0) {
+        appelsTotalSimu += a;
+        joursCallerSimu += 1;
+      }
+    })
+  );
+  simulateurOutbound({
+    tReponse: ratio(t.reponse, t.appeles),
+    tBook: ratio(bookes, t.reponse),
+    tConclusion: ratio(conclus, bookes),
+    tPresence: ratio(honores, conclus),
+    tClosing: ratio(ventes, honores),
+    panier: ventes > 0 ? ca / ventes : null,
+    prime: CC_PRIME_HONORE,
+    appelsJour: joursCallerSimu ? appelsTotalSimu / joursCallerSimu : null,
+    bases: { tReponse: t.appeles, tBook: t.reponse, tConclusion: bookes, tPresence: conclus, tClosing: honores, panier: ventes, prime: honores, appelsJour: joursCallerSimu },
+    reel: { appeles: t.appeles, reponse: t.reponse, bookes, conclus, honores, ventes, ca, remun },
+  });
 
   // Classement (podium) avec sa propre metrique.
   brancherSalesMetrique("coldcall-metrique", CC_METRIQUES, () => COLDCALL_METRIQUE, (v) => (COLDCALL_METRIQUE = v), vueColdCall);
