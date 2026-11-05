@@ -5337,11 +5337,16 @@ function vueColdCall() {
   const rdvOut = COLDCALL_CALLER === "tout" ? rdvAll : rdvAll.filter(dansCallers);
   const bookes = rdvOut.length;
   const honores = rdvOut.filter((r) => (r.present || 0) > 0).length;
+  // Conclus = Honoré ou No-show : le call a eu lieu et son issue est connue. Les RDV encore
+  // à venir (ou annulés) n'y figurent pas, donc le taux de présence ne les compte pas.
+  const conclus = rdvOut.reduce((s, r) => s + (r.conclu || 0), 0);
   const ventes = rdvOut.reduce((s, r) => s + (r.vente || 0), 0);
   const ca = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
 
+  document.getElementById("coldcall-book").className = "cartes cols-5";
   document.getElementById("coldcall-book").innerHTML = [
     carte("Calls bookés réels", nombre(bookes), t.callBook && COLDCALL_RANG === "r1" ? `${nombre(bookes)} réservés sur ${nombre(t.callBook)} déclarés dans le Sheet` : `réservations iClosed (CALL BOOKED)${suffixeDeRang(COLDCALL_RANG)}`, null),
+    carte("Calls conclus", nombre(conclus), "Honoré ou No-show (hors RDV à venir ou annulés)", null),
     carte("Calls honorés", nombre(honores), "le prospect s'est présenté", null),
     carte("Ventes", nombre(ventes), "calls rattachés à un contrat", null),
     carte("CA contracté", euros(ca), "montant des contrats signés", null),
@@ -5350,7 +5355,7 @@ function vueColdCall() {
   // Taux de conversion du call booke a la vente, sous les cartes Call book.
   const part = (a, b) => (b > 0 ? pourcent(a / b) : "—");
   document.getElementById("coldcall-taux-book").innerHTML = [
-    carte("Taux de présence", part(honores, bookes), bookes ? `${nombre(honores)} honorés sur ${nombre(bookes)} bookés` : "—", null),
+    carte("Taux de présence", part(honores, conclus), conclus ? `${nombre(honores)} honorés sur ${nombre(conclus)} calls conclus` : "aucun call conclu", null),
     carte("Taux de closing", part(ventes, honores), honores ? `${nombre(ventes)} ventes sur ${nombre(honores)} honorés` : "—", null),
     carte("Panier moyen", ventes > 0 ? euros(ca / ventes) : "—", ventes ? `${euros(ca)} sur ${nombre(ventes)} ventes` : "—", null),
   ].join("");
@@ -5572,7 +5577,7 @@ function vueColdCall() {
     defaut: "bookes",
     groupes: [
       ["Cold call (Sheet)", ["appeles", "reponse", "callBook", "tReponse", "tCallBook"]],
-      ["Du call booké à la vente", ["bookes", "honores", "ventes", "ca", "tPresence", "tClosing", "panier"]],
+      ["Du call booké à la vente", ["bookes", "conclus", "honores", "ventes", "ca", "tPresence", "tClosing", "panier"]],
       ["Rémunération", ["remun", "coutVente", "retour"]],
     ],
     metriques: {
@@ -5582,6 +5587,7 @@ function vueColdCall() {
       tReponse: { libelleCourt: "Taux de réponse", format: pourcent, decimal: true },
       tCallBook: { libelleCourt: "Taux de call book", format: pourcent, decimal: true },
       bookes: { libelleCourt: "Calls bookés réels", format: nombre },
+      conclus: { libelleCourt: "Calls conclus", format: nombre },
       honores: { libelleCourt: "Calls honorés", format: nombre },
       ventes: { libelleCourt: "Ventes", format: nombre },
       ca: { libelleCourt: "CA contracté", format: euros },
@@ -5606,6 +5612,7 @@ function vueColdCall() {
       const r = rdvOut.filter((x) => dansBloc(x.jour, b));
       const bk = r.length;
       const ho = r.filter((x) => (x.present || 0) > 0).length;
+      const co = r.reduce((sum, x) => sum + (x.conclu || 0), 0);
       const ve = r.reduce((sum, x) => sum + (x.vente || 0), 0);
       const ch = r.reduce((sum, x) => sum + (x.montant || 0), 0);
       const rm = payesChoisis.filter((x) => dansBloc(x.jour, b)).length * CC_PRIME_HONORE;
@@ -5619,7 +5626,8 @@ function vueColdCall() {
         case "honores": return ho;
         case "ventes": return ve;
         case "ca": return ch;
-        case "tPresence": return ratio(ho, bk);
+        case "conclus": return co;
+        case "tPresence": return ratio(ho, co);
         case "tClosing": return ratio(ve, ho);
         case "panier": return ve > 0 ? ch / ve : null;
         case "remun": return rm;
