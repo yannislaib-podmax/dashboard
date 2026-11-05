@@ -5443,17 +5443,7 @@ const CC_ONGLETS = [
   ["caller", "Par caller"],
   ["simu", "Simulateur"],
 ];
-function appliquerOngletColdcall() {
-  // Page Outbound en une seule vue (pas de toggle) : tous les blocs sont affichés à la suite.
-  const zone = document.getElementById("coldcall-onglet");
-  if (zone) zone.style.display = "none";
-  CC_ONGLETS.forEach(([cle]) => {
-    const bloc = document.getElementById("cc-onglet-" + cle);
-    if (bloc) bloc.style.display = "";
-  });
-  const filtres = document.getElementById("cc-filtres");
-  if (filtres) filtres.style.display = "";
-}
+function appliquerOngletColdcall() {} // page Outbound en une seule vue (pas de toggle)
 
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
