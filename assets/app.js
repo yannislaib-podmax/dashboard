@@ -5444,28 +5444,15 @@ const CC_ONGLETS = [
   ["simu", "Simulateur"],
 ];
 function appliquerOngletColdcall() {
+  // Page Outbound en une seule vue (pas de toggle) : tous les blocs sont affichés à la suite.
   const zone = document.getElementById("coldcall-onglet");
-  if (!zone) return;
-  zone.innerHTML = CC_ONGLETS.map(([cle, nom]) => `<button type="button" class="${COLDCALL_ONGLET === cle ? "actif" : ""}" data-cc-onglet="${cle}">${nom}</button>`).join("");
-  zone.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.classList.contains("actif")) return;
-      COLDCALL_ONGLET = btn.getAttribute("data-cc-onglet");
-      appliquerOngletColdcall();
-      const vue = document.getElementById("vue-sales-coldcall");
-      if (vue) {
-        vue.querySelectorAll(".rv").forEach((e) => e.classList.remove("on"));
-        requestAnimationFrame(() => apparitions(vue));
-      }
-    });
-  });
+  if (zone) zone.style.display = "none";
   CC_ONGLETS.forEach(([cle]) => {
     const bloc = document.getElementById("cc-onglet-" + cle);
-    if (bloc) bloc.style.display = COLDCALL_ONGLET === cle ? "" : "none";
+    if (bloc) bloc.style.display = "";
   });
-  // Les filtres caller / rang ne servent pas à l'activité du jour (toujours tous les callers).
   const filtres = document.getElementById("cc-filtres");
-  if (filtres) filtres.style.display = COLDCALL_ONGLET === "jour" ? "none" : "";
+  if (filtres) filtres.style.display = "";
 }
 
 function vueColdCall() {
