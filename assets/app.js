@@ -5717,28 +5717,33 @@ function vueColdCall() {
     });
     // Fleche de variation d'une pastille (vide sans comparaison). Compteurs : % ; taux : points.
     const mq = (e) => (e ? `<span class="ecart-inline ${e.classe}">${e.texte === "rien d'équivalent avant" ? "nouveau" : e.texte}</span>` : "");
-    const evNb = (a, p, cle) => (p ? mq(ecartDe(a, p[0], cle)) : "");
+    const evNb = (a, p, cle) => (p && p[0] !== null && p[0] !== undefined ? mq(ecartDe(a, p[0], cle)) : "");
     const evTaux = (a, p, baisseBonne) => (p && a !== null && p[0] !== null ? mq(ecartPoints(a, p[0], baisseBonne)) : "");
     const maxP = Math.max(1, ...lignesP.map((l) => l.appeles));
     document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesP
       .map((l) => {
         const pct = Math.round((l.appeles / maxP) * 100);
         const etat = l.appeles === 0 ? "zero" : "ok";
+        const P = l.prec;
+        const pr = (v) => (P ? [v(P)] : null);
+        const tauxDec = ratio(l.reponse, l.appeles);
+        const showUp = ratio(l.at.honores, l.at.bookes);
+        const coutVente = l.at.ventes > 0 ? l.remun / l.at.ventes : null;
         return `<div class="glass cc-act-carte rv">
         <div class="cc-act-tete"><span class="cc-act-nom">${l.nom}</span></div>
         <div class="cc-act-chiffre ${etat}">${nombre(l.appeles)}<small> ${filtreProduit && scriptAJour ? "prospects sur ce produit" : "appels sur la période"}</small></div>
         <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
         <div class="cc-act-pastilles">
-          <span>Taux décroché<b>${pourcent(ratio(l.reponse, l.appeles))}</b></span>
-          <span>Bookés déclarés<b>${nombre(l.callBook)}</b></span>
-          <span>Bookés réels<b>${nombre(l.at.bookes)}</b></span>
-          <span>Honorés<b>${nombre(l.at.honores)}</b></span>
-          <span>Show-up<b>${pourcent(ratio(l.at.honores, l.at.bookes))}</b></span>
-          <span>Ventes<b>${nombre(l.at.ventes)}</b></span>
-          <span>CA<b>${euros(l.at.ca)}</b></span>
+          <span>Taux décroché<b>${pourcent(tauxDec)}</b>${evTaux(tauxDec, pr((p) => ratio(p.reponse, p.appeles)))}</span>
+          <span>Bookés déclarés<b>${nombre(l.callBook)}</b>${evNb(l.callBook, pr((p) => p.callBook), "ccBook")}</span>
+          <span>Bookés réels<b>${nombre(l.at.bookes)}</b>${evNb(l.at.bookes, pr((p) => p.at.bookes), "ccBook")}</span>
+          <span>Honorés<b>${nombre(l.at.honores)}</b>${evNb(l.at.honores, pr((p) => p.at.honores), "ccHonore")}</span>
+          <span>Show-up<b>${pourcent(showUp)}</b>${evTaux(showUp, pr((p) => ratio(p.at.honores, p.at.bookes)))}</span>
+          <span>Ventes<b>${nombre(l.at.ventes)}</b>${evNb(l.at.ventes, pr((p) => p.at.ventes), "ccVente")}</span>
+          <span>CA<b>${euros(l.at.ca)}</b>${evNb(l.at.ca, pr((p) => p.at.ca), "ccCa")}</span>
           <span>Rémunération<b>${euros(l.remun)}</b></span>
-          <span>Coût / vente<b>${l.at.ventes > 0 ? euros(l.remun / l.at.ventes) : "—"}</b></span>
+          <span>Coût / vente<b>${coutVente === null ? "—" : euros(coutVente)}</b>${coutVente === null ? "" : evNb(coutVente, pr((p) => (p.at.ventes > 0 ? p.remun / p.at.ventes : null)), "coutVente")}</span>
         </div>
       </div>`;
       })
