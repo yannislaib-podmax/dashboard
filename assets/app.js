@@ -599,7 +599,9 @@ function entonnoir(cibleId, ETAPES, valeurs, valeursPrec, bases, basesPrec, extr
       const avantP = basesPrec ? basesPrec[i] : null;
       const ecart = valeursPrec && avantP ? ecartPoints(valeurs[i] / avant, valeursPrec[i] / avantP) : null;
 
-      const libelleBase = ETAPES[i - 1].nom.toLowerCase();
+      // Base personnalisee d'une etape (ex. taux de show-up calcule sur les calls conclus, pas sur les calls bookes).
+      const nomBase = (extra.nomsBase && extra.nomsBase[i]) || ETAPES[i - 1].nom;
+      const libelleBase = nomBase.toLowerCase();
 
       // "Rendez-vous pris → RDV conclus" : ce taux mélange de base les RDV
       // encore "Confirmé" (pas encore passés, pas un souci) et les vrais
@@ -620,7 +622,7 @@ function entonnoir(cibleId, ETAPES, valeurs, valeursPrec, bases, basesPrec, extr
         </div>`;
       }
 
-      const bulle = `<strong>${ETAPES[i - 1].nom} → ${e.nom}</strong>
+      const bulle = `<strong>${nomBase} → ${e.nom}</strong>
         <span>Taux<b>${t} %</b></span>
         <span>Base<b>${nombre(avant)} ${libelleBase}</b></span>
         <span>Arrivés<b>${nombre(valeurs[i])}</b></span>`;
@@ -5616,8 +5618,10 @@ function vueColdCall() {
     ],
     [t.assignes, t.appeles, t.reponse, bookes, honores, ventes],
     null,
-    [null, t.assignes, t.appeles, t.reponse, bookes, honores],
-    null
+    // Taux de show-up (call honore) calcule sur les calls CONCLUS (issue connue), pas sur les calls bookes.
+    [null, t.assignes, t.appeles, t.reponse, conclus, honores],
+    null,
+    { nomsBase: [null, null, null, null, "Call conclu", null] }
   );
 
   // Agregat par caller (tous les callers : le classement et les graphiques servent
