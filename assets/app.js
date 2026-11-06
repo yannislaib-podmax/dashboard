@@ -1059,14 +1059,10 @@ function camemberts(lignes) {
     );
   }
 
-  // Un seul canal / produit avec de la dépense : un disque plein n'apprend rien.
+  // Les camemberts restent affichés même avec un seul canal / produit (disque plein) ; message seulement sans aucune dépense.
   const nomsDepense = [...new Set(lignes.filter((l) => l.depense > 0).map((l) => (unite === "produit" ? l.produit : l.canal)))];
-  if (nomsDepense.length < 2) {
-    cible.innerHTML = `<div class="vide">${
-      nomsDepense.length
-        ? `Un seul ${unite} a de la dépense sur la période (${nomsDepense[0]}) : la répartition s'affichera dès qu'un deuxième en aura.`
-        : "Aucune dépense sur la période."
-    }</div>`;
+  if (nomsDepense.length < 1) {
+    cible.innerHTML = `<div class="vide">Aucune dépense sur la période.</div>`;
     return;
   }
 
@@ -1461,8 +1457,10 @@ function appliquerPaidVue() {
   const zone = document.getElementById("paid-mode");
   const blocPerf = document.getElementById("paid-bloc-perf");
   const blocLtv = document.getElementById("paid-bloc-ltv");
+  const blocPerfB = document.getElementById("paid-bloc-perf-b");
   if (!zone || !blocPerf || !blocLtv) return;
   blocPerf.style.display = PAID_VUE === "perf" ? "" : "none";
+  if (blocPerfB) blocPerfB.style.display = PAID_VUE === "perf" ? "" : "none";
   blocLtv.style.display = PAID_VUE === "ltv" ? "" : "none";
   zone.innerHTML =
     `<button type="button" class="${PAID_VUE === "perf" ? "actif" : ""}" data-paid-vue="perf">Performance</button>` +
