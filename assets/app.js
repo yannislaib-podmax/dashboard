@@ -357,8 +357,19 @@ const INDICATEURS = {
   multipleLtv: (l) => ratio(somme(l, "encaisseTous"), somme(l, "contracte1er")),
   ltvSurCout: (l) => ratio(ratio(somme(l, "encaisseTous"), somme(l, "clients")), ratio(somme(l, "depense"), somme(l, "clients"))),
   coutClient: (l) => ratio(somme(l, "depense"), somme(l, "clients")),
-  coutVente: (l) => ratio(somme(l, "depense"), somme(l, "ventes")),
-  coutAppel: (l) => ratio(somme(l, "depense"), somme(l, "honores")),
+  // Dépense « mûre » : la part de la dépense dont les RDV ont une issue connue (Honoré, No-show
+  // ou Annulé). Les RDV encore à venir ne peuvent pas avoir produit d'appel honoré ni de vente :
+  // les laisser dans la dépense gonflerait mécaniquement le coût par appel honoré et par vente.
+  // Répartition au prorata des RDV (la dépense d'un jour est supposée répartie à égalité entre ses RDV).
+  depenseMure: (l) => {
+    const dep = somme(l, "depense");
+    const rdv = somme(l, "rendezVous");
+    if (!(rdv > 0)) return dep;
+    const resolus = somme(l, "rendezVousConclus") + somme(l, "annules");
+    return dep * Math.min(1, resolus / rdv);
+  },
+  coutVente: (l) => ratio(INDICATEURS.depenseMure(l), somme(l, "ventes")),
+  coutAppel: (l) => ratio(INDICATEURS.depenseMure(l), somme(l, "honores")),
   // Coût par call booké : dépense rapportée aux RDV pris (call confirmé),
   // tous statuts confondus — avant même de savoir s'ils seront honorés.
   coutRdv: (l) => ratio(somme(l, "depense"), somme(l, "rendezVous")),
@@ -1048,6 +1059,17 @@ function camemberts(lignes) {
     );
   }
 
+  // Un seul canal / produit avec de la dépense : un disque plein n'apprend rien.
+  const nomsDepense = [...new Set(lignes.filter((l) => l.depense > 0).map((l) => (unite === "produit" ? l.produit : l.canal)))];
+  if (nomsDepense.length < 2) {
+    cible.innerHTML = `<div class="vide">${
+      nomsDepense.length
+        ? `Un seul ${unite} a de la dépense sur la période (${nomsDepense[0]}) : la répartition s'affichera dès qu'un deuxième en aura.`
+        : "Aucune dépense sur la période."
+    }</div>`;
+    return;
+  }
+
   cible.innerHTML = [
     // Allocation du budget et efficacite. Rendez-vous, ventes et CA par canal vivent deja dans Tracking UTM.
     camembert("Dépense pub", lignes, "depense", euros, unite),
@@ -1233,6 +1255,9 @@ function calculerCohortes(lignes) {
   return {
     cohortes,
     global,
+    // Au moins 2 cohortes mensuelles déjà terminées : en dessous, la courbe et le délai de rentabilité
+    // ne montrent qu'un trou de données (clients qui n'ont pas encore eu le temps de payer).
+    recul: cohortes.filter((k) => k.age >= 1).length >= 2,
     payback: idxPayback, // -1 = pas encore rentabilisé
     roasM3: global.length > 3 ? global[3] : null,
     nbClients,
@@ -1243,6 +1268,10 @@ function calculerCohortes(lignes) {
 function courbeCohortes(cible, co) {
   if (!co.cohortes.length || !co.global.length) {
     cible.innerHTML = `<div class="vide">Pas encore assez de données : il faut des clients acquis avec une dépense pub renseignée sur le même mois.</div>`;
+    return;
+  }
+  if (!co.recul) {
+    cible.innerHTML = `<div class="vide">Pas encore assez de recul : il faut au moins 2 mois d'acquisition terminés pour que la courbe de cohorte soit lisible.</div>`;
     return;
   }
 
@@ -1448,8 +1477,42 @@ function appliquerPaidVue() {
   });
 }
 
+// Bandeau « dépense non saisie » : jours (hors aujourd'hui) où un canal qui dépense d'habitude a des leads
+// mais aucune dépense. Sans lui, un oubli de saisie fausse silencieusement le ROAS et les coûts.
+function alerteSaisieDepense(lignes) {
+  const zone = document.getElementById("paid-alerte-saisie");
+  if (!zone) return;
+  const aujourdhui = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  // Seuls les 14 derniers jours sont signalés : ce sont ceux qu'on peut encore saisir. Plus loin,
+  // un jour sans dépense est le plus souvent une vraie pause de campagne, pas un oubli.
+  const limite = new Date(Date.now() - 14 * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+  const canauxPayants = new Set(lignes.filter((l) => l.depense > 0).map((l) => l.canal));
+  const parJour = {};
+  lignes.forEach((l) => {
+    if (!l.jour || l.jour >= aujourdhui || l.jour < limite || !canauxPayants.has(l.canal)) return;
+    const j = (parJour[l.jour] = parJour[l.jour] || { leads: 0, depense: 0 });
+    j.leads += l.leads || 0;
+    j.depense += l.depense || 0;
+  });
+  const manquants = Object.entries(parJour)
+    .filter(([, j]) => j.leads > 0 && j.depense === 0)
+    .map(([jour]) => jour)
+    .sort();
+  if (!manquants.length) {
+    zone.hidden = true;
+    zone.innerHTML = "";
+    return;
+  }
+  const fmt = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+  const liste = manquants.length > 8 ? `${manquants.slice(0, 8).map(fmt).join(", ")}…` : manquants.map(fmt).join(", ");
+  zone.hidden = false;
+  zone.classList.add("on");
+  zone.innerHTML = `<strong>Dépense non saisie sur ${manquants.length} jour${manquants.length > 1 ? "s" : ""} (${liste}).</strong> Ces jours ont des leads mais aucune dépense : le ROAS et les coûts de la période sont sous-estimés tant que META_DEPENSE n'est pas rempli.`;
+}
+
 function vueEnsemble(lignes, precedentes) {
   appliquerPaidVue();
+  alerteSaisieDepense(lignes);
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
     return precedentes ? ecartDe(f(lignes), f(precedentes), cle) : null;
@@ -1470,10 +1533,12 @@ function vueEnsemble(lignes, precedentes) {
   // No-show, ni Annulé) : ils pèsent dans la dépense de la période mais pas
   // encore dans "honorés"/"ventes", donc "Coût par appel honoré" et "Coût
   // par vente" sont mécaniquement surestimés tant qu'ils n'ont pas eu lieu.
-  const rdvAVenir = somme(lignes, "rendezVous") - somme(lignes, "rendezVousConclus");
+  // Les annulés ont une issue (ils ne sont jamais « à venir ») : on les retire du compte.
+  const rdvAVenir = Math.max(0, somme(lignes, "rendezVous") - somme(lignes, "rendezVousConclus") - somme(lignes, "annules"));
+  const depenseMure = INDICATEURS.depenseMure(lignes);
   const noteAVenir =
     rdvAVenir > 0
-      ? `${nombre(rdvAVenir)} RDV de la période encore à venir : ce chiffre va bouger`
+      ? `calculé sur ${euros(depenseMure)} de dépense (RDV conclus) : ${nombre(rdvAVenir)} RDV encore à venir exclus`
       : null;
 
   const modeClient = CA_MODE !== "call";
@@ -1510,15 +1575,16 @@ function vueEnsemble(lignes, precedentes) {
 
   const co = calculerCohortes(lignes);
   const sansCohorte = co.nbClients === 0 ? "aucun client rattaché sur la période" : null;
+  const carteDelai = carte(
+    "Délai de rentabilité",
+    vide(!co.recul ? "—" : co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore"),
+    noteND(!co.recul ? "pas assez de recul (moins de 2 mois d'acquisition terminés)" : co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données"),
+    null
+  );
   document.getElementById("perf-ltv-cycle").innerHTML = [
     carte("Taux de renouvellement", vide(co.tauxRenouv === null ? "—" : pourcent(co.tauxRenouv)), noteND(sansCohorte || "clients avec au moins 2 prestations"), null),
-    carte(
-      "Délai de rentabilité",
-      vide(co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore"),
-      noteND(co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données"),
-      null
-    ),
-    carte("ROAS à M+3", vide(co.roasM3 === null ? "—" : enRoas(co.roasM3)), noteND(co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense"), null),
+    carteDelai,
+    carte("ROAS à M+3", vide(co.roasM3 === null || !co.recul ? "—" : enRoas(co.roasM3)), noteND(!co.recul ? "pas assez de recul" : co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense"), null),
   ].join("");
   // Rappel en bas de l'onglet Performance : les deux chiffres qui justifient d'accepter
   // l'équilibre sur le 1er contrat, avec renvoi vers l'onglet LTV.
@@ -1527,12 +1593,7 @@ function vueEnsemble(lignes, precedentes) {
     lienLtv.innerHTML = [
       carte("LTV / coût par client", vide(enRoas(val("ltvSurCout"))), noteND(sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté"), ecartND(ecart("ltvSurCout"))),
       carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
-      carte(
-        "Délai de rentabilité",
-        vide(co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore"),
-        noteND(co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données"),
-        null
-      ),
+      carteDelai,
     ].join("");
   }
 
