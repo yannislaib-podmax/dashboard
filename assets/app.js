@@ -1371,7 +1371,7 @@ function courbeKpiPage(id, cfg) {
       st.granul = g;
       courbeKpiPage(id, st.cfg);
     },
-    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal, points: !!cfg.points }
   );
 }
 const dansBloc = (jour, b) => !!jour && jour >= b.debut && jour <= b.fin;
@@ -2402,7 +2402,7 @@ function afficherVue(nom) {
   if (barre && ancre) {
     ancre.after(barre);
     if (toggleMode) {
-      const premierToggle = vue.querySelector("#coldcall-mode, #coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
+      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
       const description = vue.querySelector(".convention");
       if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
       else if (toggleMode === zoneAcq && description) description.after(toggleMode);
@@ -5413,11 +5413,15 @@ let COLDCALL_METRIQUE = "bookes";
 let COLDCALL_COURBE_METRIQUE = "bookes";
 let GRANULARITE_COLDCALL = "semaine";
 let GRANULARITE_COLDCALL_ACTIVITE = "jour"; // graphique a points "Activite dans le temps"
-let COLDCALL_ACTIVITE_METRIQUE = "appeles"; // appeles / reponse / callBook (declares, Sheet)
+let COLDCALL_ACTIVITE_METRIQUE = "appeles"; // Sheet : appeles / reponse / callBook ; Airtable (iClosed) : bookes / honores / ventes / ca
 const CC_ACTIVITE_METRIQUES = {
   appeles: { libelleCourt: "Appelés" },
   reponse: { libelleCourt: "Décrochés" },
   callBook: { libelleCourt: "Calls bookés déclarés" },
+  bookes: { libelleCourt: "Calls bookés réels" },
+  honores: { libelleCourt: "Honorés" },
+  ventes: { libelleCourt: "Ventes" },
+  ca: { libelleCourt: "CA contracté" },
 };
 const ccTaux = (a, b, suffixe) => (b > 0 ? `${Math.round((a / b) * 100)} % ${suffixe}` : null);
 const CC_METRIQUES = {
@@ -5469,7 +5473,7 @@ function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
   appliquerOngletColdcall();
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "coldcall-rythme", "coldcall-efficacite", "coldcall-cartes-caller", "simu-outbound"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "coldcall-rythme", "coldcall-efficacite", "simu-outbound"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -5675,7 +5679,12 @@ function vueColdCall() {
       const reponse = jr.reduce((s, [, v]) => s + reponseJour(v), 0);
       const callBook = jr.reduce((s, [, v]) => s + callBookJour(v), 0);
       const actifs = jr.filter(([, v]) => valeurJour(v) > 0).length;
-      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0 };
+      // Airtable : calls bookes reels, honores, ventes, CA du caller (periode, produit et rang choisis).
+      const at = ccNouvelAgregat();
+      rdvAll.forEach((r) => {
+        if (nomDuRdv(r) === c.caller) ccAjouterRdv(at, r);
+      });
+      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0, at, remun: remunParCaller[c.caller] || 0 };
     });
     const maxP = Math.max(1, ...lignesP.map((l) => l.appeles));
     document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesP
@@ -5687,7 +5696,14 @@ function vueColdCall() {
         <div class="cc-act-chiffre ${etat}">${nombre(l.appeles)}<small> ${filtreProduit && scriptAJour ? "prospects sur ce produit" : "appels sur la période"}</small></div>
         <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
-        <div class="cc-act-pastilles"><span>Décrochés<b>${nombre(l.reponse)}</b></span><span>Calls bookés<b>${nombre(l.callBook)}</b></span></div>
+        <div class="cc-act-pastilles">
+          <span>Décrochés<b>${nombre(l.reponse)}</b></span>
+          <span>Calls bookés<b>${nombre(l.at.bookes)}</b></span>
+          <span>Honorés<b>${nombre(l.at.honores)}</b></span>
+          <span>Ventes<b>${nombre(l.at.ventes)}</b></span>
+          <span>CA contracté<b>${euros(l.at.ca)}</b></span>
+          <span>Rémunération<b>${euros(l.remun)}</b></span>
+        </div>
       </div>`;
       })
       .join("")}</div>`;
@@ -5730,19 +5746,41 @@ function vueColdCall() {
         : `Filtre produit pas encore applicable ici : le script du Sheet doit être mis à jour (colonne Produit). Le graphique montre tous les appels.`;
   }
   brancherSalesMetrique("coldcall-activite-metrique", CC_ACTIVITE_METRIQUES, () => COLDCALL_ACTIVITE_METRIQUE, (v) => (COLDCALL_ACTIVITE_METRIQUE = v), vueColdCall);
+  // Metriques Sheet (appeles / decroches / bookes declares) par jour ; metriques Airtable (bookes reels,
+  // honores, ventes, CA) par jour de call, rattachees au caller par utm_content (comme le classement).
+  const metriqueAirtable = CC_METRIQUES[COLDCALL_ACTIVITE_METRIQUE] && ["bookes", "honores", "ventes", "ca"].includes(COLDCALL_ACTIVITE_METRIQUE) ? CC_METRIQUES[COLDCALL_ACTIVITE_METRIQUE] : null;
   const valeurAct = COLDCALL_ACTIVITE_METRIQUE === "reponse" ? reponseJour : COLDCALL_ACTIVITE_METRIQUE === "callBook" ? callBookJour : valeurJour;
-  const seriesAct = COLDCALL.map((c, i) => ({
-    nom: c.caller,
-    couleur: PALETTE[i % PALETTE.length],
-    points: blocsAct.map((b) =>
-      Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + valeurAct(v) : s), 0)
-    ),
-  }));
+  const statsActBloc = (c, b) => {
+    const o = ccNouvelAgregat();
+    Object.entries(c.jours || {}).forEach(([jour, v]) => {
+      if (jour < b.debut || jour > b.fin || !dansPeriode({ jour })) return;
+      o.appeles += v.appeles || 0;
+      o.reponse += v.reponse || 0;
+      o.callBook += v.callBook || 0;
+    });
+    rdvAll.forEach((r) => {
+      if (r.jour && r.jour >= b.debut && r.jour <= b.fin && nomDuRdv(r) === c.caller) ccAjouterRdv(o, r);
+    });
+    return o;
+  };
+  const seriesAct = COLDCALL.map((c, i) => {
+    if (metriqueAirtable) {
+      const st = blocsAct.map((b) => statsActBloc(c, b));
+      return { nom: c.caller, couleur: PALETTE[i % PALETTE.length], points: st.map((s) => metriqueAirtable.valeur(s)), secondaires: st.map((s) => metriqueAirtable.secondaire(s)) };
+    }
+    return {
+      nom: c.caller,
+      couleur: PALETTE[i % PALETTE.length],
+      points: blocsAct.map((b) =>
+        Object.entries(c.jours || {}).reduce((s, [jour, v]) => (jour >= b.debut && jour <= b.fin ? s + valeurAct(v) : s), 0)
+      ),
+    };
+  });
   courbeMultiSeries(
     "coldcall-activite-courbe",
     blocsAct,
     seriesAct,
-    nombre,
+    metriqueAirtable ? metriqueAirtable.format : nombre,
     GRANULARITE_COLDCALL_ACTIVITE,
     (g) => {
       GRANULARITE_COLDCALL_ACTIVITE = g;
@@ -5766,36 +5804,6 @@ function vueColdCall() {
   });
   const lignesCaller = Object.entries(parCaller);
   const couleurCaller = Object.fromEntries(lignesCaller.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-
-  // ---- Onglet "Par caller" : une carte par caller (période, produit et rang choisis) ----
-  const cibleCartesCaller = document.getElementById("coldcall-cartes-caller");
-  if (cibleCartesCaller) {
-    const caMax = Math.max(1, ...lignesCaller.map(([, v]) => v.ca));
-    cibleCartesCaller.innerHTML = lignesCaller.length
-      ? `<div class="cc-act-grille">${lignesCaller
-          .map(([nom, v]) => {
-            const pct = Math.round((v.ca / caMax) * 100);
-            const etat = v.ca > 0 ? "ok" : "zero";
-            const tPres = v.conclus > 0 ? `${Math.round((v.honores / v.conclus) * 100)} % de présence` : "aucun call conclu";
-            const tClos = v.honores > 0 ? `${Math.round((v.ventes / v.honores) * 100)} % de closing` : "aucun call honoré";
-            return `<div class="glass cc-act-carte rv">
-              <div class="cc-act-tete"><span class="cc-act-nom" style="color:${couleurCaller[nom]}">${nom}</span><span class="cc-act-var stable">${tPres} · ${tClos}</span></div>
-              <div class="cc-act-chiffre ${etat}">${euros(v.ca)}<small> de CA contracté${suffixeDeRang(COLDCALL_RANG)}</small></div>
-              <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
-              <div class="cc-act-rythme">${v.appeles > 0 ? `${ccTaux(v.reponse, v.appeles, "de réponse") || "—"}${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}` : "Aucun appel sur la période"}</div>
-              <div class="cc-act-pastilles">
-                <span>Appelés<b>${nombre(v.appeles)}</b></span>
-                <span>Décrochés<b>${nombre(v.reponse)}</b></span>
-                <span>Calls bookés<b>${nombre(v.bookes)}</b></span>
-                <span>Honorés<b>${nombre(v.honores)}</b></span>
-                <span>Ventes<b>${nombre(v.ventes)}</b></span>
-                <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
-              </div>
-            </div>`;
-          })
-          .join("")}</div>`
-      : vide("Aucun caller détecté dans le Sheet.");
-  }
 
   // ---- Onglet "Simulateur" : mêmes mesures que les cartes ci-dessus (callers, période, rang choisis) ----
   let appelsTotalSimu = 0;
@@ -5841,6 +5849,53 @@ function vueColdCall() {
       carte("Appels pour 1 vente", ventes > 0 ? nombre(Math.round(rythmeAppels / ventes)) : "—", ventes ? `${nombre(rythmeAppels)} appels pour ${nombre(ventes)} ventes${suffixeDeRang(COLDCALL_RANG)}` : "aucune vente sur la période", null),
       carte("Meilleur jour", meilleur.caller ? nombre(meilleur.appels) : "—", meilleur.caller ? `appels, ${meilleur.caller} le ${jourCourt(meilleur.jour)}` : "—", null),
     ].join("");
+
+  // Graphique a points : les KPI de "Rythme" et "Efficacite" dans le temps (callers, periode, produit et rang choisis).
+  const dec1 = (v) => (v === null || v === undefined ? "—" : v.toFixed(1).replace(".", ","));
+  courbeKpiPage("kpi-coldcall-rythme", {
+    points: true,
+    defaut: "appelsJour",
+    groupes: [
+      ["Rythme des callers", ["joursTravailles", "appelsJour", "reponseJour", "bookJour"]],
+      ["Efficacité", ["appelsParBook", "appelsParVente", "meilleurJour"]],
+    ],
+    metriques: {
+      joursTravailles: { libelleCourt: "Jours travaillés", format: nombre },
+      appelsJour: { libelleCourt: "Appels / jour travaillé", format: dec1, decimal: true },
+      reponseJour: { libelleCourt: "Décrochés / jour travaillé", format: dec1, decimal: true },
+      bookJour: { libelleCourt: "Calls bookés / jour travaillé", format: dec1, decimal: true },
+      appelsParBook: { libelleCourt: "Appels pour 1 call booké", format: nombre },
+      appelsParVente: { libelleCourt: "Appels pour 1 vente", format: nombre },
+      meilleurJour: { libelleCourt: "Meilleur jour (appels)", format: nombre },
+    },
+    jours: choisis.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour })),
+    calcul: (cle, b) => {
+      let appels = 0, rep = 0, bk = 0, jr = 0, max = 0;
+      choisis.forEach((c) =>
+        Object.entries(c.jours || {}).forEach(([jour, jv]) => {
+          if (!dansBloc(jour, b) || !dansPeriode({ jour })) return;
+          const a = valeurJour(jv);
+          if (a <= 0) return;
+          appels += a;
+          rep += reponseJour(jv);
+          bk += callBookJour(jv);
+          jr += 1;
+          if (a > max) max = a;
+        })
+      );
+      const ve = rdvOut.filter((x) => dansBloc(x.jour, b)).reduce((sum, x) => sum + (x.vente || 0), 0);
+      switch (cle) {
+        case "joursTravailles": return jr;
+        case "appelsJour": return jr ? appels / jr : null;
+        case "reponseJour": return jr ? rep / jr : null;
+        case "bookJour": return jr ? bk / jr : null;
+        case "appelsParBook": return bk > 0 ? Math.round(appels / bk) : null;
+        case "appelsParVente": return ve > 0 ? Math.round(appels / ve) : null;
+        case "meilleurJour": return jr ? max : null;
+        default: return null;
+      }
+    },
+  });
 
   simulateurOutbound({
     tReponse: ratio(t.reponse, t.appeles),
@@ -5944,37 +5999,6 @@ function vueColdCall() {
     disque(`CA contracté par caller${suffixeRang}`, parts("ca"), euros),
   ].join("");
   brancherSurvol(document.getElementById("coldcall-camemberts"));
-
-  // Evolution : top 5 callers sur la metrique choisie, jour/semaine/mois.
-  if (!CC_METRIQUES_EVO[COLDCALL_COURBE_METRIQUE]) COLDCALL_COURBE_METRIQUE = "bookes";
-  brancherSalesMetrique("coldcall-courbe-metrique", CC_METRIQUES_EVO, () => COLDCALL_COURBE_METRIQUE, (v) => (COLDCALL_COURBE_METRIQUE = v), vueColdCall);
-  const metriqueDef = CC_METRIQUES_EVO[COLDCALL_COURBE_METRIQUE];
-  const top5 = [...lignesCaller].sort((a, b) => metriqueDef.valeur(b[1]) - metriqueDef.valeur(a[1])).slice(0, 5).map(([nom]) => nom);
-  const joursSheet = COLDCALL.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
-  const joursAll = [...new Set([...joursSheet, ...rdvAll.map((r) => r.jour).filter(Boolean)])].sort();
-  const blocs = decoupagePeriodesEtendu(joursAll, GRANULARITE_COLDCALL);
-  const statsBloc = (nom, bloc) => {
-    const o = ccNouvelAgregat();
-    const c = COLDCALL.find((x) => x.caller === nom);
-    Object.entries((c && c.jours) || {}).forEach(([jour, j]) => {
-      if (jour < bloc.debut || jour > bloc.fin || !dansPeriode({ jour })) return;
-      o.appeles += j.appeles;
-      o.reponse += j.reponse;
-      o.callBook += j.callBook;
-    });
-    rdvAll.forEach((r) => {
-      if (r.jour && r.jour >= bloc.debut && r.jour <= bloc.fin && nomDuRdv(r) === nom) ccAjouterRdv(o, r);
-    });
-    return o;
-  };
-  const series = top5.map((nom) => {
-    const st = blocs.map((b) => statsBloc(nom, b));
-    return { nom, couleur: couleurCaller[nom], points: st.map((s) => metriqueDef.valeur(s)), secondaires: st.map((s) => metriqueDef.secondaire(s)) };
-  });
-  courbeMultiSeries("coldcall-courbe", blocs, series, metriqueDef.format, GRANULARITE_COLDCALL, (g) => {
-    GRANULARITE_COLDCALL = g;
-    vueColdCall();
-  });
 
   // Cartes recreees (innerHTML) : leurs ".rv" (opacite 0) ne sont jamais observes
   // par apparitions() (1er rendu de la vue seulement). Sans re-armement elles
