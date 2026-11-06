@@ -5737,8 +5737,30 @@ function vueColdCall() {
         const tauxDec = ratio(l.reponse, l.appeles);
         const showUp = ratio(l.at.honores, l.at.conclus);
         const coutVente = l.at.ventes > 0 ? l.remun / l.at.ventes : null;
+        // Statut du jour (independant de la periode) : appels d'aujourd'hui vs reference = objectif fixe
+        // (hypothese "Appels par jour travaille" du simulateur) sinon rythme habituel du caller (30 j).
+        const jourCaller = (COLDCALL.find((c) => c.caller === l.nom) || {}).jours || {};
+        const appelsAuj = valeurJour(jourCaller[jAuj] || {});
+        const habituel = ligneActivite(COLDCALL.find((c) => c.caller === l.nom) || { jours: {} }).moy;
+        const objectifFixe = OUT_HYP.appelsJour !== null && OUT_HYP.appelsJour > 0 ? OUT_HYP.appelsJour : null;
+        const refJour = objectifFixe || (habituel > 0 ? habituel : null);
+        const jourSemaine = auj.getDay();
+        const ouvre = jourSemaine !== 0 && jourSemaine !== 6;
+        const tot = auj.getHours() < 12; // le matin, un compteur bas n'est pas encore une alerte
+        const alertes = [];
+        if (ouvre && refJour) {
+          const pctJ = appelsAuj / refJour;
+          const classeJ = pctJ >= 1 ? "hausse" : pctJ >= 0.5 || tot ? "stable" : "baisse";
+          alertes.push(`<span class="cc-act-var ${classeJ}" title="${objectifFixe ? "Objectif fixé dans le simulateur Outbound" : "Rythme habituel du caller sur 30 jours"}">Aujourd'hui : ${nombre(appelsAuj)} / ${nombre(Math.round(refJour))} ${objectifFixe ? "(objectif)" : "(son rythme)"}</span>`);
+        }
+        // Ecart bookes declares (Sheet) / reels (iClosed) : un caller qui declare nettement plus qu'il ne book.
+        const plusGrand = Math.max(l.callBook, l.at.bookes);
+        if (plusGrand >= 3 && l.callBook > l.at.bookes && (l.callBook - l.at.bookes) / l.callBook > 0.3) {
+          alertes.push(`<span class="cc-act-var baisse" title="Le caller déclare plus de calls bookés dans le Sheet qu'il n'y en a dans iClosed">⚠ Écart : ${nombre(l.callBook)} déclarés / ${nombre(l.at.bookes)} réels</span>`);
+        }
         return `<div class="glass cc-act-carte rv">
         <div class="cc-act-tete"><span class="cc-act-nom">${l.nom}</span></div>
+        ${alertes.length ? `<div class="cc-act-alertes">${alertes.join("")}</div>` : ""}
         <div class="cc-act-chiffre ${etat}">${nombre(l.appeles)}<small> ${filtreProduit && scriptAJour ? "prospects sur ce produit" : "appels sur la période"}</small></div>
         <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
