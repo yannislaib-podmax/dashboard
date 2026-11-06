@@ -5455,6 +5455,9 @@ function appliquerOngletColdcall() {
   if (!zone || !blocPerf || !blocCycle) return;
   blocPerf.style.display = COLDCALL_VUE === "perf" ? "" : "none";
   blocCycle.style.display = COLDCALL_VUE === "cycle" ? "" : "none";
+  // Type d'appel (Closing / Rattrapage) et rang : uniquement dans la vue Cycle de vente.
+  const ligneToggles = document.getElementById("coldcall-ligne");
+  if (ligneToggles) ligneToggles.style.display = COLDCALL_VUE === "cycle" ? "flex" : "none";
   zone.innerHTML =
     `<button type="button" class="${COLDCALL_VUE === "perf" ? "actif" : ""}" data-cc-vue="perf">Performance des callers</button>` +
     `<button type="button" class="${COLDCALL_VUE === "cycle" ? "actif" : ""}" data-cc-vue="cycle">Cycle de vente</button>`;
@@ -5547,7 +5550,11 @@ function vueColdCall() {
   const duRang = (r) => rangAcq(COLDCALL_RANG, r);
   // rdvAll : tous les calls Outbound du perimetre (periode, produit, rang) ; rdvOut :
   // ceux du caller choisi. "Tous" garde aussi les calls sans caller reconnu.
-  const rdvAll = exclu ? [] : TRACK_RDV_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && duRang(r));
+  // Vue Performance : calls iClosed de tous types (Closing + Rattrapage) et de tous rangs, sans les toggles
+  // Closing / Rattrapage et rang (reserves a la vue Cycle de vente).
+  const enPerf = COLDCALL_VUE === "perf";
+  const rdvBase = enPerf ? [...TRACK_CLOSING_TOUS, ...TRACK_RATT] : TRACK_RDV_TOUS;
+  const rdvAll = exclu ? [] : rdvBase.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && (enPerf || duRang(r)));
   const rdvOut = COLDCALL_CALLER === "tout" ? rdvAll : rdvAll.filter(dansCallers);
   const bookes = rdvOut.length;
   const honores = rdvOut.filter((r) => (r.present || 0) > 0).length;
@@ -5585,7 +5592,7 @@ function vueColdCall() {
   ].join("");
 
   // ---- Entonnoir, evolution, repartition, classement (meme structure que Closing / Setting) ----
-  const suffixeRang = suffixeDeRang(COLDCALL_RANG);
+  const suffixeRang = suffixeDeRang(COLDCALL_VUE === "perf" ? "tous" : COLDCALL_RANG);
 
   // Entonnoir du perimetre choisi (caller, periode, rang) : Sheet puis Airtable.
   entonnoir(
@@ -5849,14 +5856,13 @@ function vueColdCall() {
   if (cibleEff)
     cibleEff.innerHTML = [
       carte("Appels pour 1 call booké", rythmeBook > 0 ? nombre(Math.round(rythmeAppels / rythmeBook)) : "—", rythmeBook ? `${nombre(rythmeAppels)} appels pour ${nombre(rythmeBook)} calls bookés déclarés` : "aucun call booké déclaré", null),
-      carte("Appels pour 1 vente", ventes > 0 ? nombre(Math.round(rythmeAppels / ventes)) : "—", ventes ? `${nombre(rythmeAppels)} appels pour ${nombre(ventes)} ventes${suffixeDeRang(COLDCALL_RANG)}` : "aucune vente sur la période", null),
+      carte("Appels pour 1 vente", ventes > 0 ? nombre(Math.round(rythmeAppels / ventes)) : "—", ventes ? `${nombre(rythmeAppels)} appels pour ${nombre(ventes)} ventes${suffixeDeRang(enPerf ? "tous" : COLDCALL_RANG)}` : "aucune vente sur la période", null),
       carte("Meilleur jour", meilleur.caller ? nombre(meilleur.appels) : "—", meilleur.caller ? `appels, ${meilleur.caller} le ${jourCourt(meilleur.jour)}` : "—", null),
     ].join("");
 
-  // Graphique a points : les KPI de "Rythme" et "Efficacite" dans le temps (callers, periode, produit et rang choisis).
+  // Courbe standard du dash (comme "Evolution des KPI") : les KPI de "Rythme" et "Efficacite" dans le temps (callers, periode, produit et rang choisis).
   const dec1 = (v) => (v === null || v === undefined ? "—" : v.toFixed(1).replace(".", ","));
   courbeKpiPage("kpi-coldcall-rythme", {
-    points: true,
     granulDefaut: "jour",
     defaut: "appelsJour",
     groupes: [
