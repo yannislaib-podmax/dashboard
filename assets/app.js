@@ -1591,8 +1591,9 @@ function vueEnsemble(lignes, precedentes) {
   const lienLtv = document.getElementById("perf-lien-ltv");
   if (lienLtv) {
     lienLtv.innerHTML = [
-      carte("LTV / coût par client", vide(enRoas(val("ltvSurCout"))), noteND(sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté"), ecartND(ecart("ltvSurCout"))),
+      // « LTV / coût par client » = « ROAS tous contrats » (même rapport encaissé / dépense) : on n'en garde qu'un.
       carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
+      carte("Marge par client", vide(enEuros(val("margeClient"))), noteND(sansLtv || sansDepense || "LTV à date moins coût par client"), ecartND(ecart("margeClient"))),
       carteDelai,
     ].join("");
   }
