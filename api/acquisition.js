@@ -1,24 +1,10 @@
 // Fonction serveur — données d'acquisition PodMax.
 //
-// Elle lit la table ACQUISITION d'Airtable (base HQ PODMAX AGENCY) pour la
-// dépense/impressions/clics/leads (pas de souci de doublon : un lead = une
-// ligne, saisie manuelle pour la dépense). Mais le rendez-vous/honorés/
-// ventes/contracté ne sont PAS lus depuis les rollups ACQUISITION : ces
-// rollups additionnent TOUS les calls Closing liés à la ligne jour+canal+
-// produit, R1 ET relances (R2/R3...) confondues — un lead qui relance compte
-// pour 2 RDV au lieu d'1. On relit donc CALL BOOKED brut et on recalcule
-// nous-mêmes ces 5 compteurs en ne gardant que le rang R1 (même règle que le
-// Tracking UTM), puis on les substitue aux rollups Airtable.
-//
-// IMPORTANT : la jointure CALL BOOKED → ACQUISITION se fait par le vrai lien
-// Airtable (champ "Dépense média", un ID d'enregistrement), PAS en
-// reconstruisant une clé texte "jour | canal | produit". Vérifié sur les
-// données réelles (2026-10-01) : le champ Produit de CALL BOOKED a été
-// renommé après coup (ex. "Pack Créa Ads" → "🎯 Podmax Ads") sur des
-// événements iClosed déjà en base, alors que le texte figé dans la colonne
-// Produit/Clé d'ACQUISITION, lui, ne bouge jamais. Rejoindre par texte aurait
-// donc cassé le lien sur la quasi-totalité des lignes existantes — vérifié
-// sur Airtable avant d'écrire ce fichier, pas supposé.
+// La dépense pub (dépense/impressions/clics) vient de la table META_DEPENSE
+// d'Airtable (une ligne par jour). Tout le reste (leads, RDV, honorés, ventes,
+// contracté, clients) est compté ici depuis LEADS, CALL BOOKED et CONTRATS,
+// rangé par clé "jour | canal | produit", en ne gardant que le rang R1 pour
+// les RDV (même règle que le Tracking UTM). La table ACQUISITION n'existe plus.
 //
 // Le jeton Airtable ne quitte jamais le serveur. Il est lu depuis la variable
 // d'environnement AIRTABLE_TOKEN, définie dans les réglages du projet Vercel.
@@ -27,26 +13,22 @@
 // colonne dans Airtable ne cassera donc pas le dashboard.
 
 const BASE_ID = "appL3hZhYJwCADFHm";
-const TABLE_ACQUISITION = "tblIDuDZ25yvenkEz";
+// Dépense pub : table META_DEPENSE (une ligne par jour, saisie manuelle pour
+// l'instant, scénario Make / API Meta Ads plus tard). La table ACQUISITION a
+// été supprimée (décision 2026-11-06) : elle ne servait plus qu'à porter la dépense.
+const TABLE_DEPENSE = "tblPuc3NBRorQRM8y";
+// Toute la dépense saisie est de la pub Facebook sur Podmax Ads (seule régie/offre payante).
+const CANAL_DEPENSE = "Fb ads";
+const PRODUIT_DEPENSE = "🎯 Podmax Ads";
 const TABLE_CALL_BOOKED = "tblaY2J8SD0grDEOK";
 
 // Correspondance identifiant Airtable → nom lisible côté page.
-// Note : rendezVous/rendezVousConclus/honores/ventes/contracte sont bien lus
-// ici (valeurs ACQUISITION brutes) mais écrasés plus bas par le recalcul R1.
-const CHAMPS_ACQUISITION = {
-  fldQYnMqFJOdFILX7: "cle",
-  fldboNJfQPWEGq99U: "jour",
-  fldFNl3ulxKLH2wQH: "canal",
-  fldnuLNAEqzPlLzne: "produit",
-  fldfcxZxF1SFJCIXn: "depense",
-  fldlnPS7oaGEHby25: "impressions",
-  fldcaSJjaqKNqvGlV: "clics",
-  fldU8PNMP8Qo3lJgs: "leads",
-  fldU60JOee3IjwdLz: "rendezVous",
-  fldxfGAgdfydHcSbB: "rendezVousConclus",
-  fldaDyIgZYVpE7aLb: "honores",
-  fldr1manDq32B8IFv: "ventes",
-  fldIacFZj53jCcMzM: "contracte",
+// Seule la dépense est lue dans Airtable ; les compteurs viennent du recalcul R1 plus bas.
+const CHAMPS_DEPENSE = {
+  fldq11wif0SsvyB8k: "jour",
+  fld9AfJUY7hQ4xSXL: "depense",
+  fldCd7zt4RGUcXUmn: "impressions",
+  fldZJreFybYhS3Jfh: "clics",
 };
 
 const CHAMPS_CALL_BOOKED = {
@@ -308,8 +290,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [lignesAcquisition, callsBooked, leads, contrats, paiements] = await Promise.all([
-      lireTable(token, TABLE_ACQUISITION, CHAMPS_ACQUISITION),
+    const [lignesDepense, callsBooked, leads, contrats, paiements] = await Promise.all([
+      lireTable(token, TABLE_DEPENSE, CHAMPS_DEPENSE),
       lireTable(token, TABLE_CALL_BOOKED, CHAMPS_CALL_BOOKED, [CHAMP_LIEN_LEAD, CHAMP_LIEN_CONTRATS]),
       lireTable(token, TABLE_LEADS, CHAMPS_LEADS, [CHAMP_LEAD_CLIENT]),
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, [CHAMP_CONTRAT_CLIENT]),
@@ -369,10 +351,10 @@ export default async function handler(req, res) {
       }
       return parCle.get(cle);
     };
-    for (const a of lignesAcquisition) {
+    for (const a of lignesDepense) {
       const jour = a.jour ? String(a.jour).slice(0, 10) : null;
       if (!jour) continue;
-      const l = ligneDe(jour, a.canal, a.produit);
+      const l = ligneDe(jour, CANAL_DEPENSE, PRODUIT_DEPENSE);
       l.depense += a.depense ?? 0;
       l.impressions += a.impressions ?? 0;
       l.clics += a.clics ?? 0;
