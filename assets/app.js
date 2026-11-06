@@ -3703,6 +3703,24 @@ function vueTracking() {
   ].join("");
   brancherInfobulles(cartesCible);
 
+  // Poids du canal / de la source choisis dans les filtres d'en-tête : lignes filtrées / total (mêmes période,
+  // produit, type d'appel et rang, mais sans filtre canal ni source).
+  const zonePart = document.getElementById("tracking-part");
+  if (zonePart) {
+    const rdvTotal = trackRdvSelonRang().filter(dansPeriode).filter((l) => PRODUIT === "tout" || l.produit === PRODUIT);
+    const actifs = [CANAL !== "tout" ? CANAL : null, SOURCE !== "tout" ? SOURCE : null].filter(Boolean);
+    const titre = document.getElementById("tracking-part-titre");
+    if (titre) titre.textContent = actifs.length ? `Poids de ${actifs.join(" · ")} dans l'acquisition` : "Poids du canal ou de la source dans l'acquisition";
+    const part = (a, t, fmt) => ({ v: pourcent(t > 0 ? a / t : 0), n: `${fmt(a)} sur ${fmt(t)} au total${actifs.length ? "" : " · choisis un canal ou une source"}` });
+    const p = [
+      ["Part des calls bookés", part(rdv.length, rdvTotal.length, nombre)],
+      ["Part des calls présents", part(totalPresent, somme(rdvTotal, "present"), nombre)],
+      ["Part des ventes", part(totalVentes, somme(rdvTotal, "vente"), nombre)],
+      ["Part du CA contracté", part(totalCa, somme(rdvTotal, "montant"), euros)],
+    ];
+    zonePart.innerHTML = p.map(([l, r]) => carte(l, r.v, r.n, null)).join("");
+  }
+
   // Même agrégation que parValeur, mais sur la période précédente, pour
   // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
   // classement et les camemberts (pas juste un total global comme sur les
