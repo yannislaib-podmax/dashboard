@@ -17,7 +17,7 @@ const BASE_ID = "appL3hZhYJwCADFHm";
 // l'instant, scénario Make / API Meta Ads plus tard). La table ACQUISITION a
 // été supprimée (décision 2026-11-06) : elle ne servait plus qu'à porter la dépense.
 const TABLE_DEPENSE = "tblPuc3NBRorQRM8y";
-// Toute la dépense saisie est de la pub Facebook sur Podmax Ads (seule régie/offre payante).
+// Valeurs par défaut quand Canal / Produit sont vides dans META_DEPENSE (historique = Facebook sur Podmax Ads).
 const CANAL_DEPENSE = "Fb ads";
 const PRODUIT_DEPENSE = "🎯 Podmax Ads";
 const TABLE_CALL_BOOKED = "tblaY2J8SD0grDEOK";
@@ -29,6 +29,8 @@ const CHAMPS_DEPENSE = {
   fld9AfJUY7hQ4xSXL: "depense",
   fldCd7zt4RGUcXUmn: "impressions",
   fldZJreFybYhS3Jfh: "clics",
+  fldtaf5JGEc5sOrSG: "produit", // Produit (liste de choix, vide = Podmax Ads)
+  fld6CB3SDYg7GPXlu: "canal", // Canal (liste de choix, vide = Fb ads)
 };
 
 const CHAMPS_CALL_BOOKED = {
@@ -354,7 +356,9 @@ export default async function handler(req, res) {
     for (const a of lignesDepense) {
       const jour = a.jour ? String(a.jour).slice(0, 10) : null;
       if (!jour) continue;
-      const l = ligneDe(jour, CANAL_DEPENSE, PRODUIT_DEPENSE);
+      // Produit / Canal saisis dans META_DEPENSE ; repli sur les valeurs
+      // historiques quand la colonne est vide.
+      const l = ligneDe(jour, a.canal || CANAL_DEPENSE, a.produit || PRODUIT_DEPENSE);
       l.depense += a.depense ?? 0;
       l.impressions += a.impressions ?? 0;
       l.clics += a.clics ?? 0;
