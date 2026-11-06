@@ -133,7 +133,10 @@
     </p>
 
     <div class="toggle-granularite" id="paid-rang"></div>
+    <div class="toggle-granularite" id="paid-mode"></div>
 
+    <!-- Onglet 1 : Performance (acquisition : ce que la pub coûte et rapporte au 1er achat) -->
+    <div id="paid-bloc-perf">
     <h2 class="section">Performance</h2>
     <p class="sous-titre rv">Ce que l'argent dépensé a rapporté, et ce que coûte chaque étape. Le CA est celui du <strong>1er achat de chaque nouveau client</strong> (contrats Airtable), les ventes d'avant le formulaire Tally n'y figurent pas.</p>
     <div id="perf" class="cartes"></div>
@@ -165,7 +168,14 @@
 
     <div class="glass simu rv" id="simu"></div>
 
-    <h3 class="sous-section">Valeur client (LTV)</h3>
+    <h3 class="sous-section">Rentabilité dans le temps</h3>
+    <p class="sous-titre rv">Le 1er achat ne dit pas tout : voici ce que valent ces clients une fois les renouvellements comptés. Le détail (LTV, cohortes, dépense face à la valeur) est dans l'onglet LTV.</p>
+    <div id="perf-lien-ltv" class="cartes cols-3"></div>
+    </div>
+
+    <!-- Onglet 2 : LTV (valeur des clients acquis dans le temps) -->
+    <div id="paid-bloc-ltv" style="display:none">
+    <h2 class="section">Valeur client (LTV)</h2>
     <p class="sous-titre rv">Ce que les clients acquis sur la période ont payé depuis, <strong>renouvellements compris</strong>. Permet d'accepter d'être à l'équilibre sur le 1er contrat si la LTV moyenne le justifie. Les clients récents n'ont pas encore eu le temps de renouveler : la LTV monte avec l'ancienneté de la période.</p>
     <div id="perf-ltv" class="cartes cartes-ltv"></div>
     <div id="perf-ltv-rentab" class="cartes cartes-ltv cartes-cout"></div>
@@ -178,6 +188,7 @@
     <h3 class="sous-section">Courbe de cohorte</h3>
     <p class="sous-titre rv">Pour chaque mois d'acquisition : l'encaissé cumulé des clients acquis, rapporté à la dépense pub de ce mois, mois après mois. C'est la courbe de vie du client : elle montre quand la dépense est remboursée et combien un client rapporte avec le temps.</p>
     <div class="glass courbe-carte rv" id="perf-cohortes"></div>
+    </div>
 
   </section>
 
@@ -598,6 +609,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=207"></script>
+<script src="/assets/app.js?v=208"></script>
 </body>
 </html>

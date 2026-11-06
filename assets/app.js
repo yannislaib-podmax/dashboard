@@ -1424,7 +1424,32 @@ function courbePerformance(lignes) {
 }
 let DERNIERES_LIGNES_PERF = [];
 
+// Onglet de la page Paid Ads : "perf" (ce que la pub coûte et rapporte au 1er achat, simulateur)
+// ou "ltv" (valeur des clients acquis dans le temps : LTV, cohortes, dépense face à la valeur).
+let PAID_VUE = "perf";
+
+function appliquerPaidVue() {
+  const zone = document.getElementById("paid-mode");
+  const blocPerf = document.getElementById("paid-bloc-perf");
+  const blocLtv = document.getElementById("paid-bloc-ltv");
+  if (!zone || !blocPerf || !blocLtv) return;
+  blocPerf.style.display = PAID_VUE === "perf" ? "" : "none";
+  blocLtv.style.display = PAID_VUE === "ltv" ? "" : "none";
+  zone.innerHTML =
+    `<button type="button" class="${PAID_VUE === "perf" ? "actif" : ""}" data-paid-vue="perf">Performance</button>` +
+    `<button type="button" class="${PAID_VUE === "ltv" ? "actif" : ""}" data-paid-vue="ltv">LTV</button>`;
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      PAID_VUE = btn.getAttribute("data-paid-vue");
+      // Le bloc qui vient d'apparaitre est rendu a nouveau (largeurs des graphiques).
+      rendre();
+    });
+  });
+}
+
 function vueEnsemble(lignes, precedentes) {
+  appliquerPaidVue();
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
     return precedentes ? ecartDe(f(lignes), f(precedentes), cle) : null;
@@ -1495,6 +1520,22 @@ function vueEnsemble(lignes, precedentes) {
     ),
     carte("ROAS à M+3", vide(co.roasM3 === null ? "—" : enRoas(co.roasM3)), noteND(co.roasM3 === null ? "pas encore de cohorte de 3 mois" : "encaissé cumulé 3 mois après l'acquisition / dépense"), null),
   ].join("");
+  // Rappel en bas de l'onglet Performance : les deux chiffres qui justifient d'accepter
+  // l'équilibre sur le 1er contrat, avec renvoi vers l'onglet LTV.
+  const lienLtv = document.getElementById("perf-lien-ltv");
+  if (lienLtv) {
+    lienLtv.innerHTML = [
+      carte("LTV / coût par client", vide(enRoas(val("ltvSurCout"))), noteND(sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté"), ecartND(ecart("ltvSurCout"))),
+      carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
+      carte(
+        "Délai de rentabilité",
+        vide(co.payback >= 0 ? (co.payback === 0 ? "dès M0" : `M+${co.payback}`) : "pas encore"),
+        noteND(co.global.length ? (co.payback >= 0 ? "mois après l'acquisition où l'encaissé couvre la dépense" : "l'encaissé n'a pas encore couvert la dépense") : "pas assez de données"),
+        null
+      ),
+    ].join("");
+  }
+
   if (ND) {
     document.getElementById("perf-cohortes").innerHTML = `<div class="vide">Courbe de cohorte non découpée par type d'appel : disponible en mode Closing ou Tous.</div>`;
   } else {
