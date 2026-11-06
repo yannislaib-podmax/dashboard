@@ -1346,7 +1346,7 @@ function menusCategoriesKpi(zoneId, groupes, metriques, actif, onChoix) {
 const COURBES_KPI = {};
 function courbeKpiPage(id, cfg) {
   if (!document.getElementById(`${id}-courbe`)) return;
-  const st = (COURBES_KPI[id] = COURBES_KPI[id] || { metrique: cfg.defaut, granul: "semaine" });
+  const st = (COURBES_KPI[id] = COURBES_KPI[id] || { metrique: cfg.defaut, granul: cfg.granulDefaut || "semaine" });
   st.cfg = cfg;
   if (!cfg.metriques[st.metrique]) st.metrique = cfg.defaut;
   menusCategoriesKpi(`${id}-courbe-metrique`, cfg.groupes, cfg.metriques, st.metrique, (v) => {
@@ -2402,7 +2402,7 @@ function afficherVue(nom) {
   if (barre && ancre) {
     ancre.after(barre);
     if (toggleMode) {
-      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
+      const premierToggle = vue.querySelector("#coldcall-rang, #funnel-rang, #paid-rang, #tracking-dimension");
       const description = vue.querySelector(".convention");
       if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
       else if (toggleMode === zoneAcq && description) description.after(toggleMode);
@@ -5664,14 +5664,15 @@ function vueColdCall() {
   const callBookJour = (v) => (!filtreProduit || !scriptAJour ? v.callBook || 0 : sommeProduit(v.produitsCallBook));
   // Mode "periode" : des qu'un filtre de periode ou de produit est actif, les cartes
   // montrent le cumul sur la periode au lieu d'aujourd'hui / hier.
-  const modePeriodeAct = !!(DEBUT || FIN) || filtreProduit;
+  // Toujours en cumul sur la periode de l'en-tete (sans filtre : tout l'historique). Pour un suivi du jour,
+  // choisir "Aujourd'hui" ou "Hier" dans le filtre de periode.
+  const modePeriodeAct = true;
   const titreAct = document.getElementById("coldcall-activite-titre");
   const sousTitreAct = document.getElementById("coldcall-activite-soustitre");
-  if (titreAct) titreAct.textContent = modePeriodeAct ? "Activité sur la période" : "Activité du jour";
+  const periodeLibelle = !(DEBUT || FIN) ? "tout l'historique" : "la période choisie dans l'en-tête";
+  if (titreAct) titreAct.textContent = "Activité sur la période";
   if (sousTitreAct)
-    sousTitreAct.textContent = modePeriodeAct
-      ? `Cumul par caller sur la période choisie dans l'en-tête${filtreProduit ? " et le produit (prospects intéressés par ce produit, colonne J du Sheet)" : ""}. Sans filtre : aujourd'hui et hier.`
-      : "Ce que chaque caller a fait aujourd'hui et hier, lu dans le Sheet. Choisis une période ou un produit dans l'en-tête pour passer en cumul.";
+    sousTitreAct.textContent = `Cumul par caller sur ${periodeLibelle}${filtreProduit ? " et le produit (prospects intéressés par ce produit, colonne J du Sheet)" : ""}. Choisis « Aujourd'hui » ou « Hier » dans le filtre de période pour le suivi du jour.`;
   if (modePeriodeAct) {
     const lignesP = COLDCALL.map((c) => {
       const jr = Object.entries(c.jours || {}).filter(([k]) => dansPeriode({ jour: k }));
@@ -5731,7 +5732,9 @@ function vueColdCall() {
   // Activite dans le temps : appels par caller, un point par jour / semaine / mois,
   // sur la PERIODE de l'en-tete (DEBUT/FIN ; sans filtre : de la 1re activite a aujourd'hui).
   // Jours continus (les jours sans appel comptent 0).
-  const joursAvecActivite = COLDCALL.flatMap((c) => Object.keys(c.jours || {})).sort();
+  // Sans filtre de periode : tout l'historique, soit le plus ancien jour du Sheet OU du premier call
+  // iClosed (les indicateurs reels remontent plus loin que le Sheet, dont les jours ne sont dates que depuis peu).
+  const joursAvecActivite = [...COLDCALL.flatMap((c) => Object.keys(c.jours || {})), ...rdvAll.map((r) => r.jour).filter(Boolean)].sort();
   const debutAct = enDate(DEBUT || joursAvecActivite[0] || jAuj);
   const finAct = enDate(FIN || jAuj);
   const joursAct = [];
@@ -5854,6 +5857,7 @@ function vueColdCall() {
   const dec1 = (v) => (v === null || v === undefined ? "—" : v.toFixed(1).replace(".", ","));
   courbeKpiPage("kpi-coldcall-rythme", {
     points: true,
+    granulDefaut: "jour",
     defaut: "appelsJour",
     groupes: [
       ["Rythme des callers", ["joursTravailles", "appelsJour", "reponseJour", "bookJour"]],
@@ -5927,6 +5931,7 @@ function vueColdCall() {
   // Evolution globale des KPI des cartes (callers choisis, filtres de la page).
   const joursSheetKpi = choisis.flatMap((c) => Object.keys(c.jours || {})).filter((jour) => dansPeriode({ jour }));
   courbeKpiPage("kpi-coldcall", {
+    granulDefaut: "jour",
     defaut: "bookes",
     groupes: [
       ["Cold call (Sheet)", ["appeles", "reponse", "callBook", "tReponse", "tCallBook"]],
