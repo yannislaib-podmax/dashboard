@@ -3733,7 +3733,6 @@ function vueTracking() {
   trackClassement(valeurs, parValeurPrec);
   trackCourbe(champ, leads, rdv, valeurs);
   trackCamemberts(valeurs, parValeurPrec);
-  trackRapportR1R2(champ, trackRelancesFiltrees());
 
   // Les cartes/classement/courbe/camemberts ci-dessus viennent d'être reconstruits
   // (innerHTML) : ce sont de nouveaux éléments ".rv", jamais observés par
