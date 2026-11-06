@@ -1902,7 +1902,7 @@ tr.total td {
 .cc-act-barre i.bas { background: var(--rouge); }
 .cc-act-rythme { font-size: 12px; color: var(--txt3); }
 .cc-act-pastilles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
-.cc-act-pastilles span { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px; line-height: 1.2; white-space: nowrap; color: var(--txt2); padding: 10px 12px; border-radius: var(--r-petit); background: var(--verre); }
+.cc-act-pastilles span { min-width: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--txt2); padding: 10px 12px; border-radius: var(--r-petit); background: var(--verre); }
 .cc-act-pastilles .ecart-inline { align-self: flex-start; margin-left: 0; padding: 1px 7px; font-size: 10.5px; }
 .cc-act-pastilles b {font-size: 18px; line-height: 1.1; font-weight: 600; color: var(--blanc); white-space: nowrap; }
 

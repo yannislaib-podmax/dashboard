@@ -5458,6 +5458,14 @@ function appliquerOngletColdcall() {
   // Type d'appel (Closing / Rattrapage) et rang : uniquement dans la vue Cycle de vente.
   const ligneToggles = document.getElementById("coldcall-ligne");
   if (ligneToggles) ligneToggles.style.display = COLDCALL_VUE === "cycle" ? "flex" : "none";
+  // Toggle callers : vue Cycle = sous le toggle des vues ; vue Performance = sous le graphique
+  // "Activite recente" (il ne filtre que les sections suivantes : rythme, efficacite, classement).
+  const filtreCallers = document.getElementById("coldcall-filtre");
+  const emplacementPerf = document.getElementById("coldcall-filtre-perf");
+  if (filtreCallers && emplacementPerf) {
+    if (COLDCALL_VUE === "perf") emplacementPerf.appendChild(filtreCallers);
+    else zone.insertAdjacentElement("afterend", filtreCallers);
+  }
   zone.innerHTML =
     `<button type="button" class="${COLDCALL_VUE === "perf" ? "actif" : ""}" data-cc-vue="perf">Performance des callers</button>` +
     `<button type="button" class="${COLDCALL_VUE === "cycle" ? "actif" : ""}" data-cc-vue="cycle">Cycle de vente</button>`;
@@ -5727,7 +5735,7 @@ function vueColdCall() {
         const P = l.prec;
         const pr = (v) => (P ? [v(P)] : null);
         const tauxDec = ratio(l.reponse, l.appeles);
-        const showUp = ratio(l.at.honores, l.at.bookes);
+        const showUp = ratio(l.at.honores, l.at.conclus);
         const coutVente = l.at.ventes > 0 ? l.remun / l.at.ventes : null;
         return `<div class="glass cc-act-carte rv">
         <div class="cc-act-tete"><span class="cc-act-nom">${l.nom}</span></div>
@@ -5736,10 +5744,10 @@ function vueColdCall() {
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
         <div class="cc-act-pastilles">
           <span>Taux décroché<b>${pourcent(tauxDec)}</b>${evTaux(tauxDec, pr((p) => ratio(p.reponse, p.appeles)))}</span>
-          <span>Bookés déclarés<b>${nombre(l.callBook)}</b>${evNb(l.callBook, pr((p) => p.callBook), "ccBook")}</span>
-          <span>Bookés réels<b>${nombre(l.at.bookes)}</b>${evNb(l.at.bookes, pr((p) => p.at.bookes), "ccBook")}</span>
+          <span title="Calls bookés déclarés par le caller (Sheet)">Bookés décl.<b>${nombre(l.callBook)}</b>${evNb(l.callBook, pr((p) => p.callBook), "ccBook")}</span>
+          <span title="Calls bookés réels (iClosed)">Bookés réels<b>${nombre(l.at.bookes)}</b>${evNb(l.at.bookes, pr((p) => p.at.bookes), "ccBook")}</span>
           <span>Honorés<b>${nombre(l.at.honores)}</b>${evNb(l.at.honores, pr((p) => p.at.honores), "ccHonore")}</span>
-          <span>Show-up<b>${pourcent(showUp)}</b>${evTaux(showUp, pr((p) => ratio(p.at.honores, p.at.bookes)))}</span>
+          <span>Show-up<b>${pourcent(showUp)}</b>${evTaux(showUp, pr((p) => ratio(p.at.honores, p.at.conclus)))}</span>
           <span>Ventes<b>${nombre(l.at.ventes)}</b>${evNb(l.at.ventes, pr((p) => p.at.ventes), "ccVente")}</span>
           <span>CA<b>${euros(l.at.ca)}</b>${evNb(l.at.ca, pr((p) => p.at.ca), "ccCa")}</span>
           <span>Rémunération<b>${euros(l.remun)}</b></span>
