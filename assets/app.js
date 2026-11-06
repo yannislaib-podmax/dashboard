@@ -5893,6 +5893,7 @@ function vueColdCall() {
   );
   // ---- Rythme et efficacité des callers (callers, période et produit choisis) ----
   let rythmeAppels = 0, rythmeReponse = 0, rythmeBook = 0, rythmeJours = 0;
+  const rythmeJoursDistincts = new Set();
   let meilleur = { appels: 0, caller: null, jour: null };
   choisis.forEach((c) =>
     Object.entries(c.jours || {}).forEach(([jour, jv]) => {
@@ -5903,6 +5904,7 @@ function vueColdCall() {
       rythmeReponse += reponseJour(jv);
       rythmeBook += callBookJour(jv);
       rythmeJours += 1;
+      rythmeJoursDistincts.add(jour);
       if (a > meilleur.appels) meilleur = { appels: a, caller: c.caller, jour };
     })
   );
@@ -5910,7 +5912,7 @@ function vueColdCall() {
   const cibleRythme = document.getElementById("coldcall-rythme");
   if (cibleRythme)
     cibleRythme.innerHTML = [
-      carte("Jours travaillés", nombre(rythmeJours), rythmeJours ? `jours-caller avec au moins 1 appel (${nombre(choisis.length)} caller${choisis.length > 1 ? "s" : ""})` : "aucune activité sur la période", null),
+      carte("Jours travaillés (cumul callers)", nombre(rythmeJours), rythmeJours ? `somme des jours où chaque caller a appelé au moins une fois : ${nombre(rythmeJoursDistincts.size)} jour${rythmeJoursDistincts.size > 1 ? "s" : ""} calendaire${rythmeJoursDistincts.size > 1 ? "s" : ""}, ${nombre(choisis.length)} caller${choisis.length > 1 ? "s" : ""}` : "aucune activité sur la période", null),
       carte("Appels / jour travaillé", parJour(rythmeAppels), rythmeJours ? `${nombre(rythmeAppels)} appels sur ${nombre(rythmeJours)} jours travaillés` : "—", null),
       carte("Décrochés / jour travaillé", parJour(rythmeReponse), rythmeJours ? `${nombre(rythmeReponse)} décrochés` : "—", null),
       carte("Calls bookés / jour travaillé", parJour(rythmeBook), rythmeJours ? `${nombre(rythmeBook)} calls bookés déclarés` : "—", null),
