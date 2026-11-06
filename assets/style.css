@@ -639,6 +639,8 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   cursor: pointer;
   transition: background .15s, color .15s;
 }
+/* Paid Ads : le toggle Performance / LTV est seul sur sa ligne, avec un espace avant les autres toggles. */
+#paid-mode { display: flex; width: fit-content; margin-bottom: 32px; }
 .toggle-granularite button:hover { color: var(--txt); }
 .toggle-granularite button.actif {
   background: var(--violet-clair);
