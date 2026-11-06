@@ -1371,7 +1371,7 @@ function courbeKpiPage(id, cfg) {
       st.granul = g;
       courbeKpiPage(id, st.cfg);
     },
-    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal, points: !!cfg.points }
+    { granularites: ["jour", "semaine", "mois", "annee"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal, points: !!cfg.points }
   );
 }
 const dansBloc = (jour, b) => !!jour && jour >= b.debut && jour <= b.fin;
@@ -1417,7 +1417,7 @@ function courbePerformance(lignes) {
       GRANULARITE_PERF = g;
       courbePerformance(DERNIERES_LIGNES_PERF);
     },
-    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+    { granularites: ["jour", "semaine", "mois", "annee"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
   );
 }
 let DERNIERES_LIGNES_PERF = [];
@@ -2300,7 +2300,7 @@ function courbeDirection(contrats, paiements) {
       GRANULARITE_DIRECTION_COURBE = g;
       courbeDirection(DERNIERS_DIRECTION_COURBE.contrats, DERNIERS_DIRECTION_COURBE.paiements);
     },
-    { granularites: ["jour", "semaine", "mois"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
+    { granularites: ["jour", "semaine", "mois", "annee"], plancherMax: def.decimal ? 0.0001 : 1, axeExact: !!def.decimal }
   );
 }
 
@@ -5706,10 +5706,10 @@ function vueColdCall() {
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
         <div class="cc-act-pastilles">
           <span>Décrochés<b>${nombre(l.reponse)}</b></span>
-          <span>Calls bookés<b>${nombre(l.at.bookes)}</b></span>
+          <span>Bookés<b>${nombre(l.at.bookes)}</b></span>
           <span>Honorés<b>${nombre(l.at.honores)}</b></span>
           <span>Ventes<b>${nombre(l.at.ventes)}</b></span>
-          <span>CA contracté<b>${euros(l.at.ca)}</b></span>
+          <span>CA<b>${euros(l.at.ca)}</b></span>
           <span>Rémunération<b>${euros(l.remun)}</b></span>
         </div>
       </div>`;
@@ -5796,7 +5796,7 @@ function vueColdCall() {
       GRANULARITE_COLDCALL_ACTIVITE = g;
       vueColdCall();
     },
-    { granularites: ["jour", "semaine", "mois"] }
+    { granularites: ["jour", "semaine", "mois", "annee"] }
   );
 
   const parCaller = {};
