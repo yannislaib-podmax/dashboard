@@ -2715,7 +2715,10 @@ function rendre() {
   const modePaid = ACQ_MODE === "tous" ? "paid" : ACQ_MODE;
   const lignesPaid = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), modePaid), PAID_RANG);
   const precedentesPaid = appliquerRangFunnel(appliquerModeAcq(lignesPrecedentes(), modePaid), PAID_RANG);
-  vueEnsemble(lignesPaid, precedentesPaid, lignesPaid);
+  // Parts des ads : sans les rattrapages pris après une issue setter ("S"), qui relèvent du Setting et non de
+  // l'acquisition (même périmètre que Tracking UTM).
+  const lignesPartAds = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), ACQ_MODE), PAID_RANG);
+  vueEnsemble(lignesPaid, precedentesPaid, lignesPartAds);
   vueConversion(lignesFunnel, precedentesFunnel);
   // Le simulateur vit dans Paid Ads : mêmes lignes et mêmes filtres que la page.
   simulateur(lignesPaid);
