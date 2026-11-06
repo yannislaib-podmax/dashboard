@@ -381,73 +381,91 @@
   <section class="vue" id="vue-sales-coldcall">
     <div class="titre-vue">
       <h1>Outbound — Cold call</h1>
-      <p class="sous-titre">Prospection à froid, du premier appel à la vente. Le caller réserve le call avec le prospect au téléphone ; le prospect est identifié par l'UTM du lien (source outbound, content = caller).</p>
+      <p class="sous-titre">Prospection à froid, du premier appel à la vente. Le caller réserve le call avec le prospect au téléphone ; le prospect est identifié par l'UTM du lien (source outbound, content = caller). Deux vues : la performance des callers (activité, rythme, simulateur) et le cycle de vente (du lead assigné au CA).</p>
     </div>
 
-    <h3 class="sous-section" id="coldcall-activite-titre">Activité du jour</h3>
-    <p class="sous-titre rv" id="coldcall-activite-soustitre">Ce que chaque caller a fait aujourd'hui et hier, lu dans le Sheet.</p>
-    <div id="coldcall-activite"></div>
-    <h3 class="sous-section">Activité dans le temps</h3>
-    <p class="sous-titre rv">Appels passés, décrochés et calls bookés déclarés par chaque caller, un point par jour, semaine ou mois, sur la période choisie dans l'en-tête.</p>
-    <div class="toggle-granularite" id="coldcall-activite-metrique"></div>
-    <p class="sous-titre" id="coldcall-activite-note"></p>
-    <div class="glass courbe-carte rv" id="coldcall-activite-courbe"></div>
-    <h2 class="section">Simulateur Outbound</h2>
-    <p class="sous-titre rv">Tu donnes un objectif de CA contracté, il remonte la chaîne à l'envers (vente → honoré → conclu → booké → décroché → appelé) et dit ce qu'il faut produire à chaque étape, combien de jours de travail cela représente et ce que cela coûte en rémunération des callers.</p>
-    <p class="convention rv">
-      <strong>Les hypothèses viennent de la période, du caller et du rang choisis dans l'analyse filtrée ci-dessous.</strong>
-      Chaque hypothèse est modifiable : remplace-la pour tester un scénario
-      — « et si mes callers décrochent à 20 % » — et remets le champ à vide pour
-      revenir au mesuré.
-    </p>
-    <div class="glass simu rv" id="simu-outbound"></div>
-
-    <div class="cc-separateur" aria-hidden="true"><span>Analyse filtrée</span></div>
-
+    <div class="toggle-granularite" id="coldcall-mode"></div>
     <div class="toggle-granularite" id="coldcall-filtre"></div>
     <div class="toggle-granularite" id="coldcall-rang"></div>
     <div id="coldcall-avis"></div>
 
-    <h3 class="sous-section">Cold call</h3>
-    <p class="sous-titre rv">Le travail du caller, lu dans le Google Sheet : leads assignés → appelés → décrochés → calls bookés déclarés.</p>
-    <div id="coldcall-cartes" class="cartes cols-4"></div>
-    <div id="coldcall-taux-cc" class="cartes cols-3 cartes-taux"></div>
+    <!-- Vue 1 : performance des callers -->
+    <div id="coldcall-bloc-perf">
+      <h3 class="sous-section" id="coldcall-activite-titre">Activité du jour</h3>
+      <p class="sous-titre rv" id="coldcall-activite-soustitre">Ce que chaque caller a fait aujourd'hui et hier, lu dans le Sheet.</p>
+      <div id="coldcall-activite"></div>
 
-    <h3 class="sous-section">Du call booké à la vente</h3>
-    <p class="sous-titre rv">Ce qui est réellement réservé dans iClosed (Airtable), jusqu'au CA contracté. Rang choisi ci-dessus : R1 = premier call du prospect, R2+ = relances, ou tous les rangs.</p>
-    <div id="coldcall-book" class="cartes cols-5"></div>
-    <div id="coldcall-taux-book" class="cartes cols-3 cartes-taux"></div>
+      <h3 class="sous-section">Activité récente</h3>
+      <p class="sous-titre rv">Appels passés, décrochés et calls bookés déclarés par chaque caller, un point par jour, semaine ou mois, sur la période choisie dans l'en-tête.</p>
+      <div class="toggle-granularite" id="coldcall-activite-metrique"></div>
+      <p class="sous-titre" id="coldcall-activite-note"></p>
+      <div class="glass courbe-carte rv" id="coldcall-activite-courbe"></div>
 
-    <h3 class="sous-section">Poids de l'Outbound</h3>
-    <p class="sous-titre rv">Part de l'Outbound dans les calls bookés, les ventes et le CA contracté tous canaux, sur la période.</p>
-    <div id="coldcall-taux" class="cartes cols-3"></div>
+      <h3 class="sous-section">Rythme des callers</h3>
+      <p class="sous-titre rv">Sur la période et les callers choisis. Un « jour travaillé » est un jour où le caller a passé au moins un appel.</p>
+      <div id="coldcall-rythme" class="cartes cols-4"></div>
 
-    <h3 class="sous-section">Rémunération</h3>
-    <p class="sous-titre rv">30 € par call de closing auquel le prospect se présente (R1). Période et caller sélectionnés.</p>
-    <div id="coldcall-cout" class="cartes cols-3"></div>
+      <h3 class="sous-section">Efficacité</h3>
+      <p class="sous-titre rv">Combien d'appels il faut pour obtenir un call booké, une vente, et le meilleur jour sur la période.</p>
+      <div id="coldcall-efficacite" class="cartes cols-3"></div>
 
-    <h3 class="sous-section">Évolution des KPI</h3>
-    <p class="sous-titre rv">L'évolution dans le temps de chaque KPI des cartes ci-dessus, un à la fois : choisis la catégorie puis le KPI, et jour, semaine ou mois. Une période sans dénominateur n'est pas tracée pour les taux.</p>
-    <div class="kpi-select" id="kpi-coldcall-courbe-metrique"></div>
-    <div class="glass courbe-carte rv" id="kpi-coldcall-courbe"></div>
+      <h2 class="section">Simulateur Outbound</h2>
+      <p class="sous-titre rv">Tu donnes un objectif de CA contracté, il remonte la chaîne à l'envers (vente → honoré → conclu → booké → décroché → appelé) et dit ce qu'il faut produire à chaque étape, combien de jours de travail cela représente et ce que cela coûte en rémunération des callers.</p>
+      <p class="convention rv">
+        <strong>Les hypothèses viennent de la période (en-tête), du caller et du rang choisis en haut de page.</strong>
+        Chaque hypothèse est modifiable : remplace-la pour tester un scénario
+        — « et si mes callers décrochent à 20 % » — et remets le champ à vide pour
+        revenir au mesuré.
+      </p>
+      <div class="glass simu rv" id="simu-outbound"></div>
 
-    <h3 class="sous-section">Entonnoir</h3>
-    <p class="sous-titre rv">Lead assigné → appelé → décroché → call booké → honoré → vente, pour le périmètre sélectionné (caller, période, rang).</p>
-    <div class="glass entonnoir rv" id="coldcall-entonnoir"></div>
+      <h3 class="sous-section">Cartes par caller</h3>
+      <p class="sous-titre rv">Une carte par caller sur la période et le rang choisis : appels, décrochés, calls bookés, honorés, ventes, CA et rémunération. Tous les callers, quel que soit le toggle caller.</p>
+      <div id="coldcall-cartes-caller"></div>
 
-    <h3 class="sous-section">Évolution</h3>
-    <p class="sous-titre rv">Le top 5 des callers dans le temps. Change la métrique pour tracer un autre indicateur (indépendant du classement). Tous les callers, quel que soit le toggle.</p>
-    <div class="toggle-granularite" id="coldcall-courbe-metrique"></div>
-    <div class="glass courbe-carte rv" id="coldcall-courbe"></div>
+      <h3 class="sous-section">Évolution</h3>
+      <p class="sous-titre rv">Le top 5 des callers dans le temps. Change la métrique pour tracer un autre indicateur (indépendant du classement). Tous les callers, quel que soit le toggle.</p>
+      <div class="toggle-granularite" id="coldcall-courbe-metrique"></div>
+      <div class="glass courbe-carte rv" id="coldcall-courbe"></div>
 
-    <h3 class="sous-section">Répartition</h3>
-    <div class="camemberts" id="coldcall-camemberts"></div>
+      <h3 class="sous-section">Répartition</h3>
+      <div class="camemberts" id="coldcall-camemberts"></div>
 
-    <h3 class="sous-section">Classement</h3>
-    <p class="sous-titre rv">Le meilleur caller en haut. Change la métrique pour reclasser sur un autre indicateur. Tous les callers, quel que soit le toggle.</p>
-    <div class="toggle-granularite" id="coldcall-metrique"></div>
-    <div class="glass classement podium-carte rv" id="coldcall-classement"></div>
+      <h3 class="sous-section">Classement</h3>
+      <p class="sous-titre rv">Le meilleur caller en haut. Change la métrique pour reclasser sur un autre indicateur. Tous les callers, quel que soit le toggle.</p>
+      <div class="toggle-granularite" id="coldcall-metrique"></div>
+      <div class="glass classement podium-carte rv" id="coldcall-classement"></div>
+    </div>
 
+    <!-- Vue 2 : cycle de vente, du lead assigné au CA -->
+    <div id="coldcall-bloc-cycle" style="display:none">
+      <h3 class="sous-section">Cold call</h3>
+      <p class="sous-titre rv">Le travail du caller, lu dans le Google Sheet : leads assignés → appelés → décrochés → calls bookés déclarés.</p>
+      <div id="coldcall-cartes" class="cartes cols-4"></div>
+      <div id="coldcall-taux-cc" class="cartes cols-3 cartes-taux"></div>
+
+      <h3 class="sous-section">Du call booké à la vente</h3>
+      <p class="sous-titre rv">Ce qui est réellement réservé dans iClosed (Airtable), jusqu'au CA contracté. Rang choisi ci-dessus : R1 = premier call du prospect, R2+ = relances, ou tous les rangs.</p>
+      <div id="coldcall-book" class="cartes cols-5"></div>
+      <div id="coldcall-taux-book" class="cartes cols-3 cartes-taux"></div>
+
+      <h3 class="sous-section">Poids de l'Outbound</h3>
+      <p class="sous-titre rv">Part de l'Outbound dans les calls bookés, les ventes et le CA contracté tous canaux, sur la période.</p>
+      <div id="coldcall-taux" class="cartes cols-3"></div>
+
+      <h3 class="sous-section">Rémunération</h3>
+      <p class="sous-titre rv">30 € par call de closing auquel le prospect se présente (R1). Période et caller sélectionnés.</p>
+      <div id="coldcall-cout" class="cartes cols-3"></div>
+
+      <h3 class="sous-section">Évolution des KPI</h3>
+      <p class="sous-titre rv">L'évolution dans le temps de chaque KPI des cartes, un à la fois : choisis la catégorie puis le KPI, et jour, semaine ou mois. Une période sans dénominateur n'est pas tracée pour les taux.</p>
+      <div class="kpi-select" id="kpi-coldcall-courbe-metrique"></div>
+      <div class="glass courbe-carte rv" id="kpi-coldcall-courbe"></div>
+
+      <h3 class="sous-section">Entonnoir</h3>
+      <p class="sous-titre rv">Lead assigné → appelé → décroché → call booké → honoré → vente, pour le périmètre sélectionné (caller, période, rang).</p>
+      <div class="glass entonnoir rv" id="coldcall-entonnoir"></div>
+    </div>
   </section>
 
   <!-- ---------- Sales Team — Setting (ex Acquisition > Outbound) ---------- -->
@@ -578,6 +596,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=180"></script>
+<script src="/assets/app.js?v=181"></script>
 </body>
 </html>

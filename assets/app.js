@@ -2402,7 +2402,7 @@ function afficherVue(nom) {
   if (barre && ancre) {
     ancre.after(barre);
     if (toggleMode) {
-      const premierToggle = vue.querySelector("#coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
+      const premierToggle = vue.querySelector("#coldcall-mode, #coldcall-filtre, #funnel-rang, #paid-rang, #tracking-dimension");
       const description = vue.querySelector(".convention");
       if (toggleMode === zoneAcq && premierToggle) premierToggle.before(toggleMode);
       else if (toggleMode === zoneAcq && description) description.after(toggleMode);
@@ -5440,22 +5440,36 @@ const ccAjouterRdv = (o, r) => {
   o.ca += r.montant || 0;
 };
 
-// Onglets de la page Outbound : Aujourd'hui / Période / Par caller / Simulateur
-// (même principe que le toggle Closing / Rattrapage de la page Closing).
-let COLDCALL_ONGLET = "jour";
-const CC_ONGLETS = [
-  ["jour", "Activité du jour"],
-  ["periode", "Période · graphiques et cartes"],
-  ["caller", "Par caller"],
-  ["simu", "Simulateur"],
-];
-function appliquerOngletColdcall() {} // page Outbound en une seule vue (pas de toggle)
+// Page Outbound : deux vues, comme la page Setting.
+//  "perf"  = performance des callers (activité du jour / récente, rythme, simulateur, comparaison)
+//  "cycle" = cycle de vente (Sheet -> call booké -> vente -> CA, poids, rémunération, entonnoir)
+let COLDCALL_VUE = "perf";
+function appliquerOngletColdcall() {
+  const zone = document.getElementById("coldcall-mode");
+  const blocPerf = document.getElementById("coldcall-bloc-perf");
+  const blocCycle = document.getElementById("coldcall-bloc-cycle");
+  if (!zone || !blocPerf || !blocCycle) return;
+  blocPerf.style.display = COLDCALL_VUE === "perf" ? "" : "none";
+  blocCycle.style.display = COLDCALL_VUE === "cycle" ? "" : "none";
+  zone.innerHTML =
+    `<button type="button" class="${COLDCALL_VUE === "perf" ? "actif" : ""}" data-cc-vue="perf">Performance des callers</button>` +
+    `<button type="button" class="${COLDCALL_VUE === "cycle" ? "actif" : ""}" data-cc-vue="cycle">Cycle de vente</button>`;
+  zone.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.classList.contains("actif")) return;
+      COLDCALL_VUE = btn.getAttribute("data-cc-vue");
+      appliquerOngletColdcall();
+      // Le bloc qui vient d'apparaitre est rendu a nouveau (largeurs des graphiques) et ses ".rv" re-armes.
+      vueColdCall();
+    });
+  });
+}
 
 function vueColdCall() {
   const cartes = document.getElementById("coldcall-cartes");
   if (!cartes) return;
   appliquerOngletColdcall();
-  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "simu-outbound"];
+  const ids = ["coldcall-cartes", "coldcall-taux-cc", "coldcall-book", "coldcall-taux-book", "coldcall-taux", "coldcall-cout", "coldcall-activite", "coldcall-activite-metrique", "coldcall-activite-courbe", "coldcall-entonnoir", "coldcall-courbe-metrique", "coldcall-courbe", "coldcall-camemberts", "coldcall-metrique", "coldcall-classement", "coldcall-rythme", "coldcall-efficacite", "coldcall-cartes-caller", "simu-outbound"];
   const vide = (msg) => `<div style="padding:28px;color:var(--txt3)">${msg}</div>`;
   const message = COLDCALL_ERREUR
     ? `Données Cold call indisponibles : ${COLDCALL_ERREUR}`
@@ -5466,6 +5480,9 @@ function vueColdCall() {
     ids.forEach((id) => { const el = document.getElementById(id); if (el) el.innerHTML = ""; });
     document.getElementById("coldcall-filtre").innerHTML = "";
     document.getElementById("coldcall-cartes").innerHTML = vide(message);
+    // "coldcall-cartes" est dans la vue Cycle de vente : on affiche aussi le message en haut de page.
+    const avisErr = document.getElementById("coldcall-avis");
+    if (avisErr) avisErr.innerHTML = `<div class="glass message" style="padding:14px 18px;margin-bottom:14px">${message}</div>`;
     return;
   }
 
@@ -5793,6 +5810,38 @@ function vueColdCall() {
       }
     })
   );
+  // ---- Rythme et efficacité des callers (callers, période et produit choisis) ----
+  let rythmeAppels = 0, rythmeReponse = 0, rythmeBook = 0, rythmeJours = 0;
+  let meilleur = { appels: 0, caller: null, jour: null };
+  choisis.forEach((c) =>
+    Object.entries(c.jours || {}).forEach(([jour, jv]) => {
+      if (!dansPeriode({ jour })) return;
+      const a = valeurJour(jv);
+      if (a <= 0) return;
+      rythmeAppels += a;
+      rythmeReponse += reponseJour(jv);
+      rythmeBook += callBookJour(jv);
+      rythmeJours += 1;
+      if (a > meilleur.appels) meilleur = { appels: a, caller: c.caller, jour };
+    })
+  );
+  const parJour = (n) => (rythmeJours ? (n / rythmeJours).toFixed(1).replace(".", ",") : "—");
+  const cibleRythme = document.getElementById("coldcall-rythme");
+  if (cibleRythme)
+    cibleRythme.innerHTML = [
+      carte("Jours travaillés", nombre(rythmeJours), rythmeJours ? `jours-caller avec au moins 1 appel (${nombre(choisis.length)} caller${choisis.length > 1 ? "s" : ""})` : "aucune activité sur la période", null),
+      carte("Appels / jour travaillé", parJour(rythmeAppels), rythmeJours ? `${nombre(rythmeAppels)} appels sur ${nombre(rythmeJours)} jours travaillés` : "—", null),
+      carte("Décrochés / jour travaillé", parJour(rythmeReponse), rythmeJours ? `${nombre(rythmeReponse)} décrochés` : "—", null),
+      carte("Calls bookés / jour travaillé", parJour(rythmeBook), rythmeJours ? `${nombre(rythmeBook)} calls bookés déclarés` : "—", null),
+    ].join("");
+  const cibleEff = document.getElementById("coldcall-efficacite");
+  if (cibleEff)
+    cibleEff.innerHTML = [
+      carte("Appels pour 1 call booké", rythmeBook > 0 ? nombre(Math.round(rythmeAppels / rythmeBook)) : "—", rythmeBook ? `${nombre(rythmeAppels)} appels pour ${nombre(rythmeBook)} calls bookés déclarés` : "aucun call booké déclaré", null),
+      carte("Appels pour 1 vente", ventes > 0 ? nombre(Math.round(rythmeAppels / ventes)) : "—", ventes ? `${nombre(rythmeAppels)} appels pour ${nombre(ventes)} ventes${suffixeDeRang(COLDCALL_RANG)}` : "aucune vente sur la période", null),
+      carte("Meilleur jour", meilleur.caller ? nombre(meilleur.appels) : "—", meilleur.caller ? `appels, ${meilleur.caller} le ${jourCourt(meilleur.jour)}` : "—", null),
+    ].join("");
+
   simulateurOutbound({
     tReponse: ratio(t.reponse, t.appeles),
     tBook: ratio(bookes, t.reponse),
