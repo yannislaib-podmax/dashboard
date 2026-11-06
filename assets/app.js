@@ -5681,6 +5681,27 @@ function vueColdCall() {
   if (sousTitreAct)
     sousTitreAct.textContent = `Cumul par caller sur ${periodeLibelle}${filtreProduit ? " et le produit (prospects intéressés par ce produit, colonne J du Sheet)" : ""}. Choisis « Aujourd'hui » ou « Hier » dans le filtre de période pour le suivi du jour.`;
   if (modePeriodeAct) {
+    // Periode precedente (meme comparaison que le reste du dash) : sert aux fleches de variation.
+    const plagePrec = plagePrecedente();
+    const dansPlagePrec = (j) => !!j && j >= plagePrec[0] && j <= plagePrec[1];
+    const rdvPrecAll = !plagePrec || exclu ? [] : rdvBase.filter((r) => ccEstOutbound(r) && dansPlagePrec(r.jour) && parProduit(r));
+    const rdvPrecPayes = !plagePrec || exclu ? [] : TRACK_CLOSING_TOUS.filter((r) => ccEstOutbound(r) && dansPlagePrec(r.jour) && parProduit(r) && r.rangR === 1 && (r.present || 0) > 0);
+    const precDe = (c) => {
+      if (!plagePrec) return null;
+      const jr = Object.entries(c.jours || {}).filter(([k]) => dansPlagePrec(k));
+      const at = ccNouvelAgregat();
+      rdvPrecAll.forEach((r) => {
+        if (nomDuRdv(r) === c.caller) ccAjouterRdv(at, r);
+      });
+      const remun = rdvPrecPayes.filter((r) => nomDuRdv(r) === c.caller).length * CC_PRIME_HONORE;
+      return {
+        appeles: jr.reduce((s, [, v]) => s + valeurJour(v), 0),
+        reponse: jr.reduce((s, [, v]) => s + reponseJour(v), 0),
+        callBook: jr.reduce((s, [, v]) => s + callBookJour(v), 0),
+        at,
+        remun,
+      };
+    };
     const lignesP = COLDCALL.map((c) => {
       const jr = Object.entries(c.jours || {}).filter(([k]) => dansPeriode({ jour: k }));
       const appeles = jr.reduce((s, [, v]) => s + valeurJour(v), 0);
@@ -5692,8 +5713,12 @@ function vueColdCall() {
       rdvAll.forEach((r) => {
         if (nomDuRdv(r) === c.caller) ccAjouterRdv(at, r);
       });
-      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0, at, remun: remunParCaller[c.caller] || 0 };
+      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0, at, remun: remunParCaller[c.caller] || 0, prec: precDe(c) };
     });
+    // Fleche de variation d'une pastille (vide sans comparaison). Compteurs : % ; taux : points.
+    const mq = (e) => (e ? `<span class="ecart-inline ${e.classe}">${e.texte === "rien d'équivalent avant" ? "nouveau" : e.texte}</span>` : "");
+    const evNb = (a, p, cle) => (p ? mq(ecartDe(a, p[0], cle)) : "");
+    const evTaux = (a, p, baisseBonne) => (p && a !== null && p[0] !== null ? mq(ecartPoints(a, p[0], baisseBonne)) : "");
     const maxP = Math.max(1, ...lignesP.map((l) => l.appeles));
     document.getElementById("coldcall-activite").innerHTML = `<div class="cc-act-grille">${lignesP
       .map((l) => {
@@ -5705,12 +5730,15 @@ function vueColdCall() {
         <div class="cc-act-barre"><i class="${etat}" style="width:${pct}%"></i></div>
         <div class="cc-act-rythme">${l.actifs ? `${nombre(l.moy)} / jour travaillé, ${l.actifs} jour${l.actifs > 1 ? "s" : ""} actif${l.actifs > 1 ? "s" : ""}` : "Aucune activité sur la période"}</div>
         <div class="cc-act-pastilles">
-          <span>Décrochés<b>${nombre(l.reponse)}</b></span>
-          <span>Bookés<b>${nombre(l.at.bookes)}</b></span>
+          <span>Taux décroché<b>${pourcent(ratio(l.reponse, l.appeles))}</b></span>
+          <span>Bookés déclarés<b>${nombre(l.callBook)}</b></span>
+          <span>Bookés réels<b>${nombre(l.at.bookes)}</b></span>
           <span>Honorés<b>${nombre(l.at.honores)}</b></span>
+          <span>Show-up<b>${pourcent(ratio(l.at.honores, l.at.bookes))}</b></span>
           <span>Ventes<b>${nombre(l.at.ventes)}</b></span>
           <span>CA<b>${euros(l.at.ca)}</b></span>
           <span>Rémunération<b>${euros(l.remun)}</b></span>
+          <span>Coût / vente<b>${l.at.ventes > 0 ? euros(l.remun / l.at.ventes) : "—"}</b></span>
         </div>
       </div>`;
       })
