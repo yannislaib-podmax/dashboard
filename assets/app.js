@@ -5464,7 +5464,8 @@ function appliquerOngletColdcall() {
   const emplacementPerf = document.getElementById("coldcall-filtre-perf");
   if (filtreCallers && emplacementPerf) {
     if (COLDCALL_VUE === "perf") emplacementPerf.appendChild(filtreCallers);
-    else zone.insertAdjacentElement("afterend", filtreCallers);
+    // Vue Cycle : 1) vues, 2) type d'appel + rang (meme ligne), 3) callers.
+    else (ligneToggles || zone).insertAdjacentElement("afterend", filtreCallers);
   }
   zone.innerHTML =
     `<button type="button" class="${COLDCALL_VUE === "perf" ? "actif" : ""}" data-cc-vue="perf">Performance des callers</button>` +
