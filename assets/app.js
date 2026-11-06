@@ -1510,8 +1510,23 @@ function alerteSaisieDepense(lignes) {
   zone.innerHTML = `<strong>Dépense non saisie sur ${manquants.length} jour${manquants.length > 1 ? "s" : ""} (${liste}).</strong> Ces jours ont des leads mais aucune dépense : le ROAS et les coûts de la période sont sous-estimés tant que META_DEPENSE n'est pas rempli.`;
 }
 
-function vueEnsemble(lignes, precedentes) {
+function vueEnsemble(lignes, precedentes, lignesTotal) {
   appliquerPaidVue();
+  // Part des ads : source "Ads" / toutes les lignes, avec les mêmes filtres que la page.
+  const zonePart = document.getElementById("perf-part-ads");
+  if (zonePart && lignesTotal) {
+    const adsL = lignesTotal.filter((l) => l.source === "Ads");
+    const part = (champ, fmt) => {
+      const a = somme(adsL, champ), t = somme(lignesTotal, champ);
+      return { v: pourcent(t > 0 ? a / t : 0), n: `${fmt(a)} sur ${fmt(t)} au total` };
+    };
+    const rdvP = part("rendezVous", nombre), venteP = part("ventes", nombre), caP = part(caChamp(), euros);
+    zonePart.innerHTML = [
+      carte("Part des calls bookés", rdvP.v, rdvP.n, null),
+      carte("Part des ventes", venteP.v, venteP.n, null),
+      carte(`Part du ${caLibelle()}`, caP.v, caP.n, null),
+    ].join("");
+  }
   alerteSaisieDepense(lignes);
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
@@ -2702,7 +2717,7 @@ function rendre() {
   const modePaid = ACQ_MODE === "tous" ? "paid" : ACQ_MODE;
   const lignesPaid = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), modePaid), PAID_RANG);
   const precedentesPaid = appliquerRangFunnel(appliquerModeAcq(lignesPrecedentes(), modePaid), PAID_RANG);
-  vueEnsemble(lignesPaid, precedentesPaid);
+  vueEnsemble(lignesPaid, precedentesPaid, lignesPaid);
   vueConversion(lignesFunnel, precedentesFunnel);
   // Le simulateur vit dans Paid Ads : mêmes lignes et mêmes filtres que la page.
   simulateur(lignesPaid);
