@@ -46,7 +46,7 @@ const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0)
 let CA_MODE = "premier";
 const CA_MODES = {
   call: { champ: "contracte", libelle: "CA contracté", note: "CA contracté des ventes rattachées au call, tel que saisi dans iClosed." },
-  premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable), rangé au jour de signature. Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
+  premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable). Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
   tous: { champ: "encaisseTous", libelle: "CA encaissé (tous contrats)", note: "Tout ce que les clients acquis ont payé depuis, à date (renouvellements compris). Mesure ce qu'un client rapporte. Les ventes d'avant le formulaire Tally n'y figurent pas." },
 };
 const caChamp = () => CA_MODES[CA_MODE].champ;
