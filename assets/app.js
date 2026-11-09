@@ -5770,6 +5770,10 @@ function vueColdCall() {
     }
     return null;
   };
+  // Opt-ins Outbound : leads arrives par le lien d'un caller. "Sans call" = le prospect a rempli le
+  // formulaire mais n'a choisi aucun creneau (aucun call booke dans iClosed).
+  const leadsOutPeriode = exclu ? [] : TRACK_LEADS.filter((l) => ccEstOutbound(l) && dansPeriode(l) && parProduit(l));
+  const optinsSansCall = leadsOutPeriode.filter((l) => (l.nbCalls || 0) === 0);
   // Remuneration : 30 EUR par call honore (R1), independante du toggle de rang.
   const rdvPayes = exclu ? [] : TRACK_CLOSING_TOUS.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && r.rangR === 1 && (r.present || 0) > 0);
   const payesChoisis = COLDCALL_CALLER === "tout" ? rdvPayes : rdvPayes.filter(dansCallers);
@@ -5862,7 +5866,8 @@ function vueColdCall() {
       rdvAll.forEach((r) => {
         if (nomDuRdv(r) === c.caller) ccAjouterRdv(at, r);
       });
-      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0, at, remun: remunParCaller[c.caller] || 0, prec: precDe(c) };
+      const optins = optinsSansCall.filter((l) => nomDuRdv(l) === c.caller).length;
+      return { nom: c.caller, appeles, reponse, callBook, actifs, moy: actifs ? Math.round(appeles / actifs) : 0, at, optins, remun: remunParCaller[c.caller] || 0, prec: precDe(c) };
     });
     // Fleche de variation d'une pastille (vide sans comparaison). Compteurs : % ; taux : points.
     const mq = (e) => (e ? `<span class="ecart-inline ${e.classe}">${e.texte === "rien d'équivalent avant" ? "nouveau" : e.texte}</span>` : "");
@@ -5909,6 +5914,7 @@ function vueColdCall() {
           <span>Taux décroché<b>${pourcent(tauxDec)}</b>${evTaux(tauxDec, pr((p) => ratio(p.reponse, p.appeles)))}</span>
           <span title="Calls bookés déclarés par le caller (Sheet)">Bookés décl.<b>${nombre(l.callBook)}</b>${evNb(l.callBook, pr((p) => p.callBook), "ccBook")}</span>
           <span title="Calls bookés réels (iClosed)">Bookés réels<b>${nombre(l.at.bookes)}</b>${evNb(l.at.bookes, pr((p) => p.at.bookes), "ccBook")}</span>
+          <span title="Prospects arrivés par le lien du caller qui ont rempli le formulaire mais n'ont choisi aucun créneau (aucun call booké dans iClosed) : à relancer">Opt-ins sans call<b>${nombre(l.optins)}</b></span>
           <span>Honorés<b>${nombre(l.at.honores)}</b>${evNb(l.at.honores, pr((p) => p.at.honores), "ccHonore")}</span>
           <span>Show-up<b>${pourcent(showUp)}</b>${evTaux(showUp, pr((p) => ratio(p.at.honores, p.at.conclus)))}</span>
           <span>Ventes<b>${nombre(l.at.ventes)}</b>${evNb(l.at.ventes, pr((p) => p.at.ventes), "ccVente")}</span>
@@ -6064,6 +6070,12 @@ function vueColdCall() {
       carte("Appels pour 1 call booké", rythmeBook > 0 ? nombre(Math.round(rythmeAppels / rythmeBook)) : "—", rythmeBook ? `${nombre(rythmeAppels)} appels pour ${nombre(rythmeBook)} calls bookés déclarés` : "aucun call booké déclaré", null),
       carte("Appels pour 1 vente", ventes > 0 ? nombre(Math.round(rythmeAppels / ventes)) : "—", ventes ? `${nombre(rythmeAppels)} appels pour ${nombre(ventes)} ventes${suffixeDeRang(enPerf ? "tous" : COLDCALL_RANG)}` : "aucune vente sur la période", null),
       carte("Meilleur jour", meilleur.caller ? nombre(meilleur.appels) : "—", meilleur.caller ? `appels, ${meilleur.caller} le ${jourCourt(meilleur.jour)}` : "—", null),
+      carte(
+        "Opt-in → call booké",
+        leadsOutPeriode.length ? pourcent((leadsOutPeriode.length - optinsSansCall.length) / leadsOutPeriode.length) : "—",
+        leadsOutPeriode.length ? `${nombre(leadsOutPeriode.length - optinsSansCall.length)} prospects ont pris un créneau sur ${nombre(leadsOutPeriode.length)} opt-ins (${nombre(optinsSansCall.length)} sans call)` : "aucun opt-in sur la période",
+        null
+      ),
     ].join("");
 
   // Courbe standard du dash (comme "Evolution des KPI") : les KPI de "Rythme" et "Efficacite" dans le temps (callers, periode, produit et rang choisis).
@@ -6210,9 +6222,13 @@ function vueColdCall() {
 
   // Repartition entre callers.
   const parts = (cle) => lignesCaller.filter(([, v]) => v[cle] > 0).map(([nom, v]) => [nom, v[cle], couleurCaller[nom]]);
+  // Calls Outbound sans caller reconnu (lien sans UTM content) : visibles au lieu de disparaitre de la repartition.
+  const nonAttribues = rdvAll.filter((r) => !nomDuRdv(r)).length;
+  const partsBookes = parts("bookes");
+  if (nonAttribues > 0) partsBookes.push(["Non attribué", nonAttribues, "#9aa0a6"]);
   document.getElementById("coldcall-camemberts").innerHTML = [
     disque("Appelés par caller", parts("appeles"), nombre),
-    disque(`Calls bookés par caller${suffixeRang}`, parts("bookes"), nombre),
+    disque(`Calls bookés par caller${suffixeRang}`, partsBookes, nombre),
     disque(`CA contracté par caller${suffixeRang}`, parts("ca"), euros),
   ].join("");
   brancherSurvol(document.getElementById("coldcall-camemberts"));

@@ -21,6 +21,7 @@ const CHAMPS_LEADS = {
   fldZdsEwaqcwqjqtg: "utmSource",
   fldptIrzRFTSHlI97: "utmCampaign",
   fldSuIDEn4U2QuUPv: "utmContent",
+  fldreiHMlZQd2xHX3: "nbCalls", // nombre de calls bookes du lead (0 = opt-in sans creneau)
 };
 
 const CHAMPS_CALL_BOOKED = {
