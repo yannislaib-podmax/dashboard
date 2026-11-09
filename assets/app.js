@@ -5671,10 +5671,26 @@ function vueColdCall() {
   ].join("");
 
   // Taux du travail sur le Sheet, sous les cartes Cold call.
+  // Opt-ins du ou des callers choisis (leads arrives par leur lien, periode et produit de l'en-tete) :
+  // "sans creneau" = formulaire rempli mais aucun call booke dans iClosed (a relancer).
+  const exclutOut =
+    (CANAL !== "tout" && String(CANAL).toLowerCase() !== "cold call") || (SOURCE !== "tout" && String(SOURCE).toLowerCase() !== "outbound");
+  const optinsChoisis = exclutOut
+    ? []
+    : TRACK_LEADS.filter((l) => ccEstOutbound(l) && dansPeriode(l) && (PRODUIT === "tout" || l.produit === PRODUIT) && dansCallers(l));
+  const optinsSansCreneau = optinsChoisis.filter((l) => (l.nbCalls || 0) === 0).length;
+  const optinsAvecCreneau = optinsChoisis.length - optinsSansCreneau;
+  document.getElementById("coldcall-taux-cc").className = "cartes cols-4 cartes-taux";
   document.getElementById("coldcall-taux-cc").innerHTML = [
     carte("Taux de remplissage", ccPct(t.traites, t.assignes), t.assignes ? `${nombre(t.traites)} leads travaillés sur ${nombre(t.assignes)} assignés (total, hors période)` : "—", null),
     carte("Taux de réponse", ccPct(t.reponse, t.appeles), t.appeles ? `${nombre(t.reponse)} décrochés sur ${nombre(t.appeles)} appels passés` : "—", null),
     carte("Taux de call book", ccPct(t.callBook, t.reponse), t.reponse ? `${nombre(t.callBook)} calls bookés sur ${nombre(t.reponse)} décrochés` : "—", null),
+    carte(
+      "Opt-in → call booké",
+      optinsChoisis.length ? pourcent(optinsAvecCreneau / optinsChoisis.length) : "—",
+      optinsChoisis.length ? `${nombre(optinsAvecCreneau)} prospects ont pris un créneau sur ${nombre(optinsChoisis.length)} opt-ins (${nombre(optinsSansCreneau)} sans créneau, à relancer)` : "aucun opt-in sur la période",
+      null
+    ),
   ].join("");
 
   // Rangee 2 — Airtable : du call reellement booke jusqu'a la vente et au CA.
@@ -5713,7 +5729,7 @@ function vueColdCall() {
 
   document.getElementById("coldcall-book").className = "cartes cols-5";
   document.getElementById("coldcall-book").innerHTML = [
-    carte("Calls bookés réels", nombre(bookes), t.callBook && COLDCALL_RANG === "r1" ? `${nombre(bookes)} réservés sur ${nombre(t.callBook)} déclarés dans le Sheet` : `réservations iClosed (CALL BOOKED)${suffixeDeRang(COLDCALL_RANG)}`, null),
+    carte("Calls bookés réels", nombre(bookes), t.callBook && COLDCALL_RANG === "r1" ? `${nombre(bookes)} réservés sur ${nombre(t.callBook)} déclarés dans le Sheet${optinsSansCreneau ? ` (${nombre(optinsSansCreneau)} opt-ins sans créneau)` : ""}` : `réservations iClosed (CALL BOOKED)${suffixeDeRang(COLDCALL_RANG)}`, null),
     carte("Calls conclus", nombre(conclus), "Honoré ou No-show (hors RDV à venir ou annulés)", null),
     carte("Calls honorés", nombre(honores), "le prospect s'est présenté", null),
     carte("Ventes", nombre(ventes), "calls rattachés à un contrat", null),
@@ -5914,7 +5930,7 @@ function vueColdCall() {
           <span>Taux décroché<b>${pourcent(tauxDec)}</b>${evTaux(tauxDec, pr((p) => ratio(p.reponse, p.appeles)))}</span>
           <span title="Calls bookés déclarés par le caller (Sheet)">Bookés décl.<b>${nombre(l.callBook)}</b>${evNb(l.callBook, pr((p) => p.callBook), "ccBook")}</span>
           <span title="Calls bookés réels (iClosed)">Bookés réels<b>${nombre(l.at.bookes)}</b>${evNb(l.at.bookes, pr((p) => p.at.bookes), "ccBook")}</span>
-          <span title="Prospects arrivés par le lien du caller qui ont rempli le formulaire mais n'ont choisi aucun créneau (aucun call booké dans iClosed) : à relancer">Opt-ins sans call<b>${nombre(l.optins)}</b></span>
+          <span title="Prospects arrivés par le lien du caller qui ont rempli le formulaire mais n'ont choisi aucun créneau (aucun call booké dans iClosed) : à relancer">Sans créneau<b>${nombre(l.optins)}</b></span>
           <span>Honorés<b>${nombre(l.at.honores)}</b>${evNb(l.at.honores, pr((p) => p.at.honores), "ccHonore")}</span>
           <span>Show-up<b>${pourcent(showUp)}</b>${evTaux(showUp, pr((p) => ratio(p.at.honores, p.at.conclus)))}</span>
           <span>Ventes<b>${nombre(l.at.ventes)}</b>${evNb(l.at.ventes, pr((p) => p.at.ventes), "ccVente")}</span>
