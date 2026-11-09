@@ -249,13 +249,16 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
     const mesContrats = contratsParClient[idClient] || [];
     if (!mesContrats.length) continue;
 
-    const ligneLead = ligneParLeadViaCall[lead._id] || (lead.capteLe ? { jour: jourParis(lead.capteLe), canal: lead.canal || SANS, produit: lead.produit || SANS } : null);
-    if (!ligneLead) continue;
-    const idLigne = cleLigne(ligneLead.jour, ligneLead.canal, ligneLead.produit);
-    clientsDejaVus.add(idClient);
-
+    const ligneOrigine = ligneParLeadViaCall[lead._id] || (lead.capteLe ? { jour: jourParis(lead.capteLe), canal: lead.canal || SANS, produit: lead.produit || SANS } : null);
+    if (!ligneOrigine) continue;
     const dates = mesContrats.map((k) => String(k.dateSignature || "")).filter(Boolean).sort();
     const d0 = dates[0] || "";
+    // DECISION 2026-11-09 : le client est range au JOUR DE SIGNATURE de son 1er contrat
+    // (et non au jour du call). Canal et produit restent ceux du lead d'origine.
+    // Sans date de signature, repli sur le jour du call / de capture.
+    const ligneLead = { ...ligneOrigine, jour: d0 ? d0.slice(0, 10) : ligneOrigine.jour };
+    const idLigne = cleLigne(ligneLead.jour, ligneLead.canal, ligneLead.produit);
+    clientsDejaVus.add(idClient);
     const duJour = mesContrats.filter((k) => String(k.dateSignature || "") === d0);
     // 1er achat = TOUS les contrats du jour du 1er contrat, abonnement Media Buying
     // pris en option compris (decision 2026-10-20) : sa 1re mensualite est du CA
