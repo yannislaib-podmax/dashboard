@@ -3710,21 +3710,46 @@ function vueTracking() {
   // Même périmètre que les cartes du dessus (période, filtres, rang), source d'origine inchangée.
   const zoneRelance = document.getElementById("tracking-relance");
   if (zoneRelance) {
-    const carteRelance = (titre, lignes) => {
-      const honores = somme(lignes, "present");
-      const ventes = somme(lignes, "vente");
-      const ca = somme(lignes, "montant");
-      const part = rdv.length ? pourcent(lignes.length / rdv.length) : "—";
-      return carte(
-        titre,
-        nombre(lignes.length),
-        `${part} des calls bookés · ${nombre(honores)} honorés · ${nombre(ventes)} vente${ventes > 1 ? "s" : ""} · ${euros(ca)}`,
-        null
-      );
+    // Suit le même toggle que le classement (TRACK_METRIQUE) : même métrique, même part du total.
+    const defRel = TRACK_METRIQUES[TRACK_METRIQUE];
+    const LIBELLE_REL = { leads: "Leads", booke: "Call booké", present: "Call honoré", ventes: "Ventes", ca: "CA contracté" };
+    const LIBELLE_PART_REL = { leads: "des leads", ca: "du CA", present: "des présents", booke: "des calls bookés", ventes: "des ventes" };
+    const aggRel = (lignesRdv, lignesLeads) => ({
+      leads: lignesLeads.length,
+      rdv: lignesRdv.length,
+      present: somme(lignesRdv, "present"),
+      conclu: somme(lignesRdv, "conclu"),
+      ventes: somme(lignesRdv, "vente"),
+      ca: somme(lignesRdv, "montant"),
+    });
+    const totalRel = defRel.valeur(aggRel(rdv, leads));
+    // Détail par campagne / par setter, sur la même métrique (valeurs triées décroissant).
+    const detailRel = (lignesRdv, lignesLeads, cle) => {
+      const noms = new Set([...lignesRdv, ...lignesLeads].map((x) => x[cle] || "Non renseigné"));
+      return [...noms]
+        .map((nom) => {
+          const a = aggRel(lignesRdv.filter((x) => (x[cle] || "Non renseigné") === nom), lignesLeads.filter((x) => (x[cle] || "Non renseigné") === nom));
+          return { nom, val: defRel.valeur(a), txt: defRel.format(defRel.valeur(a)) };
+        })
+        .filter((d) => d.val > 0)
+        .sort((x, y) => y.val - x.val)
+        .map((d) => `${d.nom} : ${d.txt}`)
+        .join(" · ");
     };
+    const carteRelance = (titre, v, applicable, detail) => {
+      const val = defRel.valeur(v);
+      if (!applicable) return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, "—", "non applicable : une relance concerne un call, pas un lead", null);
+      const part = totalRel > 0 ? `${pourcent(val / totalRel)} ${LIBELLE_PART_REL[TRACK_METRIQUE]}` : "—";
+      const sec = defRel.secondaire(v);
+      const note = [part, sec, detail].filter(Boolean).join(" · ");
+      return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, defRel.format(val), note, null);
+    };
+    const rdvPost = rdv.filter((r) => r.relance);
+    const rdvSetter = rdv.filter((r) => r.viaSetter === true);
+    const leadsSetter = leads.filter((l) => l.viaSetter === true);
     zoneRelance.innerHTML = [
-      carteRelance("Relancés par une campagne post", rdv.filter((r) => r.relance)),
-      carteRelance("Relancés par le setter", rdv.filter((r) => r.viaSetter === true)),
+      carteRelance("Relancés par une campagne post", aggRel(rdvPost, []), TRACK_METRIQUE !== "leads", detailRel(rdvPost, [], "relance")),
+      carteRelance("Relancés par le setter", aggRel(rdvSetter, leadsSetter), true, detailRel(rdvSetter, TRACK_METRIQUE === "leads" ? leadsSetter : [], "setterNom")),
     ].join("");
   }
 

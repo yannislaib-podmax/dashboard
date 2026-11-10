@@ -175,8 +175,8 @@ export default async function handler(req, res) {
 
     // Contacts suivis par un setter (meme definition que Sales Team : Setter Owner renseigne sur le lead).
     // Leur call reste dans l'acquisition avec sa source d'origine ; on le marque seulement "relance par le setter".
-    const contactsSetter = new Set(leadsBrut.filter((l) => l.contactId != null && l.setter).map((l) => l.contactId));
-    const leads = leadsBrut.map(({ _id, contactId, setter, ...reste }) => reste);
+    const contactsSetter = new Map(leadsBrut.filter((l) => l.contactId != null && l.setter).map((l) => [l.contactId, String(l.setter)]));
+    const leads = leadsBrut.map(({ _id, contactId, setter, ...reste }) => ({ ...reste, viaSetter: !!setter, setterNom: setter ? String(setter) : "" }));
 
     // Montant par contrat (abonnements compris).
     const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
@@ -213,6 +213,7 @@ export default async function handler(req, res) {
           ...reste,
           relance: reste.relance || "",
           viaSetter: contactId != null && contactsSetter.has(contactId),
+          setterNom: contactId != null ? contactsSetter.get(contactId) || "" : "",
           typeAppel: reste.typeAppel === "Closing" ? "Closing" : "Rattrapage",
           vente: ids.length > 0 ? 1 : 0,
           montant: ids.reduce((t, id) => t + montantContrat.get(id), 0),
