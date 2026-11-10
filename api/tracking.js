@@ -22,6 +22,8 @@ const CHAMPS_LEADS = {
   fldptIrzRFTSHlI97: "utmCampaign",
   fldSuIDEn4U2QuUPv: "utmContent",
   fldreiHMlZQd2xHX3: "nbCalls", // nombre de calls bookes du lead (0 = opt-in sans creneau)
+  fldPQJPP97FujIbNm: "contactId", // sert a savoir si le contact est suivi par un setter (relance setter)
+  fldrhu8o1b2Oroz5b: "setter", // Setter Owner iClosed : rempli = lead travaille par un setter
 };
 
 const CHAMPS_CALL_BOOKED = {
@@ -41,6 +43,7 @@ const CHAMPS_CALL_BOOKED = {
   fldhiaObnPFQjPioa: "bookingId", // prefixe "SETTER-" = call de setting synthetique (base de donnees), pas du Rattrapage
   fldGrEX8JoVHL2wbD: "rangR",
   fldszCN4DEDuhjCzh: "contrats", // lien CALL BOOKED -> CONTRATS (ids), source unique des ventes et du CA
+  fld9pKPcrZfuPuxlP: "relance", // campagne de relance "post-..." par laquelle le call a ete pris (origine et cout inchanges)
 };
 
 // Ventes et CA = CONTRATS (meme regle que api/sales-team.js, decision 2026-10-05) :
@@ -170,7 +173,10 @@ export default async function handler(req, res) {
       lireTable(token, TABLE_CONTRATS, CHAMPS_CONTRATS, null),
     ]);
 
-    const leads = leadsBrut.map(({ _id, ...reste }) => reste);
+    // Contacts suivis par un setter (meme definition que Sales Team : Setter Owner renseigne sur le lead).
+    // Leur call reste dans l'acquisition avec sa source d'origine ; on le marque seulement "relance par le setter".
+    const contactsSetter = new Set(leadsBrut.filter((l) => l.contactId != null && l.setter).map((l) => l.contactId));
+    const leads = leadsBrut.map(({ _id, contactId, setter, ...reste }) => reste);
 
     // Montant par contrat (abonnements compris).
     const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
@@ -205,6 +211,8 @@ export default async function handler(req, res) {
         const ids = contratsDuCall({ contrats });
         return {
           ...reste,
+          relance: reste.relance || "",
+          viaSetter: contactId != null && contactsSetter.has(contactId),
           typeAppel: reste.typeAppel === "Closing" ? "Closing" : "Rattrapage",
           vente: ids.length > 0 ? 1 : 0,
           montant: ids.reduce((t, id) => t + montantContrat.get(id), 0),

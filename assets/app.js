@@ -3706,6 +3706,28 @@ function vueTracking() {
   ].join("");
   brancherInfobulles(cartesCible);
 
+  // Calls relancés : par une campagne post (champ « Relancé par ») ou par un setter (contact suivi par un setter).
+  // Même périmètre que les cartes du dessus (période, filtres, rang), source d'origine inchangée.
+  const zoneRelance = document.getElementById("tracking-relance");
+  if (zoneRelance) {
+    const carteRelance = (titre, lignes) => {
+      const honores = somme(lignes, "present");
+      const ventes = somme(lignes, "vente");
+      const ca = somme(lignes, "montant");
+      const part = rdv.length ? pourcent(lignes.length / rdv.length) : "—";
+      return carte(
+        titre,
+        nombre(lignes.length),
+        `${part} des calls bookés · ${nombre(honores)} honorés · ${nombre(ventes)} vente${ventes > 1 ? "s" : ""} · ${euros(ca)}`,
+        null
+      );
+    };
+    zoneRelance.innerHTML = [
+      carteRelance("Relancés par une campagne post", rdv.filter((r) => r.relance)),
+      carteRelance("Relancés par le setter", rdv.filter((r) => r.viaSetter === true)),
+    ].join("");
+  }
+
   // Même agrégation que parValeur, mais sur la période précédente, pour
   // comparer chaque valeur UTM à elle-même d'une période à l'autre dans le
   // classement et les camemberts (pas juste un total global comme sur les
