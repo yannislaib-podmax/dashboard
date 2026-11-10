@@ -63,7 +63,7 @@ const sommeAds = (lignes, champ) => somme(lignes, champ) - (horsRelances() ? som
 let CA_MODE = "premier";
 const CA_MODES = {
   call: { champ: "contracte", libelle: "CA contracté", note: "CA contracté des ventes rattachées au call, tel que saisi dans iClosed." },
-  premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable). Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
+  premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable), daté du jour de signature. Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
   tous: { champ: "encaisseTous", libelle: "CA encaissé (tous contrats)", note: "Tout ce que les clients acquis ont payé depuis, à date (renouvellements compris). Mesure ce qu'un client rapporte. Les ventes d'avant le formulaire Tally n'y figurent pas." },
 };
 const caChamp = () => CA_MODES[CA_MODE].champ;
@@ -1216,7 +1216,9 @@ function brancherSurvol(cible) {
 const moisIndex = (cle) => Number(cle.slice(0, 4)) * 12 + Number(cle.slice(5, 7)) - 1;
 
 function calculerCohortes(lignes) {
-  const clients = parCanalEtProduit(CLIENTS_DETAIL.filter((c) => c.jour && dansPeriode(c)));
+  // Les cohortes suivent aussi les toggles Closing / Rattrapage / Tous et R1 / R2+ / Tous (type du call de chaque client).
+  const typesOk = typesClientsSelonToggles();
+  const clients = parCanalEtProduit(CLIENTS_DETAIL.filter((c) => c.jour && dansPeriode(c) && typesOk.includes(c.type || "C1")));
   const aujourdhui = new Date();
   const moisCourant = aujourdhui.getFullYear() * 12 + aujourdhui.getMonth();
 
@@ -2714,6 +2716,27 @@ const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes
 // + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
 const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
+// Clients / CA du 1er achat / encaissé : l'API fournit le total (champ de base) et sa ventilation par type de call
+// ("_C1" / "_C2" = Closing R1 / R2+, "_D1" / "_D2" = Rattrapage R1 / R2+). On recompose ici selon les toggles de Paid Ads.
+const CHAMPS_CLIENTS = ["clients", "contracte1er", "encaisseTous"];
+const CHAMPS_CLIENTS_AVEC_REL = [...CHAMPS_CLIENTS, ...CHAMPS_CLIENTS.map(nomRel)];
+function typesClientsSelonToggles() {
+  const genres = ACQ_MODE === "rattrapage" ? ["D"] : ACQ_MODE === "tous" ? ["C", "D"] : ["C"];
+  const rangs = PAID_RANG === "r1" ? ["1"] : PAID_RANG === "r2" ? ["2"] : ["1", "2"];
+  return genres.flatMap((g) => rangs.map((r) => g + r));
+}
+function appliquerClientsToggle(lignes) {
+  // Ancienne réponse d'API sans ventilation (cache en cours de renouvellement) : on garde les totaux.
+  if (!lignes || !lignes.some((l) => "clients_C1" in l)) return lignes;
+  const types = typesClientsSelonToggles();
+  return lignes.map((l) => {
+    const o = { ...l };
+    CHAMPS_CLIENTS_AVEC_REL.forEach((f) => {
+      o[f] = types.reduce((s, t) => s + (l[`${f}_${t}`] || 0), 0);
+    });
+    return o;
+  });
+}
 function appliquerRangFunnel(lignes, rang = FUNNEL_RANG) {
   if (!lignes || rang === "r1") return lignes;
   return lignes.map((l) => {
@@ -2737,11 +2760,13 @@ function rendre() {
   // + rattrapages apres issue setter (leads payes par la pub).
   brancherSalesRangToggle("paid-rang", () => PAID_RANG, (v) => (PAID_RANG = v), rendre, false);
   const modePaid = ACQ_MODE === "tous" ? "paid" : ACQ_MODE;
-  const lignesPaid = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), modePaid), PAID_RANG);
-  const precedentesPaid = appliquerRangFunnel(appliquerModeAcq(lignesPrecedentes(), modePaid), PAID_RANG);
+  // Decision 2026-11-11 : les cartes clients / CA du 1er achat / coût par client suivent aussi les toggles
+  // (Closing / Rattrapage / Tous, R1 / R2+ / Tous), et sont datées du jour de signature du contrat.
+  const lignesPaid = appliquerClientsToggle(appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), modePaid), PAID_RANG));
+  const precedentesPaid = appliquerClientsToggle(appliquerRangFunnel(appliquerModeAcq(lignesPrecedentes(), modePaid), PAID_RANG));
   // Parts des ads : sans les rattrapages pris après une issue setter ("S"), qui relèvent du Setting et non de
   // l'acquisition (même périmètre que Tracking UTM).
-  const lignesPartAds = appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), ACQ_MODE), PAID_RANG);
+  const lignesPartAds = appliquerClientsToggle(appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), ACQ_MODE), PAID_RANG));
   vueEnsemble(lignesPaid, precedentesPaid, lignesPartAds);
   vueConversion(lignesFunnel, precedentesFunnel);
   // Le simulateur vit dans Paid Ads : mêmes lignes et mêmes filtres que la page.

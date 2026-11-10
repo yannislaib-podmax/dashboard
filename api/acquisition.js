@@ -198,9 +198,15 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     p["rendezVous" + suf] += 1;
     p["rendezVousConclus" + suf] += c.conclu || 0;
     p["honores" + suf] += c.present || 0;
-    p["ventes" + suf] += c.vente || 0;
-    p["contracte" + suf] += c.montant || 0;
     p["annules" + suf] += c.annule || 0;
+    // DECISION 2026-11-11 : une vente et son CA comptent le jour de SIGNATURE du contrat, pas le jour ou le call
+    // a ete pris (sinon la depense d'une periode est divisee par des ventes d'une autre periode). Sans date de
+    // signature connue, on garde le jour du call.
+    const jourVente = c.jourSignature || jour;
+    const cleVente = cleLigne(jourVente, c.canal, c.produit);
+    const pv = (parCle[cleVente] = parCle[cleVente] || champsVides());
+    pv["ventes" + suf] += c.vente || 0;
+    pv["contracte" + suf] += c.montant || 0;
     const motif = String(c.motif || "").toUpperCase();
     const parCloser = c.annule && motif === "ADMIN_CANCELLED" ? 1 : 0;
     const parProspect = c.annule && motif === "CONTACT_CANCELLED" ? 1 : 0;
@@ -212,9 +218,9 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
       p["relRendezVous" + suf] += 1;
       p["relRendezVousConclus" + suf] += c.conclu || 0;
       p["relHonores" + suf] += c.present || 0;
-      p["relVentes" + suf] += c.vente || 0;
-      p["relContracte" + suf] += c.montant || 0;
       p["relAnnules" + suf] += c.annule || 0;
+      pv["relVentes" + suf] += c.vente || 0;
+      pv["relContracte" + suf] += c.montant || 0;
     }
   }
   return parCle;
@@ -238,6 +244,33 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = [], conta
       if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = { jour, canal: c.canal || SANS, produit: c.produit || SANS, rel: estRelance(c, contactsSetter) };
     }
   }
+
+  // Type + rang d'un call d'acquisition : C1 / C2 = Closing R1 / R2+, D1 / D2 = Rattrapage R1 / R2+ (meme regle que
+  // recalculerDepuisCallBooked). null = call hors acquisition (setting, rang inconnu...).
+  const typeRang = (c) => {
+    const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
+    if (c.typeAppel !== "Closing" && !rattrapage) return null;
+    const r = c.rangR === 1 ? "1" : c.rangR > 1 ? "2" : null;
+    return r ? (rattrapage ? "D" : "C") + r : null;
+  };
+  const typeParContrat = {};
+  const typeParLead = {};
+  for (const c of callsBooked) {
+    const t = typeRang(c);
+    if (!t) continue;
+    for (const idContrat of c[CHAMP_LIEN_CONTRATS] || []) if (!typeParContrat[idContrat]) typeParContrat[idContrat] = t;
+    for (const idLead of c[CHAMP_LIEN_LEAD] || []) if (!typeParLead[idLead] || t === "C1") typeParLead[idLead] = t;
+  }
+  // Compteurs clients : total (champ de base) + ventilation par type de call (champ_C1, champ_C2, champ_D1, champ_D2),
+  // que la page Paid Ads recompose selon ses toggles Closing / Rattrapage / Tous et R1 / R2+ / Tous.
+  const champsClientVides = () => {
+    const o = {};
+    for (const f of ["clients", "contracte1er", "encaisseTous", "relClients", "relContracte1er", "relEncaisseTous"]) {
+      o[f] = 0;
+      for (const t of ["C1", "C2", "D1", "D2"]) o[`${f}_${t}`] = 0;
+    }
+    return o;
+  };
 
   // client -> contrats
   const contratsParClient = {};
@@ -273,35 +306,52 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = [], conta
 
     const ligneLead = ligneParLeadViaCall[lead._id] || (lead.capteLe ? { jour: jourParis(lead.capteLe), canal: lead.canal || SANS, produit: lead.produit || SANS } : null);
     if (!ligneLead) continue;
-    const idLigne = cleLigne(ligneLead.jour, ligneLead.canal, ligneLead.produit);
     clientsDejaVus.add(idClient);
 
     const dates = mesContrats.map((k) => String(k.dateSignature || "")).filter(Boolean).sort();
     const d0 = dates[0] || "";
     const duJour = mesContrats.filter((k) => String(k.dateSignature || "") === d0);
+    // DECISION 2026-11-11 : un nouveau client compte le jour de SIGNATURE de son 1er contrat (et non le jour du
+    // call), pour que la depense, les clients, les ventes et le CA d'une meme periode soient comparables.
+    // Sans date de signature, on garde le jour du call.
+    const jourClient = d0 ? d0.slice(0, 10) : ligneLead.jour;
+    const idLigne = cleLigne(jourClient, ligneLead.canal, ligneLead.produit);
     // 1er achat = TOUS les contrats du jour du 1er contrat, abonnement Media Buying
     // pris en option compris (decision 2026-10-20) : sa 1re mensualite est du CA
     // d'acquisition, les mensualites suivantes ne comptent que dans la LTV
     // (encaisseTous).
     const premier = duJour;
 
-    const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || { clients: 0, contracte1er: 0, encaisseTous: 0, relClients: 0, relContracte1er: 0, relEncaisseTous: 0 });
+    // Type et rang du call qui a donne la vente (pour les toggles Closing / Rattrapage et R1 / R2+) :
+    // call lie a l'un des contrats du 1er jour, sinon a un contrat du client, sinon un call du lead ; par defaut Closing R1.
+    const typeDuClient =
+      premier.map((k) => typeParContrat[k._id]).find(Boolean) ||
+      mesContrats.map((k) => typeParContrat[k._id]).find(Boolean) ||
+      typeParLead[lead._id] ||
+      "C1";
+
+    const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || champsClientVides());
     const c1 = premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
     const cT = mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
-    p.clients += 1;
-    p.contracte1er += c1;
-    p.encaisseTous += cT;
+    const ajouter = (champ, v) => {
+      p[champ] += v;
+      p[`${champ}_${typeDuClient}`] += v;
+    };
+    ajouter("clients", 1);
+    ajouter("contracte1er", c1);
+    ajouter("encaisseTous", cT);
     // Client venu par le travail d'un setter ou d'une campagne de relance : miroir "rel" (retranche des couts / du ROAS Ads).
     if (lead.setter || ligneLead.rel) {
-      p.relClients += 1;
-      p.relContracte1er += c1;
-      p.relEncaisseTous += cT;
+      ajouter("relClients", 1);
+      ajouter("relContracte1er", c1);
+      ajouter("relEncaisseTous", cT);
     }
 
     detail.push({
-      jour: ligneLead.jour,
+      jour: jourClient,
       canal: ligneLead.canal,
       produit: ligneLead.produit,
+      type: typeDuClient, // C1 / C2 (Closing R1 / R2+), D1 / D2 (Rattrapage R1 / R2+) : filtre des cohortes
       // nombre de prestations (hors abonnement) : >= 2 = client qui a renouvele
       prestations: mesContrats.filter((k) => k.typeContrat !== "Abonnement").length,
       paiements: paiementsParClient[idClient] || [],
@@ -360,6 +410,9 @@ export default async function handler(req, res) {
       }
       c.vente = ids.size > 0 ? 1 : 0;
       c.montant = [...ids].reduce((t, id) => t + (montantContrat.get(id) || 0), 0);
+      // Jour de signature (le plus ancien des contrats du call) : la vente et son CA sont rangés a cette date.
+      const datesSignature = [...ids].map((id) => String((contratParId.get(id) || {}).dateSignature || "").slice(0, 10)).filter(Boolean).sort();
+      c.jourSignature = datesSignature[0] || null;
     }
 
     // Contacts suivis par un setter (Setter Owner renseigne sur le lead) : leurs calls sont "relances".
