@@ -53,7 +53,10 @@ const detailAnnulation = (total, closer, prospect) => {
   const autre = total - closer - prospect;
   return `<br><small>${nombre(closer)} par le closer · ${nombre(prospect)} par le prospect${autre > 0 ? ` · ${nombre(autre)} autre` : ""}</small>`;
 };
-const horsRelances = () => SOURCE === "Ads";
+// Décision 2026-11-11 : les calls/clients issus d'un setter ou d'une relance « post- » restent
+// attribués à la pub d'origine du lead (le coût du setter se traite en ligne de coût, pas en attribution).
+// Remettre `SOURCE === "Ads"` pour réactiver le retrait des champs rel*.
+const horsRelances = () => false;
 const sommeAds = (lignes, champ) => somme(lignes, champ) - (horsRelances() ? somme(lignes, nomRel(champ)) : 0);
 
 // Base de calcul du CA dans « Paid Ads » (décision 2026-10-05) :
