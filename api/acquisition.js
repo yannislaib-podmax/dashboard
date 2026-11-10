@@ -47,6 +47,7 @@ const CHAMPS_CALL_BOOKED = {
   fldGrEX8JoVHL2wbD: "rangR",
   fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
   fld9pKPcrZfuPuxlP: "relance", // campagne de relance "post-..." par laquelle le call a ete pris
+  fldKOzi8a88A3EQ7O: "motif", // ADMIN_CANCELLED = annule par le closer, CONTACT_CANCELLED = annule par le prospect
 };
 
 // DECISION 2026-10-13 : on ne se sert plus du lien CALL BOOKED / LEADS -> ACQUISITION
@@ -161,7 +162,7 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // dans des champs miroirs "rel" + champ (relRendezVous, relHonoresR2...). Le dashboard les retranche
 // des couts par call / vente et du ROAS quand la source filtree est "Ads". Les leads et la depense
 // ne sont pas touches : c'est bien la pub qui a ramene le lead.
-const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
+const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules", "annulesCloser", "annulesProspect"];
 const nomRel = (f) => "rel" + f.charAt(0).toUpperCase() + f.slice(1);
 const estRelance = (c, contactsSetter) => !!c.relance || (c.contactId != null && contactsSetter.has(c.contactId));
 
@@ -200,7 +201,14 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     p["ventes" + suf] += c.vente || 0;
     p["contracte" + suf] += c.montant || 0;
     p["annules" + suf] += c.annule || 0;
+    const motif = String(c.motif || "").toUpperCase();
+    const parCloser = c.annule && motif === "ADMIN_CANCELLED" ? 1 : 0;
+    const parProspect = c.annule && motif === "CONTACT_CANCELLED" ? 1 : 0;
+    p["annulesCloser" + suf] += parCloser;
+    p["annulesProspect" + suf] += parProspect;
     if (estRelance(c, contactsSetter)) {
+      p["relAnnulesCloser" + suf] += parCloser;
+      p["relAnnulesProspect" + suf] += parProspect;
       p["relRendezVous" + suf] += 1;
       p["relRendezVousConclus" + suf] += c.conclu || 0;
       p["relHonores" + suf] += c.present || 0;

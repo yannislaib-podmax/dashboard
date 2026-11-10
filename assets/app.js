@@ -44,6 +44,15 @@ const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0)
 // et du ROAS. Les leads et la depense restent entiers (c'est la pub qui a ramene le lead). L'API fournit les champs
 // miroirs "rel" + champ (relHonores, relRendezVousR2, relClients...), qui suivent les memes toggles que les champs de base.
 const nomRel = (champ) => "rel" + champ.charAt(0).toUpperCase() + champ.slice(1);
+// Qui a annule un call : motif iClosed ADMIN_CANCELLED = le closer, CONTACT_CANCELLED = le prospect.
+const estAnnuleCloser = (c) => c.statut === "Annulé" && String(c.motif || "").toUpperCase() === "ADMIN_CANCELLED";
+const estAnnuleProspect = (c) => c.statut === "Annulé" && String(c.motif || "").toUpperCase() === "CONTACT_CANCELLED";
+// Detail en petit sous une carte « Taux d'annulation » (vide s'il n'y a aucune annulation).
+const detailAnnulation = (total, closer, prospect) => {
+  if (!(total > 0)) return "";
+  const autre = total - closer - prospect;
+  return `<br><small>${nombre(closer)} par le closer · ${nombre(prospect)} par le prospect${autre > 0 ? ` · ${nombre(autre)} autre` : ""}</small>`;
+};
 const horsRelances = () => SOURCE === "Ads";
 const sommeAds = (lignes, champ) => somme(lignes, champ) - (horsRelances() ? somme(lignes, nomRel(champ)) : 0);
 
@@ -470,7 +479,7 @@ function vueConversion(lignes, precedentes) {
       carte(
         "Taux d'annulation",
         pourcent(annulation),
-        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (closing${suffixeDeRang(FUNNEL_RANG)})${fragile(rdvPris)}`,
+        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (closing${suffixeDeRang(FUNNEL_RANG)})${fragile(rdvPris)}` + detailAnnulation(annulesCount, somme(lignes, "annulesCloser"), somme(lignes, "annulesProspect")),
         annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null
       ) +
       carte(
@@ -2701,7 +2710,7 @@ function brancherAcqMode() {
     });
   });
 }
-const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
+const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules", "annulesCloser", "annulesProspect"];
 // + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
 const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
@@ -4290,6 +4299,9 @@ function salesStatsCallsClosing(calls) {
   const ventes = somme(calls, "vente");
   const ca = somme(calls, "montant");
   const annules = calls.filter((c) => c.statut === "Annulé").length;
+  // Qui a annule : motif iClosed ADMIN_CANCELLED = le closer, CONTACT_CANCELLED = le prospect.
+  const annulesCloser = calls.filter(estAnnuleCloser).length;
+  const annulesProspect = calls.filter(estAnnuleProspect).length;
   return {
     rdv,
     conclus,
@@ -4297,6 +4309,8 @@ function salesStatsCallsClosing(calls) {
     ventes,
     ca,
     annules,
+    annulesCloser,
+    annulesProspect,
     presence: ratio(honores, conclus),
     closing: ratio(ventes, honores),
     annulation: ratio(annules, rdv),
@@ -4557,7 +4571,7 @@ function vueSalesClosing() {
     carte(
       "Taux d'annulation",
       rdv === 0 ? "—" : pourcent(s.annulation),
-      (rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdv)} rendez-vous pris`) + suffixeRang,
+      (rdv === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdv)} rendez-vous pris`) + suffixeRang + detailAnnulation(s.annules, s.annulesCloser, s.annulesProspect),
       s.annulation !== null && sPrec && sPrec.annulation !== null ? ecartPoints(s.annulation, sPrec.annulation, true) : null
     ),
     carte(
@@ -4868,6 +4882,8 @@ function vueOutbound() {
     return {
       nbCalls: calls.length,
       nbAnnules: calls.filter((c) => c.statut === "Annulé").length,
+      nbAnnulesCloser: calls.filter(estAnnuleCloser).length,
+      nbAnnulesProspect: calls.filter(estAnnuleProspect).length,
       nbVentes: somme(calls, "vente"),
       setter: l.setter,
       jour: l.jourAssignation,
@@ -4903,6 +4919,8 @@ function vueOutbound() {
       // En CALLS (pas en leads), comme l'onglet Cycle de vente : un lead peut avoir plusieurs calls (R2+, annules).
       callsBookes: somme(liste, "nbCalls"),
       annules: somme(liste, "nbAnnules"),
+      annulesCloser: somme(liste, "nbAnnulesCloser"),
+      annulesProspect: somme(liste, "nbAnnulesProspect"),
       callsVentes: somme(liste, "nbVentes"),
       assignes: liste.length,
       contactes: liste.filter((l) => l.contacte).length,
@@ -4979,6 +4997,8 @@ function vueOutbound() {
       closing: liste.length,
       leadsCall: new Set(liste.map((c) => c.contactId)).size,
       annules: liste.filter((c) => c.statut === "Annulé").length,
+      annulesCloser: liste.filter(estAnnuleCloser).length,
+      annulesProspect: liste.filter(estAnnuleProspect).length,
       conclus: liste.filter((c) => c.conclu).length,
       honores: liste.filter((c) => c.present).length,
       ventes: liste.filter((c) => c.vente).length,
@@ -5015,7 +5035,7 @@ function vueOutbound() {
   ].join("");
   // Taux du cycle de vente : calls via setter dont le rendez-vous tombe sur la periode (meme axe que les cartes au-dessus).
   document.getElementById(`${prefixeId}-taux`).innerHTML = [
-    carte("Taux d'annulation", pourcent(ratio(cj.annules, cj.closing)), cj.closing ? `${nombre(cj.annules)} annulés sur ${nombre(cj.closing)} calls bookés` : "aucun call booké sur la période", cjPrec && ratio(cj.annules, cj.closing) !== null && ratio(cjPrec.annules, cjPrec.closing) !== null ? ecartPoints(ratio(cj.annules, cj.closing), ratio(cjPrec.annules, cjPrec.closing), true) : null),
+    carte("Taux d'annulation", pourcent(ratio(cj.annules, cj.closing)), cj.closing ? `${nombre(cj.annules)} annulés sur ${nombre(cj.closing)} calls bookés` + detailAnnulation(cj.annules, cj.annulesCloser, cj.annulesProspect) : "aucun call booké sur la période", cjPrec && ratio(cj.annules, cj.closing) !== null && ratio(cjPrec.annules, cjPrec.closing) !== null ? ecartPoints(ratio(cj.annules, cj.closing), ratio(cjPrec.annules, cjPrec.closing), true) : null),
     carte("Taux de show", pourcent(ratio(cj.honores, cj.conclus)), cj.conclus ? `${nombre(cj.honores)} honorés sur ${nombre(cj.conclus)} calls passés (calls de la période)` : "aucun call passé sur la période", ep(ratio(cj.honores, cj.conclus), cjPrec && ratio(cjPrec.honores, cjPrec.conclus))),
     carte("Taux de vente", pourcent(ratio(cj.ventes, cj.honores)), cj.honores ? `${nombre(cj.ventes)} ventes sur ${nombre(cj.honores)} honorés (calls de la période)` : "—", ep(ratio(cj.ventes, cj.honores), cjPrec && ratio(cjPrec.ventes, cjPrec.honores))),
   ].join("");
@@ -5052,7 +5072,7 @@ function vueOutbound() {
     carte("CA généré", euros(g.ca), "montant des contrats signés sur ces calls", ev("ca")),
   ].join("");
   document.getElementById(`${prefixeId}-taux-cohorte`).innerHTML = [
-    carte("Taux d'annulation", pourcent(ratio(g.annules, g.callsBookes)), g.callsBookes ? `${nombre(g.annules)} annulés sur ${nombre(g.callsBookes)} calls bookés` : "aucun call booké", epc(ratio(g.annules, g.callsBookes), gPrec && ratio(gPrec.annules, gPrec.callsBookes), true)),
+    carte("Taux d'annulation", pourcent(ratio(g.annules, g.callsBookes)), g.callsBookes ? `${nombre(g.annules)} annulés sur ${nombre(g.callsBookes)} calls bookés` + detailAnnulation(g.annules, g.annulesCloser, g.annulesProspect) : "aucun call booké", epc(ratio(g.annules, g.callsBookes), gPrec && ratio(gPrec.annules, gPrec.callsBookes), true)),
     carte("Taux de show", pourcent(ratio(g.present, g.conclu)), g.conclu ? `${nombre(g.present)} honorés sur ${nombre(g.conclu)} calls conclus` : "aucun call conclu", epc(ratio(g.present, g.conclu), gPrec && ratio(gPrec.present, gPrec.conclu))),
     carte("Taux de vente", pourcent(ratio(g.callsVentes, g.present)), g.present ? `${nombre(g.callsVentes)} ventes sur ${nombre(g.present)} honorés` : "—", epc(ratio(g.callsVentes, g.present), gPrec && ratio(gPrec.callsVentes, gPrec.present))),
   ].join("");

@@ -59,6 +59,7 @@ const CHAMPS_CALL_BOOKED = {
   fldGgYg63q8hUIzqK: "setter",
   fldUxmqK72q9MWwJe: "statut", // Confirmé / Annulé / Honoré / No-show
   fldIJJbmVTPBFHt1o: "issue",
+  fldKOzi8a88A3EQ7O: "motif", // motif iClosed du call : ADMIN_CANCELLED = annule par le closer, CONTACT_CANCELLED = annule par le prospect
   fldGrEX8JoVHL2wbD: "rangR",
   fld1GgVHXLLo54h8s: "montant",
   fldG440Cf4HAIkHEk: "source",
@@ -248,6 +249,7 @@ export default async function handler(req, res) {
           setter: c.setter || null,
           statut: c.statut,
           issue: c.issue,
+          motif: c.motif || null,
           rangR: c.rangR,
           montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
           source: c.source,
