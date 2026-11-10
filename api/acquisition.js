@@ -46,6 +46,7 @@ const CHAMPS_CALL_BOOKED = {
   fldhiaObnPFQjPioa: "bookingId", // "SETTER-" = call de setting synthetique, exclu du Rattrapage
   fldGrEX8JoVHL2wbD: "rangR",
   fld1v2skWq5Qt44Vq: "annule", // "Est annulé" (formule : Statut = "Annulé")
+  fld9pKPcrZfuPuxlP: "relance", // campagne de relance "post-..." par laquelle le call a ete pris
 };
 
 // DECISION 2026-10-13 : on ne se sert plus du lien CALL BOOKED / LEADS -> ACQUISITION
@@ -57,6 +58,8 @@ const CHAMPS_LEADS = {
   fldaUTHkR9vloCz2e: "capteLe",
   fldllUNg0J5M1xIhb: "canal",
   fldGQUwkMl7QTDgQP: "produit",
+  fldPQJPP97FujIbNm: "contactId", // sert a reperer les contacts suivis par un setter
+  fldrhu8o1b2Oroz5b: "setter", // Setter Owner iClosed : rempli = lead travaille par un setter
 };
 const SANS = "Non déterminé";
 
@@ -153,13 +156,25 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // Compte rendezVous/rendezVousConclus/honores/ventes/contracte/annules par
 // ligne jour | canal | produit, a partir des seuls calls Closing de rang R1
 // (un lead qui relance, R2/R3..., ne compte pas comme un 2e rendez-vous).
-function recalculerDepuisCallBooked(callsBooked) {
+// Decision 2026-11-10 : un call pris grace au travail d'un setter ou d'une campagne de relance
+// "post-..." (et non par la pub) reste compte partout (Funnel, Tracking), mais est AUSSI cumule
+// dans des champs miroirs "rel" + champ (relRendezVous, relHonoresR2...). Le dashboard les retranche
+// des couts par call / vente et du ROAS quand la source filtree est "Ads". Les leads et la depense
+// ne sont pas touches : c'est bien la pub qui a ramene le lead.
+const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
+const nomRel = (f) => "rel" + f.charAt(0).toUpperCase() + f.slice(1);
+const estRelance = (c, contactsSetter) => !!c.relance || (c.contactId != null && contactsSetter.has(c.contactId));
+
+function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
   // R1 = champs sans suffixe (comportement historique). R2+ = relances (R2, R3...),
   // dans des champs suffixes "R2" : le dashboard choisit R1 / R2+ / Tous.
   const champsVides = () => {
     const o = {};
     for (const suf of ["", "R2", "D", "DR2", "S"]) {
-      for (const f of ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"]) o[f + suf] = 0;
+      for (const f of CHAMPS_CALLS) {
+        o[f + suf] = 0;
+        o[nomRel(f) + suf] = 0;
+      }
     }
     return o;
   };
@@ -185,6 +200,14 @@ function recalculerDepuisCallBooked(callsBooked) {
     p["ventes" + suf] += c.vente || 0;
     p["contracte" + suf] += c.montant || 0;
     p["annules" + suf] += c.annule || 0;
+    if (estRelance(c, contactsSetter)) {
+      p["relRendezVous" + suf] += 1;
+      p["relRendezVousConclus" + suf] += c.conclu || 0;
+      p["relHonores" + suf] += c.present || 0;
+      p["relVentes" + suf] += c.vente || 0;
+      p["relContracte" + suf] += c.montant || 0;
+      p["relAnnules" + suf] += c.annule || 0;
+    }
   }
   return parCle;
 }
@@ -196,7 +219,7 @@ function recalculerDepuisCallBooked(callsBooked) {
 //                   option ce jour-la compris : 1re mensualite = CA
 //                   d'acquisition ; les suivantes vont dans la LTV)
 //  - encaisseTous : encaisse sur TOUS les contrats du client (a date)
-function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
+function recalculerParClient(callsBooked, leads, contrats, paiements = [], contactsSetter = new Map()) {
   // lead -> ligne (jour|canal|produit) du call Closing R1
   const ligneParLeadViaCall = {};
   for (const c of callsBooked) {
@@ -204,7 +227,7 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
     const jour = jourParis(c.prisLe);
     if (!jour) continue;
     for (const idLead of c[CHAMP_LIEN_LEAD] || []) {
-      if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = { jour, canal: c.canal || SANS, produit: c.produit || SANS };
+      if (!ligneParLeadViaCall[idLead]) ligneParLeadViaCall[idLead] = { jour, canal: c.canal || SANS, produit: c.produit || SANS, rel: estRelance(c, contactsSetter) };
     }
   }
 
@@ -254,10 +277,18 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = []) {
     // (encaisseTous).
     const premier = duJour;
 
-    const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || { clients: 0, contracte1er: 0, encaisseTous: 0 });
+    const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || { clients: 0, contracte1er: 0, encaisseTous: 0, relClients: 0, relContracte1er: 0, relEncaisseTous: 0 });
+    const c1 = premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
+    const cT = mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
     p.clients += 1;
-    p.contracte1er += premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
-    p.encaisseTous += mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
+    p.contracte1er += c1;
+    p.encaisseTous += cT;
+    // Client venu par le travail d'un setter ou d'une campagne de relance : miroir "rel" (retranche des couts / du ROAS Ads).
+    if (lead.setter || ligneLead.rel) {
+      p.relClients += 1;
+      p.relContracte1er += c1;
+      p.relEncaisseTous += cT;
+    }
 
     detail.push({
       jour: ligneLead.jour,
@@ -323,16 +354,18 @@ export default async function handler(req, res) {
       c.montant = [...ids].reduce((t, id) => t + (montantContrat.get(id) || 0), 0);
     }
 
-    const recalcul = recalculerDepuisCallBooked(callsBooked);
-    const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, paiements);
-    const vide = {
-      rendezVous: 0, rendezVousConclus: 0, honores: 0, ventes: 0, contracte: 0, annules: 0,
-      rendezVousR2: 0, rendezVousConclusR2: 0, honoresR2: 0, ventesR2: 0, contracteR2: 0, annulesR2: 0,
-      rendezVousD: 0, rendezVousConclusD: 0, honoresD: 0, ventesD: 0, contracteD: 0, annulesD: 0,
-      rendezVousDR2: 0, rendezVousConclusDR2: 0, honoresDR2: 0, ventesDR2: 0, contracteDR2: 0, annulesDR2: 0,
-      rendezVousS: 0, rendezVousConclusS: 0, honoresS: 0, ventesS: 0, contracteS: 0, annulesS: 0,
-    };
-    const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0 };
+    // Contacts suivis par un setter (Setter Owner renseigne sur le lead) : leurs calls sont "relances".
+    const contactsSetter = new Map(leads.filter((l) => l.contactId != null && l.setter).map((l) => [l.contactId, String(l.setter)]));
+    const recalcul = recalculerDepuisCallBooked(callsBooked, contactsSetter);
+    const { parIdAcquisition: parClient, detail: clientsDetail } = recalculerParClient(callsBooked, leads, contrats, paiements, contactsSetter);
+    const vide = {};
+    for (const suf of ["", "R2", "D", "DR2", "S"]) {
+      for (const f of CHAMPS_CALLS) {
+        vide[f + suf] = 0;
+        vide[nomRel(f) + suf] = 0;
+      }
+    }
+    const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0, relClients: 0, relContracte1er: 0, relEncaisseTous: 0 };
 
     // Lignes = depense ACQUISITION + comptages calcules. On cree une ligne des
     // qu'un lead, un call ou un client existe sur une cle sans depense.
@@ -372,6 +405,8 @@ export default async function handler(req, res) {
       const cl = parClient[ligne.cle] || videClient;
       return {
         ...ligne,
+        ...r, // inclut les champs miroirs "rel*" (calls pris grace a un setter / une campagne de relance)
+        ...cl,
         rendezVous: r.rendezVous,
         rendezVousConclus: r.rendezVousConclus,
         honores: r.honores,

@@ -39,6 +39,14 @@ const carte = (libelle, chiffre, note, ecart) => `
 
 const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0);
 
+// Decision 2026-11-10 : un call (ou un client) venu du travail d'un setter ou d'une campagne de relance "post-..."
+// n'a pas ete obtenu par la pub. Quand la source filtree est "Ads", on le retranche des couts par call / vente / client
+// et du ROAS. Les leads et la depense restent entiers (c'est la pub qui a ramene le lead). L'API fournit les champs
+// miroirs "rel" + champ (relHonores, relRendezVousR2, relClients...), qui suivent les memes toggles que les champs de base.
+const nomRel = (champ) => "rel" + champ.charAt(0).toUpperCase() + champ.slice(1);
+const horsRelances = () => SOURCE === "Ads";
+const sommeAds = (lignes, champ) => somme(lignes, champ) - (horsRelances() ? somme(lignes, nomRel(champ)) : 0);
+
 // Base de calcul du CA dans « Paid Ads » (décision 2026-10-05) :
 //  - "call"    : CA des ventes saisies dans iClosed au call (historique) ;
 //  - "premier" : CA du 1er achat de chaque client acquis (contrats Airtable) ;
@@ -341,11 +349,11 @@ const ratio = (a, b) => (b > 0 ? a / b : null);
 
 const INDICATEURS = {
   depense: (l) => somme(l, "depense"),
-  contracte: (l) => somme(l, caChamp()),
-  roas: (l) => ratio(somme(l, caChamp()), somme(l, "depense")),
+  contracte: (l) => sommeAds(l, caChamp()),
+  roas: (l) => ratio(sommeAds(l, caChamp()), somme(l, "depense")),
   clients: (l) => somme(l, "clients"),
   encaisse: (l) => somme(l, "encaisseTous"),
-  roasTous: (l) => ratio(somme(l, "encaisseTous"), somme(l, "depense")),
+  roasTous: (l) => ratio(sommeAds(l, "encaisseTous"), somme(l, "depense")),
   ltv: (l) => ratio(somme(l, "encaisseTous"), somme(l, "clients")),
   // LTV / coût d'acquisition : > 1 = chaque client rapporte plus qu'il n'a coûté.
   // Marge par client : ce qu'il a rapporté à date moins ce qu'il a coûté à acquérir.
@@ -353,26 +361,27 @@ const INDICATEURS = {
     const n = somme(l, "clients");
     return n > 0 ? (somme(l, "encaisseTous") - somme(l, "depense")) / n : null;
   },
+  // (margeClient et LTV restent sur tous les clients : ce sont des valeurs client, pas des couts d'acquisition pub.)
   // Combien de fois le 1er achat est dépassé par la valeur à date du client.
   multipleLtv: (l) => ratio(somme(l, "encaisseTous"), somme(l, "contracte1er")),
-  ltvSurCout: (l) => ratio(ratio(somme(l, "encaisseTous"), somme(l, "clients")), ratio(somme(l, "depense"), somme(l, "clients"))),
-  coutClient: (l) => ratio(somme(l, "depense"), somme(l, "clients")),
+  ltvSurCout: (l) => ratio(ratio(sommeAds(l, "encaisseTous"), sommeAds(l, "clients")), ratio(somme(l, "depense"), sommeAds(l, "clients"))),
+  coutClient: (l) => ratio(somme(l, "depense"), sommeAds(l, "clients")),
   // Dépense « mûre » : la part de la dépense dont les RDV ont une issue connue (Honoré, No-show
   // ou Annulé). Les RDV encore à venir ne peuvent pas avoir produit d'appel honoré ni de vente :
   // les laisser dans la dépense gonflerait mécaniquement le coût par appel honoré et par vente.
   // Répartition au prorata des RDV (la dépense d'un jour est supposée répartie à égalité entre ses RDV).
   depenseMure: (l) => {
     const dep = somme(l, "depense");
-    const rdv = somme(l, "rendezVous");
+    const rdv = sommeAds(l, "rendezVous");
     if (!(rdv > 0)) return dep;
-    const resolus = somme(l, "rendezVousConclus") + somme(l, "annules");
+    const resolus = sommeAds(l, "rendezVousConclus") + sommeAds(l, "annules");
     return dep * Math.min(1, resolus / rdv);
   },
-  coutVente: (l) => ratio(INDICATEURS.depenseMure(l), somme(l, "ventes")),
-  coutAppel: (l) => ratio(INDICATEURS.depenseMure(l), somme(l, "honores")),
+  coutVente: (l) => ratio(INDICATEURS.depenseMure(l), sommeAds(l, "ventes")),
+  coutAppel: (l) => ratio(INDICATEURS.depenseMure(l), sommeAds(l, "honores")),
   // Coût par call booké : dépense rapportée aux RDV pris (call confirmé),
   // tous statuts confondus — avant même de savoir s'ils seront honorés.
-  coutRdv: (l) => ratio(somme(l, "depense"), somme(l, "rendezVous")),
+  coutRdv: (l) => ratio(somme(l, "depense"), sommeAds(l, "rendezVous")),
   coutLead: (l) => ratio(somme(l, "depense"), somme(l, "leads")),
 
   cpm: (l) => {
@@ -1547,7 +1556,11 @@ function vueEnsemble(lignes, precedentes, lignesTotal) {
   // encore dans "honorés"/"ventes", donc "Coût par appel honoré" et "Coût
   // par vente" sont mécaniquement surestimés tant qu'ils n'ont pas eu lieu.
   // Les annulés ont une issue (ils ne sont jamais « à venir ») : on les retire du compte.
-  const rdvAVenir = Math.max(0, somme(lignes, "rendezVous") - somme(lignes, "rendezVousConclus") - somme(lignes, "annules"));
+  const rdvAVenir = Math.max(0, sommeAds(lignes, "rendezVous") - sommeAds(lignes, "rendezVousConclus") - sommeAds(lignes, "annules"));
+  // Source "Ads" : les calls pris grace a un setter ou a une campagne de relance sont exclus des couts par call / vente et du ROAS.
+  const nbRel = horsRelances() ? somme(lignes, "relRendezVous") : 0;
+  const noteRel = nbRel > 0 ? `hors ${nombre(nbRel)} call${nbRel > 1 ? "s" : ""} relancé${nbRel > 1 ? "s" : ""} (setter / campagne post)` : null;
+  const avecRel = (n) => [n, noteRel].filter(Boolean).join("<br>") || null;
   const depenseMure = INDICATEURS.depenseMure(lignes);
   const noteAVenir =
     rdvAVenir > 0
@@ -1569,7 +1582,7 @@ function vueEnsemble(lignes, precedentes, lignesTotal) {
   document.getElementById("perf").innerHTML = [
     carte("Dépense pub", euros(depense), depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
     carte(caLibelle(), caClientND ? "—" : enEuros(val("contracte")), caClientND ? NA : sansClient, caClientND ? null : ecart("contracte")),
-    carte("ROAS", caClientND ? "—" : enRoas(val("roas")), caClientND ? NA : sansDepense || "le chiffre de pilotage", caClientND ? null : ecart("roas")),
+    carte("ROAS", caClientND ? "—" : enRoas(val("roas")), caClientND ? NA : avecRel(sansDepense || "le chiffre de pilotage"), caClientND ? null : ecart("roas")),
     carte("Nouveaux clients", vide(nombre(nbClients)), noteND(null), ecartND(ecart("clients"))),
   ].join("");
 
@@ -1619,10 +1632,10 @@ function vueEnsemble(lignes, precedentes, lignesTotal) {
 
   document.getElementById("perf-couts").innerHTML = [
     modeClient
-      ? carte("Coût par client", vide(enEuros(val("coutClient"))), noteND(sansClient || sansDepense), ecartND(ecart("coutClient")))
-      : carte("Coût par vente", enEuros(val("coutVente")), (depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense) || noteAVenir, ecart("coutVente")),
-    carte("Coût par appel honoré", enEuros(val("coutAppel")), sansDepense || noteAVenir, ecart("coutAppel")),
-    carte("Coût par call booké", enEuros(val("coutRdv")), sansDepense, ecart("coutRdv")),
+      ? carte("Coût par client", vide(enEuros(val("coutClient"))), noteND(avecRel(sansClient || sansDepense)), ecartND(ecart("coutClient")))
+      : carte("Coût par vente", enEuros(val("coutVente")), avecRel((depense > 0 && ventes === 0 ? "aucune vente sur la période" : sansDepense) || noteAVenir), ecart("coutVente")),
+    carte("Coût par appel honoré", enEuros(val("coutAppel")), avecRel(sansDepense || noteAVenir), ecart("coutAppel")),
+    carte("Coût par call booké", enEuros(val("coutRdv")), avecRel(sansDepense), ecart("coutRdv")),
     carte("Coût par lead", enEuros(val("coutLead")), sansDepense, ecart("coutLead")),
   ].join("");
 
@@ -2655,7 +2668,7 @@ function appliquerModeAcq(lignes, mode = ACQ_MODE) {
   return lignes.map((l) => {
     const o = { ...l };
     // Le Rattrapage a les memes rangs que le Closing : R1 = champs "D", R2+ = champs "DR2".
-    CHAMPS_CALLS_RANG.forEach((f) => {
+    CHAMPS_CALLS_RANG_AVEC_REL.forEach((f) => {
       const d1 = l[f + "D"] || 0, d2 = l[f + "DR2"] || 0;
       // Paid Ads ("paid") : + les rattrapages pris apres une issue setter ("S"), leads payes par la pub.
       o[f] = mode === "rattrapage" ? d1 : (l[f] || 0) + d1 + (mode === "paid" ? l[f + "S"] || 0 : 0);
@@ -2689,12 +2702,14 @@ function brancherAcqMode() {
   });
 }
 const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules"];
+// + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
+const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
 function appliquerRangFunnel(lignes, rang = FUNNEL_RANG) {
   if (!lignes || rang === "r1") return lignes;
   return lignes.map((l) => {
     const o = { ...l };
-    CHAMPS_CALLS_RANG.forEach((f) => {
+    CHAMPS_CALLS_RANG_AVEC_REL.forEach((f) => {
       const r2 = l[f + "R2"] || 0;
       o[f] = rang === "r2" ? r2 : (l[f] || 0) + r2;
     });
