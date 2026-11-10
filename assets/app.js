@@ -3733,15 +3733,15 @@ function vueTracking() {
         })
         .filter((d) => d.val > 0)
         .sort((x, y) => y.val - x.val)
-        .map((d) => `${d.nom} : ${d.txt}`)
-        .join(" · ");
+        .map((d) => `${String(d.nom).replace(/[<>&]/g, "")} : ${d.txt}`)
+        .join("<br>");
     };
     const carteRelance = (titre, v, applicable, detail) => {
       const val = defRel.valeur(v);
       if (!applicable) return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, "—", "non applicable : une relance concerne un call, pas un lead", null);
       const part = totalRel > 0 ? `${pourcent(val / totalRel)} ${LIBELLE_PART_REL[TRACK_METRIQUE]}` : "—";
       const sec = defRel.secondaire(v);
-      const note = [part, sec, detail].filter(Boolean).join(" · ");
+      const note = [[part, sec].filter(Boolean).join(" · "), detail].filter(Boolean).join("<br>");
       return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, defRel.format(val), note, null);
     };
     const rdvPost = rdv.filter((r) => r.relance);
