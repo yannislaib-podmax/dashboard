@@ -3748,8 +3748,8 @@ function vueTracking() {
     const rdvSetter = rdv.filter((r) => r.viaSetter === true);
     const leadsSetter = leads.filter((l) => l.viaSetter === true);
     zoneRelance.innerHTML = [
-      carteRelance("Relancés par une campagne post", aggRel(rdvPost, []), TRACK_METRIQUE !== "leads", detailRel(rdvPost, [], "relance")),
-      carteRelance("Relancés par le setter", aggRel(rdvSetter, leadsSetter), true, detailRel(rdvSetter, TRACK_METRIQUE === "leads" ? leadsSetter : [], "setterNom")),
+      carteRelance("Relancés par une campagne post (acquisition)", aggRel(rdvPost, []), TRACK_METRIQUE !== "leads", detailRel(rdvPost, [], "relance")),
+      carteRelance("Relancés par le setter (acquisition)", aggRel(rdvSetter, leadsSetter), true,detailRel(rdvSetter, TRACK_METRIQUE === "leads" ? leadsSetter : [], "setterNom")),
     ].join("");
   }
 
@@ -5008,7 +5008,7 @@ function vueOutbound() {
     carte(
       "Part des calls bookés — Setting",
       cP.bookes ? pourcent(ratio(cP.bookesSetting, cP.bookes)) : "—",
-      cP.bookes ? `${nombre(cP.bookesSetting)} sur ${nombre(cP.bookes)} calls bookés (Closing + Rattrapage + via setter)` : "aucun call sur la période",
+      cP.bookes ? `${nombre(cP.bookesSetting)} sur ${nombre(cP.bookes)} calls bookés (Closing + Rattrapage + via setter), calls dont le rendez-vous tombe sur la période` : "aucun call sur la période",
       cP.bookes && cPPrec && cPPrec.bookes ? ep(ratio(cP.bookesSetting, cP.bookes), ratio(cPPrec.bookesSetting, cPPrec.bookes)) : null
     ),
     carte(

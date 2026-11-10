@@ -164,25 +164,16 @@ function recalculerDepuisCallBooked(callsBooked) {
     return o;
   };
   const parCle = {};
-  // Premiere issue setter (ligne "SETTER-...") par contact : un call Rattrapage pris
-  // APRES est un call du Setting, pas de l'acquisition (decision 2026-10-31).
-  const premiereIssueSetter = new Map();
-  for (const c of callsBooked) {
-    if (c.contactId == null || c.typeAppel !== "Diagnostic" || !String(c.bookingId || "").startsWith("SETTER-")) continue;
-    const t = String(c.prisLe || "");
-    if (!premiereIssueSetter.has(c.contactId) || t < premiereIssueSetter.get(c.contactId)) premiereIssueSetter.set(c.contactId, t);
-  }
+  // Decision 2026-11-10 (option A, meme regle que Tracking UTM) : un call pris apres une relance du setter
+  // (Closing ou Rattrapage) reste dans l'acquisition avec sa source d'origine. Les champs "S" restent a 0.
   for (const c of callsBooked) {
     // Rattrapage (Diagnostic) : champs suffixes "D", tous rangs confondus.
     // Rattrapage = type "Rattrapage" (nouveau) ou ancien "Diagnostic" sans prefixe SETTER- ;
     // un Diagnostic "SETTER-" est un call de setting : hors acquisition.
     const rattrapage = c.typeAppel === "Rattrapage" || (c.typeAppel === "Diagnostic" && !String(c.bookingId || "").startsWith("SETTER-"));
     if (c.typeAppel !== "Closing" && !rattrapage) continue;
-    // Rattrapage pris apres une issue setter : call du Setting, exclu de l'acquisition
-    // (Funnel...) mais compte a part (suffixe "S", R1) pour Paid Ads : le lead a ete paye par la pub.
-    const viaSetter = rattrapage && c.contactId != null && premiereIssueSetter.has(c.contactId) && premiereIssueSetter.get(c.contactId) <= String(c.prisLe || "");
     // Rattrapage : meme logique de rang que le Closing (R1 -> "D", R2+ -> "DR2").
-    const suf = viaSetter ? (c.rangR === 1 ? "S" : null) : rattrapage ? (c.rangR === 1 ? "D" : c.rangR > 1 ? "DR2" : null) : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
+    const suf = rattrapage ? (c.rangR === 1 ? "D" : c.rangR > 1 ? "DR2" : null) : c.rangR === 1 ? "" : c.rangR > 1 ? "R2" : null;
     if (suf === null) continue;
     const jour = jourParis(c.prisLe);
     if (!jour) continue;

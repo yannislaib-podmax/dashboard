@@ -191,22 +191,12 @@ export default async function handler(req, res) {
     // Les calls Diagnostic (rattrapage) sont renvoyes aussi, marques par
     // `typeAppel` : le front les garde pour le toggle Closing / Rattrapage des
     // onglets Acquisition (defaut Closing = comportement historique).
-    // Premiere issue setter ("SETTER-...") par contact : un Rattrapage pris APRES est un
-    // call du Setting, pas de l'acquisition (decision 2026-10-31).
-    const premiereIssueSetter = new Map();
-    for (const r of rdvBrut) {
-      if (r.contactId == null || r.typeAppel !== "Diagnostic" || !String(r.bookingId || "").startsWith("SETTER-")) continue;
-      const t = String(r.prisLe || "");
-      if (!premiereIssueSetter.has(r.contactId) || t < premiereIssueSetter.get(r.contactId)) premiereIssueSetter.set(r.contactId, t);
-    }
-    const viaSetting = (r) =>
-      r.contactId != null && premiereIssueSetter.has(r.contactId) && premiereIssueSetter.get(r.contactId) <= String(r.prisLe || "");
-
+    // Decision 2026-11-10 (option A) : un call pris apres une relance du setter (Closing OU Rattrapage)
+    // reste dans le Tracking avec sa source d'origine ; il est seulement marque viaSetter.
     const rdv = rdvBrut
-      // Diagnostic "SETTER-" = call de setting sur la base de donnees (pas d'origine pub,
-      // pas du Rattrapage) : exclu de l'acquisition. Il vit dans Sales Team > Setting.
+      // Diagnostic "SETTER-" = issue saisie par le setter (pas un call de vente) : exclu.
       // Rattrapage = type "Rattrapage" (nouveau) ou ancien "Diagnostic" sans prefixe SETTER-.
-      .filter((r) => r.typeAppel === "Closing" || (estRattrapage(r) && !viaSetting(r)))
+      .filter((r) => r.typeAppel === "Closing" || estRattrapage(r))
       .map(({ _id, contrats, bookingId, contactId, ...reste }) => {
         const ids = contratsDuCall({ contrats });
         return {
