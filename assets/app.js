@@ -2715,7 +2715,7 @@ function brancherAcqMode() {
     });
   });
 }
-const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules", "annulesCloser", "annulesProspect"];
+const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "annules", "annulesCloser", "annulesProspect"];
 // + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
 const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
@@ -2756,8 +2756,10 @@ function rendre() {
   const lignes = appliquerModeAcq(lignesFiltrees());
   const precedentes = appliquerModeAcq(lignesPrecedentes());
   brancherSalesRangToggle("funnel-rang", () => FUNNEL_RANG, (v) => (FUNNEL_RANG = v), rendre, true);
-  const lignesFunnel = appliquerRangFunnel(lignes);
-  const precedentesFunnel = appliquerRangFunnel(precedentes);
+  // Funnel = cohorte du jour du call : ventes datees du call (ventesJC), comme les honores (taux de closing coherent).
+  const ventesDuCall = (ls) => (ls ? ls.map((l) => ({ ...l, ventes: l.ventesJC ?? l.ventes })) : ls);
+  const lignesFunnel = ventesDuCall(appliquerRangFunnel(lignes));
+  const precedentesFunnel = ventesDuCall(appliquerRangFunnel(precedentes));
 
   // Paid Ads : filtres Tous / Closing / Rattrapage et R1 / R2+ / Tous. "Tous" = Closing + Rattrapage
   // + rattrapages apres issue setter (leads payes par la pub).

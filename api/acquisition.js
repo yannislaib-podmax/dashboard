@@ -162,7 +162,9 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // dans des champs miroirs "rel" + champ (relRendezVous, relHonoresR2...). Le dashboard les retranche
 // des couts par call / vente et du ROAS quand la source filtree est "Ads". Les leads et la depense
 // ne sont pas touches : c'est bien la pub qui a ramene le lead.
-const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "contracte", "annules", "annulesCloser", "annulesProspect"];
+// "ventesJC" = ventes datees du jour du CALL (cohorte), pour Funnel : meme population que les honores.
+// "ventes" / "contracte" restent dates de la signature (Paid Ads, pilotage de la depense).
+const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "annules", "annulesCloser", "annulesProspect"];
 const nomRel = (f) => "rel" + f.charAt(0).toUpperCase() + f.slice(1);
 const estRelance = (c, contactsSetter) => !!c.relance || (c.contactId != null && contactsSetter.has(c.contactId));
 
@@ -199,6 +201,7 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     p["rendezVousConclus" + suf] += c.conclu || 0;
     p["honores" + suf] += c.present || 0;
     p["annules" + suf] += c.annule || 0;
+    p["ventesJC" + suf] += c.vente || 0;
     // DECISION 2026-11-11 : une vente et son CA comptent le jour de SIGNATURE du contrat, pas le jour ou le call
     // a ete pris (sinon la depense d'une periode est divisee par des ventes d'une autre periode). Sans date de
     // signature connue, on garde le jour du call.
