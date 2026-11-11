@@ -4684,14 +4684,6 @@ function vueSalesClosing() {
       `par vente${suffixeRang}`,
       panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
     ),
-    carte(
-      "Cycle de vente moyen",
-      s.cycle === null ? "—" : jours1(s.cycle),
-      s.cycleN === 0
-        ? "aucune vente mesurable sur la période" + suffixeRang
-        : `médiane ${jours1(s.cycleMed)} · ${nombre(s.cycleN)} vente${s.cycleN > 1 ? "s" : ""} · du 1er RDV pris à la signature${suffixeRang}`,
-      s.cycle !== null && sPrec && sPrec.cycle !== null ? ecartDe(s.cycle, sPrec.cycle, "salesCycle") : null
-    ),
     // Une seule carte, uniquement la part du CA issue du Closing direct (hors
     // rattrapage). La part du rattrapage vit dans le mode Rattrapage.
     carte(
@@ -4701,6 +4693,14 @@ function vueSalesClosing() {
         ? `${euros(caMode)} sur ${euros(caClosingEtRatt)} de CA Closing + Rattrapage${suffixeRang}`
         : "aucun CA sur la période" + suffixeRang,
       caClosingEtRatt && partModePrec !== null ? ecartPart(caMode / caClosingEtRatt, partModePrec) : null
+    ),
+    carte(
+      "Cycle de vente moyen",
+      s.cycle === null ? "—" : jours1(s.cycle),
+      s.cycleN === 0
+        ? "aucune vente mesurable sur la période" + suffixeRang
+        : `médiane ${jours1(s.cycleMed)} · ${nombre(s.cycleN)} vente${s.cycleN > 1 ? "s" : ""} · du 1er RDV pris à la signature${suffixeRang}`,
+      s.cycle !== null && sPrec && sPrec.cycle !== null ? ecartDe(s.cycle, sPrec.cycle, "salesCycle") : null
     ),
   ].join("");
 
