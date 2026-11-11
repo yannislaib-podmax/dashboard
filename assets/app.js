@@ -503,9 +503,10 @@ function vueConversion(lignes, precedentes) {
     defaut: "ventes",
     groupes: [
       ["Volumes", ["leads", "rendezVous", "rendezVousConclus", "honores", "ventes"]],
-      ["Taux", ["tauxAnnulation", "tauxPresence", "tauxClosing"]],
+      ["Taux", ["tauxAnnulation", "tauxPresence", "tauxClosing", "cycle"]],
     ],
     metriques: {
+      cycle: { libelleCourt: "Cycle de vente (jours)", format: jours1, decimal: true },
       leads: { libelleCourt: "Leads", format: nombre },
       rendezVous: { libelleCourt: "Rendez-vous pris", format: nombre },
       rendezVousConclus: { libelleCourt: "RDV conclus", format: nombre },
@@ -516,7 +517,13 @@ function vueConversion(lignes, precedentes) {
       tauxClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
     },
     jours: lignes.map((l) => l.jour),
-    calcul: (cle, b) => INDICATEURS[cle](lignes.filter((l) => dansBloc(l.jour, b))),
+    // Cycle de vente (capture du lead -> signature, 1er achat) : lit les calls de /api/tracking, tous rangs
+    // confondus (la vente peut etre sur un R2), avec les memes filtres Canal/Produit/Source que la barre.
+    // Date = jour de prise du RDV de la vente.
+    calcul: (cle, b) =>
+      cle === "cycle"
+        ? statsCycle(parCanalEtProduitTrack(TRACK_RDV_TOUS.filter((r) => dansBloc(r.jour, b))), "cycleLead").cycle
+        : INDICATEURS[cle](lignes.filter((l) => dansBloc(l.jour, b))),
   });
 
   graphiqueTemporalite(lignes);
@@ -3480,6 +3487,12 @@ function trackCourbe(champ, leads, rdv, valeurs) {
   if (!cible) return;
 
   const def = TRACK_METRIQUES[TRACK_METRIQUE];
+
+  // Le cycle de vente est trop clairsemé pour une courbe par canal : son evolution est dans Funnel.
+  if (def.ordre === "asc") {
+    cible.innerHTML = `<div class="vide">Le cycle de vente est trop clairsemé pour une courbe par canal. Son évolution se suit dans Funnel, « Évolution des KPI » (filtre canal/source possible).</div>`;
+    return;
+  }
 
   // Top 5 valeurs UTM sur la métrique active — au-delà, la courbe devient
   // illisible (même logique que le plafond à 10 des camemberts, en plus
