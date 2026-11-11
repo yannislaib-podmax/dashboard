@@ -2497,6 +2497,76 @@ function vueDirection() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Direction — Marge (coûts de production)                            */
+/* ------------------------------------------------------------------ */
+
+let MARGE_CONTRATS = [];
+let MARGE_LIGNES = [];
+
+function vueMarge() {
+  const cartes = document.getElementById("marge-cartes");
+  if (!cartes) return;
+
+  const num = (v) => (typeof v === "number" && isFinite(v) ? v : 0);
+  const contrats = MARGE_CONTRATS.filter((c) => c.statut !== "Annulé");
+
+  let netRecu = 0;
+  let coutDirect = 0;
+  contrats.forEach((c) => {
+    netRecu += num(c.netRecu);
+    coutDirect += num(c.coutDirect);
+  });
+  const marge = netRecu - coutDirect;
+  const taux = netRecu > 0 ? marge / netRecu : null;
+
+  const estime = MARGE_LIGNES.filter((l) => l.statut === "Estimé").reduce((s, l) => s + num(l.montantRetenu), 0);
+  const du = MARGE_LIGNES.filter((l) => l.statut === "Dû").reduce((s, l) => s + num(l.montantRetenu), 0);
+
+  cartes.innerHTML = [
+    carte("Net reçu", euros(netRecu), "sur les contrats non annulés", null),
+    carte("Coût direct", euros(coutDirect), `dont ${euros(estime)} estimé, ${euros(du)} dû`, null),
+    carte("Marge brute", euros(marge), null, null),
+    carte("Taux de marge", taux === null ? "—" : pourcent(taux), taux === null ? "aucun encaissement" : "marge brute / net reçu", null),
+  ].join("");
+
+  // Par produit
+  const parProduit = {};
+  contrats.forEach((c) => {
+    const p = c.produit || "Non défini";
+    parProduit[p] ||= { nb: 0, net: 0, cout: 0 };
+    parProduit[p].nb += 1;
+    parProduit[p].net += num(c.netRecu);
+    parProduit[p].cout += num(c.coutDirect);
+  });
+
+  const ligneMarge = (net, cout) => {
+    const m = net - cout;
+    return `<td>${euros(net)}</td><td>${euros(cout)}</td><td>${euros(m)}</td><td>${net > 0 ? pourcent(m / net) : "—"}</td>`;
+  };
+
+  const blocProduits = document.getElementById("marge-produits");
+  if (blocProduits) {
+    const corps = Object.entries(parProduit)
+      .sort((a, b) => b[1].net - a[1].net)
+      .map(([p, v]) => `<tr><td>${p}</td><td>${v.nb}</td>${ligneMarge(v.net, v.cout)}</tr>`)
+      .join("");
+    blocProduits.innerHTML = corps
+      ? `<table><thead><tr><th>Produit</th><th>Contrats</th><th>Net reçu</th><th>Coût direct</th><th>Marge brute</th><th>Taux</th></tr></thead><tbody>${corps}</tbody></table>`
+      : `<div style="padding:28px;color:var(--txt3)">Aucune donnée.</div>`;
+  }
+
+  const blocContrats = document.getElementById("marge-contrats");
+  if (blocContrats) {
+    const corps = contrats
+      .map((c) => `<tr><td>${c.idContrat ?? "—"}</td><td>${c.produit ?? "—"}</td><td>${c.statut ?? "—"}</td>${ligneMarge(num(c.netRecu), num(c.coutDirect))}</tr>`)
+      .join("");
+    blocContrats.innerHTML = corps
+      ? `<table><thead><tr><th>Contrat</th><th>Produit</th><th>Statut</th><th>Net reçu</th><th>Coût direct</th><th>Marge brute</th><th>Taux</th></tr></thead><tbody>${corps}</tbody></table>`
+      : `<div style="padding:28px;color:var(--txt3)">Aucune donnée.</div>`;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Navigation et apparitions                                          */
 /* ------------------------------------------------------------------ */
 
@@ -5547,6 +5617,20 @@ async function charger() {
       if (reponseDirection.ok) {
         DIRECTION_CONTRATS = (donneesDirection.contrats || []).map((c) => ({ ...c, source: deriverSource(c.canal) }));
         DIRECTION_PAIEMENTS = donneesDirection.paiements || [];
+      }
+    } catch {
+      // Ignoré volontairement : voir commentaire ci-dessus.
+    }
+
+    // Marge (coûts de production) — même isolement : une panne de
+    // /api/marge ne touche jamais le reste du dashboard.
+    try {
+      const reponseMarge = await fetch("/api/marge");
+      const donneesMarge = await reponseMarge.json();
+      if (reponseMarge.ok) {
+        MARGE_CONTRATS = donneesMarge.contrats || [];
+        MARGE_LIGNES = donneesMarge.lignesCout || [];
+        vueMarge();
       }
     } catch {
       // Ignoré volontairement : voir commentaire ci-dessus.

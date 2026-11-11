@@ -44,6 +44,7 @@
       <button type="button">Direction <span class="chevron">▶</span></button>
       <div class="sous"><div class="sous-interieur">
         <a href="#direction" data-vue="direction">Tableau de bord</a>
+        <a href="#marge" data-vue="marge">Marge</a>
       </div></div>
     </div>
 
@@ -569,6 +570,30 @@
     <div class="camemberts" id="direction-camemberts"></div>
   </section>
 
+  <!-- ---------- Direction — Marge ---------- -->
+  <section class="vue" id="vue-marge">
+    <div class="titre-vue">
+      <h1>Marge</h1>
+      <p class="sous-titre">Ce que chaque contrat rapporte une fois les coûts de production retirés.</p>
+    </div>
+
+    <p class="convention rv">
+      <strong>Marge brute = net reçu − coût direct.</strong>
+      Le coût direct additionne les lignes de coût du contrat (monteur, chef de
+      projet, vidéaste, acteur, media buyer). Une ligne « Estimé » devient
+      « Dû » à la livraison du pack.
+    </p>
+
+    <h2 class="section">Vue d'ensemble</h2>
+    <div id="marge-cartes" class="cartes"></div>
+
+    <h3 class="sous-section">Par produit</h3>
+    <div class="glass cadre-table rv" id="marge-produits"></div>
+
+    <h3 class="sous-section">Par contrat</h3>
+    <div class="glass cadre-table rv" id="marge-contrats"></div>
+  </section>
+
   <!-- ---------- Détail par jour ---------- -->
   <section class="vue" id="vue-jour">
     <div class="titre-vue">
@@ -607,6 +632,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=236"></script>
+<script src="/assets/app.js?v=237"></script>
 </body>
 </html>
