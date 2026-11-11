@@ -82,7 +82,17 @@ const CHAMPS_CONTRATS = {
   fldz1nshv9SfQLn04: "montantTotal",
   fldlhedw3iJNyAITQ: "dateSignature",
   fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
+  fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL : le cycle de vente ne se mesure que sur le 1er achat
 };
+
+// Nombre de jours entre deux dates AAAA-MM-JJ (null si l'une manque ; jamais negatif).
+function joursEntre(debut, fin) {
+  if (!debut || !fin) return null;
+  const a = Date.parse(`${String(debut).slice(0, 10)}T00:00:00Z`);
+  const b = Date.parse(`${String(fin).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
 
 // L'Intake ne relie au call que le contrat principal : on y ajoute les contrats
 // du meme client signes le meme jour (ex. abonnement Media Buying pris en
@@ -223,6 +233,31 @@ export default async function handler(req, res) {
       const t = String(c.prisLe || "");
       if (!premiereIssueSetter.has(c.contactId) || t < premiereIssueSetter.get(c.contactId)) premiereIssueSetter.set(c.contactId, t);
     }
+    // Cycle de vente (en jours) : 1er RDV pris du contact (ou capture du lead) -> signature du contrat.
+    // Mesure uniquement sur un 1er achat (Type d'achat NOUVEAU) et si le contact est identifie.
+    const premierRdvContact = new Map();
+    for (const c of callsBrut) {
+      if (c.contactId == null || !c.prisLe) continue;
+      const j = jourParis(c.prisLe);
+      if (!premierRdvContact.has(c.contactId) || j < premierRdvContact.get(c.contactId)) premierRdvContact.set(c.contactId, j);
+    }
+    const captureContact = new Map();
+    for (const l of leadsBrut) {
+      if (l.contactId == null || !l.capteLe) continue;
+      const j = jourParis(l.capteLe);
+      if (!captureContact.has(l.contactId) || j < captureContact.get(l.contactId)) captureContact.set(l.contactId, j);
+    }
+    const cycleDe = (c) => {
+      const ids = liensContrats(c);
+      if (!ids.length || c.contactId == null) return { cycleRdv: null, cycleLead: null };
+      const ks = ids.map((id) => contratsBrut.find((k) => k._id === id)).filter(Boolean);
+      if (!ks.some((k) => k.typeAchat === "NOUVEAU")) return { cycleRdv: null, cycleLead: null };
+      const sig = ks.map((k) => String(k.dateSignature || "").slice(0, 10)).filter(Boolean).sort()[0];
+      return {
+        cycleRdv: joursEntre(premierRdvContact.get(c.contactId), sig),
+        cycleLead: joursEntre(captureContact.get(c.contactId), sig),
+      };
+    };
     const calls = callsBrut
       .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage")
       .map((c) => {
@@ -258,6 +293,7 @@ export default async function handler(req, res) {
           present: c.present || 0,
           conclu: c.conclu || 0,
           vente: liensContrats(c).length > 0 ? 1 : 0,
+          ...cycleDe(c),
         };
       });
 

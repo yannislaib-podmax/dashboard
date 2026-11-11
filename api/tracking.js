@@ -56,7 +56,17 @@ const CHAMPS_CONTRATS = {
   fldz1nshv9SfQLn04: "montantTotal",
   fldlhedw3iJNyAITQ: "dateSignature",
   fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
+  fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL : cycle de vente mesure sur le 1er achat uniquement
 };
+
+// Jours entre deux dates AAAA-MM-JJ (null si l'une manque ; jamais negatif).
+function joursEntre(debut, fin) {
+  if (!debut || !fin) return null;
+  const a = Date.parse(`${String(debut).slice(0, 10)}T00:00:00Z`);
+  const b = Date.parse(`${String(fin).slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
 
 // L'Intake ne relie au call que le contrat principal : on y ajoute les contrats
 // du meme client signes le meme jour (ex. abonnement Media Buying pris en
@@ -193,13 +203,24 @@ export default async function handler(req, res) {
     // onglets Acquisition (defaut Closing = comportement historique).
     // Decision 2026-11-10 (option A) : un call pris apres une relance du setter (Closing OU Rattrapage)
     // reste dans le Tracking avec sa source d'origine ; il est seulement marque viaSetter.
+    // Cycle de vente par canal : capture du lead (plus ancienne du contact) -> signature, 1er achat seulement.
+    const captureContact = new Map();
+    for (const l of leadsBrut) {
+      if (l.contactId == null || !l.jour) continue;
+      if (!captureContact.has(l.contactId) || l.jour < captureContact.get(l.contactId)) captureContact.set(l.contactId, l.jour);
+    }
+    const contratParId = new Map(contratsBrut.map((k) => [k._id, k]));
     const rdv = rdvBrut
       // Diagnostic "SETTER-" = issue saisie par le setter (pas un call de vente) : exclu.
       // Rattrapage = type "Rattrapage" (nouveau) ou ancien "Diagnostic" sans prefixe SETTER-.
       .filter((r) => r.typeAppel === "Closing" || estRattrapage(r))
       .map(({ _id, contrats, bookingId, contactId, ...reste }) => {
         const ids = contratsDuCall({ contrats });
+        const ks = ids.map((id) => contratParId.get(id)).filter(Boolean);
+        const sig = ks.map((k) => String(k.dateSignature || "").slice(0, 10)).filter(Boolean).sort()[0];
+        const mesurable = contactId != null && ks.some((k) => k.typeAchat === "NOUVEAU");
         return {
+          cycleLead: mesurable ? joursEntre(captureContact.get(contactId), sig) : null,
           ...reste,
           relance: reste.relance || "",
           viaSetter: contactId != null && contactsSetter.has(contactId),

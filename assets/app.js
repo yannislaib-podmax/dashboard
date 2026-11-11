@@ -295,7 +295,7 @@ const lignesFiltrees = () => parCanalEtProduit(TOUTES.filter(dansPeriode));
 
 let COMPARAISON = "precedente";
 
-const BAISSE_EST_BONNE = new Set(["coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc", "dirResiliations"]);
+const BAISSE_EST_BONNE = new Set(["salesCycle", "trackCycle", "coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead", "cpm", "cpc", "dirResiliations"]);
 const SANS_JUGEMENT = new Set(["depense"]);
 
 const SEUIL_STABLE_PCT = 5;
@@ -3252,16 +3252,20 @@ function trackRapportR1R2(champ, rdvTous) {
 function trackAgreger(champ, leads, rdv) {
   const parValeur = {};
   const point = (cle) => (parValeur[cle] = parValeur[cle] || { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 });
+  const rdvParValeur = {};
 
   leads.forEach((l) => { point(l[champ] || TRACK_NON_RENSEIGNE).leads += 1; });
   rdv.forEach((r) => {
     const p = point(r[champ] || TRACK_NON_RENSEIGNE);
+    (rdvParValeur[r[champ] || TRACK_NON_RENSEIGNE] = rdvParValeur[r[champ] || TRACK_NON_RENSEIGNE] || []).push(r);
     p.rdv += 1;
     p.present += r.present || 0;
     p.conclu += r.conclu || 0;
     p.ventes += r.vente || 0;
     p.ca += r.montant || 0;
   });
+  // Cycle de vente (capture du lead -> signature) par valeur du canal.
+  Object.keys(parValeur).forEach((n) => Object.assign(parValeur[n], statsCycle(rdvParValeur[n] || [], "cycleLead")));
 
   return parValeur;
 }
@@ -3297,12 +3301,20 @@ const TRACK_METRIQUES = {
     format: nombre,
     secondaire: (v) => (v.present > 0 ? `${Math.round((v.ventes / v.present) * 100)} % de closing` : null),
   },
+  // Cycle de vente : capture du lead -> signature (1er achat). Plus court = meilleur.
+  cycle: {
+    titre: "Classement par cycle de vente (le plus court en tête)",
+    valeur: (v) => v.cycle,
+    format: jours1,
+    secondaire: (v) => (v.cycleN > 0 ? `méd. ${jours1(v.cycleMed)} · ${v.cycleN} vente${v.cycleN > 1 ? "s" : ""}` : null),
+    ordre: "asc",
+  },
 };
 
 // vide-type pour une valeur UTM qui n'existait pas encore sur la période
 // précédente (pas de ligne du tout pour ce nom-là) : traité comme 0, pas
 // comme "pas de donnée" — "cette source est apparue" est une info en soi.
-const TRACK_VIDE = { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 };
+const TRACK_VIDE = { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0, cycle: null, cycleN: 0, cycleMed: null };
 
 function trackClassement(valeurs, parValeurPrec) {
   const cible = document.getElementById("tracking-classement");
@@ -3311,22 +3323,23 @@ function trackClassement(valeurs, parValeurPrec) {
   const def = TRACK_METRIQUES[TRACK_METRIQUE];
   const classe = valeurs
     .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v), v])
-    .filter(([, val]) => val > 0)
-    .sort((a, b) => b[1] - a[1]);
+    .filter(([, val]) => (def.ordre === "asc" ? val != null : val > 0))
+    .sort((a, b) => (def.ordre === "asc" ? a[1] - b[1] : b[1] - a[1]));
 
   if (!classe.length) {
     cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
     return;
   }
 
-  const max = classe[0][1];
+  const max = def.ordre === "asc" ? Math.max(...classe.map((x) => x[1]), 1) : classe[0][1];
 
   // Part de chaque valeur dans le total de la metrique (calculee sur TOUTES les valeurs, pas seulement le top 8).
   // Pour le classement par CA : « x % du CA » = ce que vaut le canal / la source / la campagne / le content.
-  const totalMetrique = valeurs.reduce((s, [, v]) => s + def.valeur(v), 0);
+  const totalMetrique = valeurs.reduce((s, [, v]) => s + (def.valeur(v) || 0), 0);
   // Meme logique pour toutes les metriques : part de la source / canal / campagne / content dans le total.
   const LIBELLE_PART = { leads: "des leads", ca: "du CA", present: "des présents", booke: "des calls bookés", ventes: "des ventes" };
-  const partDuCa = (val) => (totalMetrique > 0 ? `${pourcent(val / totalMetrique)} ${LIBELLE_PART[TRACK_METRIQUE] || ""}`.trim() : null);
+  // Le cycle n'est pas un volume : pas de « part du total », on affiche médiane et nombre de ventes.
+  const partDuCa = (val, v) => (def.ordre === "asc" ? def.secondaire(v) : totalMetrique > 0 ? `${pourcent(val / totalMetrique)} ${LIBELLE_PART[TRACK_METRIQUE] || ""}`.trim() : null);
 
   const bulle = (nom, v) => `
     <strong>${nom}</strong>
@@ -3334,6 +3347,7 @@ function trackClassement(valeurs, parValeurPrec) {
     <span>Call booké<b>${nombre(v.rdv)}</b></span>
     <span>Call présent<b>${nombre(v.present)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
+    ${v.cycleN > 0 ? `<span>Cycle de vente<b>${jours1(v.cycle)} (${v.cycleN} vente${v.cycleN > 1 ? "s" : ""})</b></span>` : ""}
     ${v.conclu > 0 ? `<span class="bulle-pied">${Math.round((v.ventes / v.conclu) * 100)} % de closing · ${Math.round((v.present / v.conclu) * 100)} % de présence</span>` : ""}`;
 
   cible.innerHTML = classe
@@ -3342,7 +3356,7 @@ function trackClassement(valeurs, parValeurPrec) {
       // pas sur les cartes globales, que la comparaison a un sens : elle
       // porte bien sur la dimension active (ex: "Instagram ↑ 18 %").
       const ecart = parValeurPrec
-        ? ecartDe(val, def.valeur(parValeurPrec[nom] || TRACK_VIDE), "track")
+        ? ecartDe(val, def.valeur(parValeurPrec[nom] || TRACK_VIDE), def.ordre === "asc" ? "trackCycle" : "track")
         : null;
 
       return `
@@ -3352,7 +3366,7 @@ function trackClassement(valeurs, parValeurPrec) {
         <div class="classement-piste"><div class="classement-barre" style="width:${Math.max(4, Math.round((val / max) * 100))}%"></div></div>
         <div class="classement-chiffres">
           <span class="classement-valeur">${def.format(val)}${ecart ? `<span class="ecart-inline ${ecart.classe}">${ecart.texte}</span>` : ""}</span>
-          ${partDuCa(val) ? `<span class="classement-secondaire">${partDuCa(val)}</span>` : ""}
+          ${partDuCa(val, v) ? `<span class="classement-secondaire">${partDuCa(val, v)}</span>` : ""}
         </div>
       </div>`;
     })
@@ -3455,6 +3469,7 @@ function trackValeurBloc(nom, champ, leads, rdv, bloc) {
     conclu: somme(rJ, "conclu"),
     ventes: somme(rJ, "vente"),
     ca: somme(rJ, "montant"),
+    ...statsCycle(rJ, "cycleLead"),
   };
 
   return TRACK_METRIQUES[TRACK_METRIQUE].valeur(v);
@@ -3471,8 +3486,8 @@ function trackCourbe(champ, leads, rdv, valeurs) {
   // strict ici car chaque valeur est une ligne entière, pas juste une part).
   const top5 = valeurs
     .map(([nom, v]) => [nom, def.valeur(v)])
-    .filter(([, val]) => val > 0)
-    .sort((a, b) => b[1] - a[1])
+    .filter(([, val]) => (def.ordre === "asc" ? val != null : val > 0))
+    .sort((a, b) => (def.ordre === "asc" ? a[1] - b[1] : b[1] - a[1]))
     .slice(0, 5)
     .map(([nom]) => nom);
 
@@ -3495,11 +3510,10 @@ function trackCourbe(champ, leads, rdv, valeurs) {
   const jours = [...new Set([...leads, ...rdv].map((l) => l.jour).filter(Boolean))].sort();
   const blocs = decoupagePeriodesEtendu(jours, GRANULARITE_TRACKING);
 
-  const series = top5.map((nom) => ({
-    nom,
-    couleur: couleur[nom],
-    points: blocs.map((b) => trackValeurBloc(nom, champ, leads, rdv, b)),
-  }));
+  const series = top5.map((nom) => {
+    const brut = blocs.map((b) => trackValeurBloc(nom, champ, leads, rdv, b));
+    return { nom, couleur: couleur[nom], points: def.ordre === "asc" ? completerPoints(brut) : brut };
+  }).filter((s) => s.points !== null);
 
   const max = Math.max(1, ...series.flatMap((s) => s.points));
 
@@ -3766,9 +3780,10 @@ function vueTracking() {
   if (zoneRelance) {
     // Suit le même toggle que le classement (TRACK_METRIQUE) : même métrique, même part du total.
     const defRel = TRACK_METRIQUES[TRACK_METRIQUE];
-    const LIBELLE_REL = { leads: "Leads", booke: "Call booké", present: "Call honoré", ventes: "Ventes", ca: "CA contracté" };
+    const LIBELLE_REL = { leads: "Leads", booke: "Call booké", present: "Call honoré", ventes: "Ventes", ca: "CA contracté", cycle: "Cycle de vente" };
     const LIBELLE_PART_REL = { leads: "des leads", ca: "du CA", present: "des présents", booke: "des calls bookés", ventes: "des ventes" };
     const aggRel = (lignesRdv, lignesLeads) => ({
+      ...statsCycle(lignesRdv, "cycleLead"),
       leads: lignesLeads.length,
       rdv: lignesRdv.length,
       present: somme(lignesRdv, "present"),
@@ -3776,7 +3791,7 @@ function vueTracking() {
       ventes: somme(lignesRdv, "vente"),
       ca: somme(lignesRdv, "montant"),
     });
-    const totalRel = defRel.valeur(aggRel(rdv, leads));
+    const totalRel = defRel.valeur(aggRel(rdv, leads)) || 0;
     // Détail par campagne / par setter, sur la même métrique (valeurs triées décroissant).
     const detailRel = (lignesRdv, lignesLeads, cle) => {
       const noms = new Set([...lignesRdv, ...lignesLeads].map((x) => x[cle] || "Non renseigné"));
@@ -3785,18 +3800,19 @@ function vueTracking() {
           const a = aggRel(lignesRdv.filter((x) => (x[cle] || "Non renseigné") === nom), lignesLeads.filter((x) => (x[cle] || "Non renseigné") === nom));
           return { nom, val: defRel.valeur(a), txt: defRel.format(defRel.valeur(a)) };
         })
-        .filter((d) => d.val > 0)
-        .sort((x, y) => y.val - x.val)
+        .filter((d) => (defRel.ordre === "asc" ? d.val != null : d.val > 0))
+        .sort((x, y) => (defRel.ordre === "asc" ? x.val - y.val : y.val - x.val))
         .map((d) => `${String(d.nom).replace(/[<>&]/g, "")} : ${d.txt}`)
         .join("<br>");
     };
     const carteRelance = (titre, v, applicable, detail) => {
       const val = defRel.valeur(v);
       if (!applicable) return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, "—", "non applicable : une relance concerne un call, pas un lead", null);
-      const part = totalRel > 0 ? `${pourcent(val / totalRel)} ${LIBELLE_PART_REL[TRACK_METRIQUE]}` : "—";
+      const estCycle = defRel.ordre === "asc";
+      const part = estCycle ? "" : totalRel > 0 ? `${pourcent(val / totalRel)} ${LIBELLE_PART_REL[TRACK_METRIQUE]}` : "—";
       const sec = defRel.secondaire(v);
       const note = [[part, sec].filter(Boolean).join(" · "), detail].filter(Boolean).join("<br>");
-      return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, defRel.format(val), note, null);
+      return carte(`${titre} · ${LIBELLE_REL[TRACK_METRIQUE]}`, val == null ? "—" : defRel.format(val), note, null);
     };
     const rdvPost = rdv.filter((r) => r.relance);
     const rdvSetter = rdv.filter((r) => r.viaSetter === true);
@@ -4240,14 +4256,46 @@ const SALES_METRIQUES = {
     format: euros,
     secondaire: () => null,
   },
+  // Cycle de vente : 1er RDV pris -> signature. Plus court = meilleur (classement croissant).
+  cycle: {
+    libelleCourt: "Cycle de vente",
+    valeur: (v) => v.cycle,
+    format: jours1,
+    secondaire: (v) => (v.cycleN > 0 ? `méd. ${jours1(v.cycleMed)} · ${v.cycleN} vente${v.cycleN > 1 ? "s" : ""}` : null),
+    ordre: "asc",
+  },
 };
 
 // Agrégat {rdv,conclus,honores,ventes,ca} d'un closer sur un seul bloc de
 // temps — base commune pour toutes les métriques du toggle ci-dessus (avant,
 // ne renvoyait que le CA, ce qui ne permettait pas de changer de métrique).
+// Cycle de vente (jours) d'un jeu de calls : moyenne, mediane et nombre de ventes mesurables.
+// Cote closer on part du 1er RDV pris (cycleRdv) ; cote canal (Tracking) de la capture du lead (cycleLead).
+function statsCycle(liste, cle = "cycleRdv") {
+  const v = liste.map((c) => c[cle]).filter((x) => typeof x === "number" && x >= 0).sort((a, b) => a - b);
+  const n = v.length;
+  if (!n) return { cycleN: 0, cycle: null, cycleMed: null };
+  const moy = v.reduce((t, x) => t + x, 0) / n;
+  const med = n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+  return { cycleN: n, cycle: moy, cycleMed: med };
+}
+// Courbes multi-lignes : un cycle de vente n'existe que les periodes ou il y a eu une vente. On reporte la
+// derniere valeur connue (et la 1re valeur sur le debut de serie) plutot que de tracer un faux zero.
+function completerPoints(points) {
+  const premier = points.find((v) => typeof v === "number");
+  if (premier === undefined) return null;
+  let dernier = premier;
+  return points.map((v) => (typeof v === "number" ? (dernier = v) : dernier));
+}
+// Declaration de fonction (hissee) : utilisee par TRACK_METRIQUES / SALES_METRIQUES, definies plus haut dans le fichier.
+function jours1(x) {
+  return `${(Math.round(x * 10) / 10).toString().replace(".", ",")} j`;
+}
+
 function salesStatsBlocCloser(nom, calls, bloc) {
   const dansBloc = calls.filter((c) => (c.closer || "Non renseigné") === nom && c.jour >= bloc.debut && c.jour <= bloc.fin);
   return {
+    ...statsCycle(dansBloc),
     rdv: dansBloc.length,
     conclus: somme(dansBloc, "conclu"),
     honores: somme(dansBloc, "present"),
@@ -4291,15 +4339,15 @@ function salesRenduClassement(cibleId, entries, metriquesObj, metriqueActive, bu
   const def = metriquesObj[metriqueActive];
   const classe = entries
     .map(([nom, v]) => [nom, def.valeur(v), def.secondaire(v), v])
-    .filter(([, val]) => val > 0)
-    .sort((a, b) => b[1] - a[1]);
+    .filter(([, val]) => (def.ordre === "asc" ? val != null : val > 0))
+    .sort((a, b) => (def.ordre === "asc" ? a[1] - b[1] : b[1] - a[1]));
 
   if (!classe.length) {
     cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
     return;
   }
 
-  const max = classe[0][1];
+  const max = def.ordre === "asc" ? Math.max(...classe.map((x) => x[1]), 1) : classe[0][1];
 
   cible.innerHTML = classe
     .map(
@@ -4333,6 +4381,7 @@ function salesStatsCallsClosing(calls) {
   const annulesCloser = calls.filter(estAnnuleCloser).length;
   const annulesProspect = calls.filter(estAnnuleProspect).length;
   return {
+    ...statsCycle(calls),
     rdv,
     conclus,
     honores,
@@ -4622,6 +4671,14 @@ function vueSalesClosing() {
       `par vente${suffixeRang}`,
       panier !== null && sPrec && sPrec.panier !== null ? ecartDe(panier, sPrec.panier, "salesPanier") : null
     ),
+    carte(
+      "Cycle de vente moyen",
+      s.cycle === null ? "—" : jours1(s.cycle),
+      s.cycleN === 0
+        ? "aucune vente mesurable sur la période" + suffixeRang
+        : `médiane ${jours1(s.cycleMed)} · ${nombre(s.cycleN)} vente${s.cycleN > 1 ? "s" : ""} · du 1er RDV pris à la signature${suffixeRang}`,
+      s.cycle !== null && sPrec && sPrec.cycle !== null ? ecartDe(s.cycle, sPrec.cycle, "salesCycle") : null
+    ),
     // Une seule carte, uniquement la part du CA issue du Closing direct (hors
     // rattrapage). La part du rattrapage vit dans le mode Rattrapage.
     carte(
@@ -4638,9 +4695,10 @@ function vueSalesClosing() {
     defaut: "ca",
     groupes: [
       ["Volumes", ["rdv", "conclus", "honores", "ventes", "ca"]],
-      ["Taux", ["annulation", "presence", "closing", "panier"]],
+      ["Taux", ["annulation", "presence", "closing", "panier", "cycle"]],
     ],
     metriques: {
+      cycle: { libelleCourt: "Cycle de vente (jours)", format: jours1, decimal: true },
       rdv: { libelleCourt: "RDV prévus", format: nombre },
       conclus: { libelleCourt: "RDV conclus", format: nombre },
       honores: { libelleCourt: "RDV honorés", format: nombre },
@@ -4692,8 +4750,10 @@ function vueSalesClosing() {
   // (classement, camemberts, courbe) pour que les chiffres restent
   // cohérents entre les sections de l'onglet.
   const parCloser = {};
+  const callsParCloser = {};
   calls.forEach((c) => {
     const n = c.closer || "Non renseigné";
+    (callsParCloser[n] = callsParCloser[n] || []).push(c);
     if (!parCloser[n]) parCloser[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 };
     const p = parCloser[n];
     p.rdv += 1;
@@ -4702,6 +4762,7 @@ function vueSalesClosing() {
     p.ventes += c.vente;
     p.ca += c.montant;
   });
+  Object.keys(parCloser).forEach((n) => Object.assign(parCloser[n], statsCycle(callsParCloser[n])));
   const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
 
   // Classement — en bas de page, avec son propre toggle RDV prévus/Call
@@ -4719,6 +4780,7 @@ function vueSalesClosing() {
     <span>RDV honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
+    ${v.cycleN > 0 ? `<span>Cycle de vente<b>${jours1(v.cycle)} (méd. ${jours1(v.cycleMed)}, ${v.cycleN} vente${v.cycleN > 1 ? "s" : ""})</b></span>` : ""}
     ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
   salesRenduPodium("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
 
@@ -4758,15 +4820,18 @@ function vueSalesClosing() {
   const top5Closers = lignesCloser.slice(0, 5).map(([nom]) => nom);
   const joursCalls = calls.map((c) => c.jour).filter(Boolean).sort();
   const blocsCloser = decoupagePeriodesEtendu(joursCalls, GRANULARITE_SALES_CLOSING);
-  const seriesCloser = top5Closers.map((nom) => {
-    const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, calls, b));
-    return {
-      nom,
-      couleur: couleurCloser[nom],
-      points: statsParBloc.map((st) => metriqueDef.valeur(st)),
-      secondaires: statsParBloc.map((st) => metriqueDef.secondaire(st)),
-    };
-  });
+  const seriesCloser = top5Closers
+    .map((nom) => {
+      const statsParBloc = blocsCloser.map((b) => salesStatsBlocCloser(nom, calls, b));
+      const brut = statsParBloc.map((st) => metriqueDef.valeur(st));
+      return {
+        nom,
+        couleur: couleurCloser[nom],
+        points: metriqueDef.ordre === "asc" ? completerPoints(brut) : brut,
+        secondaires: statsParBloc.map((st) => metriqueDef.secondaire(st)),
+      };
+    })
+    .filter((s) => s.points !== null);
   courbeMultiSeries("sales-closing-courbe", blocsCloser, seriesCloser, metriqueDef.format, GRANULARITE_SALES_CLOSING, (g) => {
     GRANULARITE_SALES_CLOSING = g;
     vueSalesClosing();
@@ -5332,8 +5397,8 @@ function salesRenduPodium(cibleId, entries, metriquesObj, metriqueActive, bulleF
   const def = metriquesObj[metriqueActive];
   const classe = entries
     .map(([nom, v]) => ({ nom, val: def.valeur(v), sec: def.secondaire(v), v }))
-    .filter((e) => e.val > 0)
-    .sort((x, y) => y.val - x.val);
+    .filter((e) => (def.ordre === "asc" ? e.val != null : e.val > 0))
+    .sort((x, y) => (def.ordre === "asc" ? x.val - y.val : y.val - x.val));
 
   if (!classe.length) {
     cible.innerHTML = `<div class="vide">Rien à classer sur cette période.</div>`;
