@@ -3973,6 +3973,7 @@ let SALES_LEADS = [];
 let SALES_FOLLOWUPS = []; // leads au stage Follow-Up Scheduled (stock courant, setter ou non)
 let CLIENTS_DETAIL = [];
 let SALES_CALLS = [];
+let SALES_SOLDES = {}; // reste à encaisser par closer (stock, indépendant de la période)
 let SALES_CLOSER = "tout";
 // Périmètre de rang R pour les métriques de PERFORMANCE de Closing (taux,
 // classement, courbe) — "r1" (par défaut) isole le 1er call sur chaque lead,
@@ -4792,6 +4793,18 @@ function vueSalesClosing() {
       ca ? `${euros(s.encaisse)} encaissés sur ${euros(ca)} contractés${suffixeRang}` : "aucune vente sur la période" + suffixeRang,
       s.collecte !== null && sPrec && sPrec.collecte !== null ? ecartPoints(s.collecte, sPrec.collecte) : null
     ),
+    (() => {
+      const lignesSolde = Object.entries(SALES_SOLDES).filter(([nom]) => SALES_CLOSER === "tout" || nom === SALES_CLOSER);
+      const reste = lignesSolde.reduce((t, [, v]) => t + v.reste, 0);
+      const nb = lignesSolde.reduce((t, [, v]) => t + v.nb, 0);
+      const detail = lignesSolde.length > 1 ? "<br>" + lignesSolde.sort((a, b) => b[1].reste - a[1].reste).map(([nom, v]) => `<b>${euros(v.reste)}</b> ${nom}`).join("<br>") : "";
+      return carte(
+        "Reste à encaisser",
+        euros(reste),
+        (nb ? `${nombre(nb)} contrat${nb > 1 ? "s" : ""} pas encore soldé${nb > 1 ? "s" : ""} · toutes périodes` : "tout est encaissé") + detail,
+        null
+      );
+    })(),
     carte(
       "Panier moyen",
       panier === null ? "—" : euros(panier),
@@ -5716,6 +5729,7 @@ async function charger() {
         SALES_LEADS = (donneesSales.leads || []).map(avecSource);
         SALES_FOLLOWUPS = (donneesSales.followUps || []).map(avecSource);
         SALES_CALLS = (donneesSales.calls || []).map(avecSource);
+        SALES_SOLDES = donneesSales.soldes || {};
         vueSalesClosing();
         initSalesMode();
       }

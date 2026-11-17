@@ -82,6 +82,8 @@ const CHAMPS_CONTRATS = {
   fldz1nshv9SfQLn04: "montantTotal",
   fldlhedw3iJNyAITQ: "dateSignature",
   fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
+  fldjHO9Feh6daNVbg: "statutContrat", // Annulé = exclu du reste à encaisser
+  fldcExyrANUkkgBP5: "montantRecu", // rollup : total reçu (avant remboursement)
   fldy8OIvfHdsHTCCm: "caNet", // CA net = montant recu - rembourse (encaisse AVANT frais plateforme)
   fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL : le cycle de vente ne se mesure que sur le 1er achat
 };
@@ -301,9 +303,31 @@ export default async function handler(req, res) {
         };
       });
 
+    // Reste à encaisser par closer : contracté − reçu sur TOUS les contrats rattachés à ses calls, quelles que soient la
+    // période, le rang ou le type du call (stock courant, pas une cohorte). Un contrat n'est compté qu'une fois,
+    // chez le closer du premier call qui y est lié ; les contrats annulés sont exclus.
+    const closerDuContrat = new Map();
+    for (const c of callsBrut) {
+      if (!c.closer) continue;
+      for (const id of String(c.contrats || "").split(", ").filter(Boolean)) {
+        if (!closerDuContrat.has(id)) closerDuContrat.set(id, c.closer);
+      }
+    }
+    const soldes = {};
+    for (const k of contratsBrut) {
+      const closer = closerDuContrat.get(k._id);
+      if (!closer || k.statutContrat === "Annulé") continue;
+      const reste = Math.max(0, (k.montantTotal || 0) - (k.montantRecu || 0));
+      if (reste <= 0) continue;
+      soldes[closer] = soldes[closer] || { reste: 0, nb: 0 };
+      soldes[closer].reste += reste;
+      soldes[closer].nb += 1;
+    }
+
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
     return res.status(200).json({
+      soldes,
       genereLe: new Date().toISOString(),
       nbLeads: leads.length,
       followUps,
