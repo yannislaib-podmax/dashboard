@@ -65,12 +65,18 @@ const sommeAds = (lignes, champ) => somme(lignes, champ) - (horsRelances() ? som
 //  - "tous"    : CA encaissé sur tous les contrats de ces clients, à date.
 let CA_MODE = "premier";
 const CA_MODES = {
-  call: { champ: "contracte", libelle: "CA contracté", note: "CA contracté des ventes rattachées au call, tel que saisi dans iClosed." },
-  premier: { champ: "contracte1er", libelle: "CA du 1er achat", note: "Contracté du premier achat de chaque nouveau client (contrats Airtable), daté du jour de signature. Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
-  tous: { champ: "encaisseTous", libelle: "CA encaissé (tous contrats)", note: "Tout ce que les clients acquis ont payé depuis, à date (renouvellements compris). Mesure ce qu'un client rapporte. Les ventes d'avant le formulaire Tally n'y figurent pas." },
+  // Décision 2026-11-17 : la valeur principale est l'ENCAISSÉ (avant frais plateforme, remboursements déduits, daté de la
+  // signature) ; le contracté est affiché en dessous. "champ" = encaissé, "champCon" = contracté.
+  call: { champ: "encaisse", champCon: "contracte", libelle: "CA encaissé", note: "CA encaissé des ventes rattachées au call (daté de la signature du contrat)." },
+  premier: { champ: "encaisse1er", champCon: "contracte1er", libelle: "CA encaissé du 1er achat", note: "Encaissé du premier achat de chaque nouveau client (contrats Airtable), daté du jour de signature. Mesure ce que coûte un nouveau client. Les ventes d'avant le formulaire Tally n'y figurent pas." },
+  tous: { champ: "encaisseTous", champCon: "contracteTous", libelle: "CA encaissé (tous contrats)", note: "Tout ce que les clients acquis ont payé depuis, à date (renouvellements compris). Mesure ce qu'un client rapporte. Les ventes d'avant le formulaire Tally n'y figurent pas." },
 };
 const caChamp = () => CA_MODES[CA_MODE].champ;
+const caChampCon = () => CA_MODES[CA_MODE].champCon;
 const caLibelle = () => CA_MODES[CA_MODE].libelle;
+const caLibelleCon = () => caLibelle().replace("encaissé", "contracté");
+// Carte à deux niveaux : chiffre principal (encaissé) puis, en dessous, le contracté.
+const sousChiffre = (libelle, valeur) => `<span class="sous-chiffre">${libelle} : <b>${valeur}</b></span>`;
 
 /* ------------------------------------------------------------------ */
 /*  Infobulle partagée                                                 */
@@ -361,8 +367,12 @@ const ratio = (a, b) => (b > 0 ? a / b : null);
 
 const INDICATEURS = {
   depense: (l) => somme(l, "depense"),
-  contracte: (l) => sommeAds(l, caChamp()),
-  roas: (l) => ratio(sommeAds(l, caChamp()), somme(l, "depense")),
+  contracte: (l) => sommeAds(l, caChamp()), // encaissé du mode actif (clé historique conservée)
+  roas: (l) => ratio(sommeAds(l, caChamp()), somme(l, "depense")), // ROAS encaissé
+  caContracte: (l) => sommeAds(l, caChampCon()),
+  roasContracte: (l) => ratio(sommeAds(l, caChampCon()), somme(l, "depense")),
+  contracteTous: (l) => somme(l, "contracteTous"),
+  roasTousContracte: (l) => ratio(sommeAds(l, "contracteTous"), somme(l, "depense")),
   clients: (l) => somme(l, "clients"),
   encaisse: (l) => somme(l, "encaisseTous"),
   roasTous: (l) => ratio(sommeAds(l, "encaisseTous"), somme(l, "depense")),
@@ -727,10 +737,10 @@ function tranches7(lignes, granularite) {
   return blocs
     .map((b) => {
       const dedans = lignes.filter((l) => l.jour >= b.debut && l.jour <= b.fin);
-      const premier = somme(dedans, "contracte1er");
+      const premier = somme(dedans, "encaisse1er");
       const encaisse = somme(dedans, "encaisseTous");
       // Renouvellements = ce que ces clients ont payé en plus de leur 1er achat.
-      return { ...b, depense: somme(dedans, "depense"), contracte: premier, renouv: Math.max(0, encaisse - premier), total: Math.max(premier, encaisse) };
+      return { ...b, depense: somme(dedans, "depense"), contracte: premier, premierCon: somme(dedans, "contracte1er"), renouv: Math.max(0, encaisse - premier), total: Math.max(premier, encaisse) };
     })
     // On n'affiche une tranche que si elle a une dépense ou un CA à montrer :
     // des colonnes vides à hauteur minimale poussaient le graphique hors de
@@ -763,7 +773,7 @@ function graphiqueCa(lignes) {
   const legende = `
     <div class="legende-graph">
       <span><i class="b-depense"></i>Dépense pub</span>
-      <span><i class="b-contracte"></i>1er achat des clients acquis</span>
+      <span><i class="b-contracte"></i>1er achat encaissé des clients acquis</span>
       <span><i class="b-renouv"></i>Renouvellements (LTV à date)</span>
     </div>
     <p class="note-graph">Chaque période montre ce que les clients <em>acquis cette période</em> ont payé à date : les périodes récentes sont plus basses, les clients n'ont pas encore renouvelé.</p>`;
@@ -771,14 +781,17 @@ function graphiqueCa(lignes) {
   const colonnes = blocs
     .map((b) => {
       const roas1 = b.depense > 0 ? (b.contracte / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
+      const roas1Con = b.depense > 0 ? (b.premierCon / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
       const roasT = b.depense > 0 ? (b.total / b.depense).toFixed(2).replace(".", ",") + " ×" : "—";
       const libelle = libellePeriodeEtendu(b, granularite);
       const bulle = `<strong>${libelle}</strong>
         <span><i class="p-depense"></i>Dépense pub<b>${euros(b.depense)}</b></span>
-        <span><i class="p-contracte"></i>1er achat<b>${euros(b.contracte)}</b></span>
+        <span><i class="p-contracte"></i>1er achat encaissé<b>${euros(b.contracte)}</b></span>
+        <span class="bulle-pied">1er achat contracté<b>${euros(b.premierCon)}</b></span>
         <span><i class="p-renouv"></i>Renouvellements<b>${euros(b.renouv)}</b></span>
-        <span class="bulle-pied">ROAS 1er achat<b>${roas1}</b></span>
-        <span class="bulle-pied">ROAS tous contrats<b>${roasT}</b></span>`;
+        <span class="bulle-pied">ROAS 1er achat encaissé<b>${roas1}</b></span>
+        <span class="bulle-pied">ROAS 1er achat contracté<b>${roas1Con}</b></span>
+        <span class="bulle-pied">ROAS encaissé tous contrats<b>${roasT}</b></span>`;
       return `<div class="barre-col"${info(bulle)}>
         <div class="valeur">${roasT}</div>
         <div class="zone">
@@ -1352,8 +1365,10 @@ let GRANULARITE_PERF = "semaine";
 const formatKpiRoas = (v) => (v === null || v === undefined ? "—" : v.toFixed(2).replace(".", ",") + " ×");
 const PERF_METRIQUES = {
   depense: { libelleCourt: "Dépense pub", cle: "depense", format: euros },
-  contracte: { libelleCourt: "CA", cle: "contracte", format: euros },
-  roas: { libelleCourt: "ROAS", cle: "roas", format: formatKpiRoas, decimal: true },
+  contracte: { libelleCourt: "CA encaissé", cle: "contracte", format: euros },
+  caContracte: { libelleCourt: "CA contracté", cle: "caContracte", format: euros },
+  roas: { libelleCourt: "ROAS encaissé", cle: "roas", format: formatKpiRoas, decimal: true },
+  roasContracte: { libelleCourt: "ROAS contracté", cle: "roasContracte", format: formatKpiRoas, decimal: true },
   clients: { libelleCourt: "Nouveaux clients", cle: "clients", format: nombre },
   coutClient: { libelleCourt: "Coût par client", cle: "coutClient", format: euros },
   coutVente: { libelleCourt: "Coût par vente", cle: "coutVente", format: euros },
@@ -1438,7 +1453,7 @@ function courbePerformance(lignes) {
   menusCategoriesKpi(
     "perf-courbe-metrique",
     [
-      ["Budget et résultats", ["depense", "contracte", "roas", "clients"]],
+      ["Budget et résultats", ["depense", "contracte", "caContracte", "roas", "roasContracte", "clients"]],
       ["Coûts d'acquisition", ["coutClient", "coutVente", "coutAppel", "coutRdv", "coutLead"]],
       ["Média", ["cpm", "cpc", "ctr"]],
       ["Valeur client (LTV)", ["encaisse", "ltv", "multipleLtv", "roasTous", "margeClient", "ltvSurCout"]],
@@ -1602,20 +1617,20 @@ function vueEnsemble(lignes, precedentes, lignesTotal) {
 
   document.getElementById("perf").innerHTML = [
     carte("Dépense pub", euros(depense), depense === 0 ? "aucune dépense renseignée" : null, ecart("depense")),
-    carte(caLibelle(), caClientND ? "—" : enEuros(val("contracte")), caClientND ? NA : sansClient, caClientND ? null : ecart("contracte")),
-    carte("ROAS", caClientND ? "—" : enRoas(val("roas")), caClientND ? NA : avecRel(sansDepense || "le chiffre de pilotage"), caClientND ? null : ecart("roas")),
+    carte(caLibelle(), caClientND ? "—" : enEuros(val("contracte")), caClientND ? NA : [sansClient, sousChiffre(caLibelleCon(), enEuros(val("caContracte")))].filter(Boolean).join("<br>"), caClientND ? null : ecart("contracte")),
+    carte("ROAS encaissé", caClientND ? "—" : enRoas(val("roas")), caClientND ? NA : avecRel([sansDepense, sousChiffre("ROAS contracté", enRoas(val("roasContracte")))].filter(Boolean).join("<br>")), caClientND ? null : ecart("roas")),
     carte("Nouveaux clients", vide(nombre(nbClients)), noteND(null), ecartND(ecart("clients"))),
   ].join("");
 
   const sansLtv = nbClients === 0 ? "aucun client rattaché sur la période" : null;
   // Ligne 1 : ce que rapporte un client. Ligne 2 : ce que ça donne face à la dépense.
   document.getElementById("perf-ltv").innerHTML = [
-    carte("CA encaissé (tous contrats)", vide(enEuros(val("encaisse"))), noteND(sansLtv || "tout ce que ces clients ont payé à date"), ecartND(ecart("encaisse"))),
+    carte("CA encaissé (tous contrats)", vide(enEuros(val("encaisse"))), noteND([sansLtv || "tout ce que ces clients ont payé à date", sousChiffre("Contracté (tous contrats)", enEuros(val("contracteTous")))].join("<br>")), ecartND(ecart("encaisse"))),
     carte("LTV moyenne par client", vide(enEuros(val("ltv"))), noteND(sansLtv || "encaissé à date, par client acquis"), ecartND(ecart("ltv"))),
     carte("LTV / 1er achat", vide(enRoas(val("multipleLtv"))), noteND(sansLtv || "combien de fois le 1er contrat est dépassé"), ecartND(ecart("multipleLtv"))),
   ].join("");
   document.getElementById("perf-ltv-rentab").innerHTML = [
-    carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
+    carte("ROAS encaissé tous contrats", vide(enRoas(val("roasTous"))), noteND([sansDepense || "encaissé total / dépense pub", sousChiffre("ROAS contracté", enRoas(val("roasTousContracte")))].join("<br>")), ecartND(ecart("roasTous"))),
     carte("Marge par client", vide(enEuros(val("margeClient"))), noteND(sansLtv || sansDepense || "LTV à date moins coût par client"), ecartND(ecart("margeClient"))),
     carte("LTV / coût par client", vide(enRoas(val("ltvSurCout"))), noteND(sansLtv || sansDepense || "au-dessus de 1 ×, un client rapporte plus qu'il n'a coûté"), ecartND(ecart("ltvSurCout"))),
   ].join("");
@@ -1639,7 +1654,7 @@ function vueEnsemble(lignes, precedentes, lignesTotal) {
   if (lienLtv) {
     lienLtv.innerHTML = [
       // « LTV / coût par client » = « ROAS tous contrats » (même rapport encaissé / dépense) : on n'en garde qu'un.
-      carte("ROAS tous contrats", vide(enRoas(val("roasTous"))), noteND(sansDepense || "encaissé total / dépense pub"), ecartND(ecart("roasTous"))),
+      carte("ROAS encaissé tous contrats", vide(enRoas(val("roasTous"))), noteND([sansDepense || "encaissé total / dépense pub", sousChiffre("ROAS contracté", enRoas(val("roasTousContracte")))].join("<br>")), ecartND(ecart("roasTous"))),
       carte("Marge par client", vide(enEuros(val("margeClient"))), noteND(sansLtv || sansDepense || "LTV à date moins coût par client"), ecartND(ecart("margeClient"))),
       carteDelai,
     ].join("");
@@ -1705,6 +1720,7 @@ function vueJour(lignes) {
         ${cellule(l.rendezVous)}
         ${cellule(l.honores)}
         ${cellule(l.ventes)}
+        ${cellule(l.encaisse, euros)}
         ${cellule(l.contracte, euros)}
       </tr>`;
     })
@@ -1714,7 +1730,7 @@ function vueJour(lignes) {
     <table>
       <thead><tr>
         <th>Jour</th><th>Canal</th><th>Dépense</th>
-        <th>Leads</th><th>RDV</th><th>Honorés</th><th>Ventes</th><th>Contracté</th>
+        <th>Leads</th><th>RDV</th><th>Honorés</th><th>Ventes</th><th>Encaissé</th><th>Contracté</th>
       </tr></thead>
       <tbody>${corps}</tbody>
     </table>`;
@@ -1725,7 +1741,7 @@ function vueJour(lignes) {
 /* ------------------------------------------------------------------ */
 
 function vueCanal(lignes) {
-  const champs = ["depense", "leads", "rendezVous", "honores", "ventes", "contracte"];
+  const champs = ["depense", "leads", "rendezVous", "honores", "ventes", "encaisse", "contracte"];
 
   const parCanal = {};
   lignes.forEach((l) => {
@@ -1750,6 +1766,7 @@ function vueCanal(lignes) {
       ${cellule(d.rendezVous)}
       ${cellule(d.honores)}
       ${cellule(d.ventes)}
+      ${cellule(d.encaisse, euros)}
       ${cellule(d.contracte, euros)}
       <td class="${parRdv === "—" ? "zero" : ""}">${parRdv}</td>
     </tr>`;
@@ -1761,7 +1778,7 @@ function vueCanal(lignes) {
     <table>
       <thead><tr>
         <th>Canal</th><th>Dépense</th><th>Leads</th>
-        <th>RDV</th><th>Honorés</th><th>Ventes</th><th>Contracté</th><th>Coût / RDV</th>
+        <th>RDV</th><th>Honorés</th><th>Ventes</th><th>Encaissé</th><th>Contracté</th><th>Coût / RDV</th>
       </tr></thead>
       <tbody>
         ${canaux.map(([nom, d]) => ligne(nom, d)).join("")}
@@ -2792,13 +2809,13 @@ function brancherAcqMode() {
     });
   });
 }
-const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "annules", "annulesCloser", "annulesProspect"];
+const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
 // + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
 const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
 // Clients / CA du 1er achat / encaissé : l'API fournit le total (champ de base) et sa ventilation par type de call
 // ("_C1" / "_C2" = Closing R1 / R2+, "_D1" / "_D2" = Rattrapage R1 / R2+). On recompose ici selon les toggles de Paid Ads.
-const CHAMPS_CLIENTS = ["clients", "contracte1er", "encaisseTous"];
+const CHAMPS_CLIENTS = ["clients", "contracte1er", "encaisse1er", "contracteTous", "encaisseTous"];
 const CHAMPS_CLIENTS_AVEC_REL = [...CHAMPS_CLIENTS, ...CHAMPS_CLIENTS.map(nomRel)];
 function typesClientsSelonToggles() {
   const genres = ACQ_MODE === "rattrapage" ? ["D"] : ACQ_MODE === "tous" ? ["C", "D"] : ["C"];
@@ -3135,7 +3152,7 @@ function vueQuotidien(lignes) {
     carte("Annulés", nombre(total(duJour, "annules")), null) +
     carte("Taux de closing", pourcent(tauxClosingJour), total(duJour, "honores") ? "ventes sur honorés aujourd'hui" : "aucun appel honoré pour l'instant") +
     carte("Ventes signées", nombre(total(duJour, "ventes")), null) +
-    carte("Contracté", euros(total(duJour, "contracte")), null);
+    carte("CA encaissé", euros(total(duJour, "encaisse")), sousChiffre("Contracté", euros(total(duJour, "contracte"))));
 
   camembertQuotidien(duJour);
 
@@ -3144,10 +3161,10 @@ function vueQuotidien(lignes) {
   const parJour = new Map();
   lignes.forEach((l) => {
     if (!parJour.has(l.jour)) {
-      parJour.set(l.jour, { jour: l.jour, appelsPrevus: 0, appelsConclus: 0, honores: 0, noShow: 0, annules: 0, ventes: 0, contracte: 0 });
+      parJour.set(l.jour, { jour: l.jour, appelsPrevus: 0, appelsConclus: 0, honores: 0, noShow: 0, annules: 0, ventes: 0, contracte: 0, encaisse: 0 });
     }
     const j = parJour.get(l.jour);
-    ["appelsPrevus", "appelsConclus", "honores", "noShow", "annules", "ventes", "contracte"].forEach(
+    ["appelsPrevus", "appelsConclus", "honores", "noShow", "annules", "ventes", "contracte", "encaisse"].forEach(
       (champ) => (j[champ] += l[champ] || 0)
     );
   });
@@ -3181,6 +3198,7 @@ function vueQuotidien(lignes) {
         ${cellule(j.annules)}
         ${cellule(j.ventes)}
         ${cellulePourcent(tauxClosing)}
+        ${cellule(j.encaisse, euros)}
         ${cellule(j.contracte, euros)}
       </tr>`;
     })
@@ -3189,7 +3207,7 @@ function vueQuotidien(lignes) {
   table.innerHTML = `
     <table>
       <thead><tr>
-        <th>Jour</th><th>Appels prévus</th><th>Honorés</th><th>Taux présence</th><th>No-show</th><th>Annulés</th><th>Ventes</th><th>Taux closing</th><th>Contracté</th>
+        <th>Jour</th><th>Appels prévus</th><th>Honorés</th><th>Taux présence</th><th>No-show</th><th>Annulés</th><th>Ventes</th><th>Taux closing</th><th>Encaissé</th><th>Contracté</th>
       </tr></thead>
       <tbody>${corps}</tbody>
     </table>`;
@@ -3328,7 +3346,7 @@ function trackRapportR1R2(champ, rdvTous) {
 // enregistrement de vente (chantier à part). Pas touché pour l'instant.
 function trackAgreger(champ, leads, rdv) {
   const parValeur = {};
-  const point = (cle) => (parValeur[cle] = parValeur[cle] || { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0 });
+  const point = (cle) => (parValeur[cle] = parValeur[cle] || { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0, contracte: 0 });
   const rdvParValeur = {};
 
   leads.forEach((l) => { point(l[champ] || TRACK_NON_RENSEIGNE).leads += 1; });
@@ -3339,7 +3357,8 @@ function trackAgreger(champ, leads, rdv) {
     p.present += r.present || 0;
     p.conclu += r.conclu || 0;
     p.ventes += r.vente || 0;
-    p.ca += r.montant || 0;
+    p.ca += r.encaisse || 0; // "ca" = CA encaissé (avant frais, daté de la signature)
+    p.contracte += r.montant || 0;
   });
   // Cycle de vente (capture du lead -> signature) par valeur du canal.
   Object.keys(parValeur).forEach((n) => Object.assign(parValeur[n], statsCycle(rdvParValeur[n] || [], "cycleLead")));
@@ -3355,10 +3374,10 @@ const TRACK_METRIQUES = {
     secondaire: () => null,
   },
   ca: {
-    titre: "Classement par CA contracté",
+    titre: "Classement par CA encaissé",
     valeur: (v) => v.ca,
     format: euros,
-    secondaire: () => null,
+    secondaire: (v) => (v.contracte > 0 ? `contracté ${euros(v.contracte)}` : null),
   },
   present: {
     titre: "Classement par rendez-vous honorés",
@@ -3391,7 +3410,7 @@ const TRACK_METRIQUES = {
 // vide-type pour une valeur UTM qui n'existait pas encore sur la période
 // précédente (pas de ligne du tout pour ce nom-là) : traité comme 0, pas
 // comme "pas de donnée" — "cette source est apparue" est une info en soi.
-const TRACK_VIDE = { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0, cycle: null, cycleN: 0, cycleMed: null };
+const TRACK_VIDE = { leads: 0, rdv: 0, present: 0, conclu: 0, ventes: 0, ca: 0, contracte: 0, cycle: null, cycleN: 0, cycleMed: null };
 
 function trackClassement(valeurs, parValeurPrec) {
   const cible = document.getElementById("tracking-classement");
@@ -3423,7 +3442,8 @@ function trackClassement(valeurs, parValeurPrec) {
     <span>Leads<b>${nombre(v.leads)}</b></span>
     <span>Call booké<b>${nombre(v.rdv)}</b></span>
     <span>Call présent<b>${nombre(v.present)}</b></span>
-    <span>CA contracté<b>${euros(v.ca)}</b></span>
+    <span>CA encaissé<b>${euros(v.ca)}</b></span>
+    <span>CA contracté<b>${euros(v.contracte)}</b></span>
     ${v.cycleN > 0 ? `<span>Cycle de vente<b>${jours1(v.cycle)} (${v.cycleN} vente${v.cycleN > 1 ? "s" : ""})</b></span>` : ""}
     ${v.conclu > 0 ? `<span class="bulle-pied">${Math.round((v.ventes / v.conclu) * 100)} % de closing · ${Math.round((v.present / v.conclu) * 100)} % de présence</span>` : ""}`;
 
@@ -3481,7 +3501,7 @@ function trackCamemberts(valeurs, parValeurPrec) {
     disque(`Call booké par ${libelle}`, partsPour("rdv"), nombre),
     disque(`Call présent par ${libelle}`, partsPour("present"), nombre),
     disque(`Ventes par ${libelle}`, partsPour("ventes"), nombre),
-    disque(`CA contracté par ${libelle}`, partsPour("ca"), euros),
+    disque(`CA encaissé par ${libelle}`, partsPour("ca"), euros),
   ].join("");
 
   brancherSurvol(cible);
@@ -3545,7 +3565,8 @@ function trackValeurBloc(nom, champ, leads, rdv, bloc) {
     present: somme(rJ, "present"),
     conclu: somme(rJ, "conclu"),
     ventes: somme(rJ, "vente"),
-    ca: somme(rJ, "montant"),
+    ca: somme(rJ, "encaisse"),
+    contracte: somme(rJ, "montant"),
     ...statsCycle(rJ, "cycleLead"),
   };
 
@@ -3835,7 +3856,8 @@ function vueTracking() {
   const parValeur = trackAgreger(champ, leads, rdv);
   const valeurs = Object.entries(parValeur);
 
-  const totalCa = somme(rdv, "montant");
+  const totalCa = somme(rdv, "encaisse");
+  const totalContracte = somme(rdv, "montant");
   const totalPresent = somme(rdv, "present");
   const totalVentes = somme(rdv, "vente");
 
@@ -3845,7 +3867,7 @@ function vueTracking() {
   const ecartRdv = precedentes ? ecartDe(rdv.length, precedentes.rdv.length, "rendezVous") : null;
   const ecartPresent = precedentes ? ecartDe(totalPresent, somme(precedentes.rdv, "present"), "honores") : null;
   const ecartVentes = precedentes ? ecartDe(totalVentes, somme(precedentes.rdv, "vente"), "ventes") : null;
-  const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "montant"), "contracte") : null;
+  const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "encaisse"), "contracte") : null;
 
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
@@ -3853,7 +3875,7 @@ function vueTracking() {
     carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
     carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
     carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes),
-    carteInfo("CA contracté", euros(totalCa), trackBulleRepartition("CA contracté", valeurs, "ca", euros), ecartCa),
+    carteInfo("CA encaissé", euros(totalCa), trackBulleRepartition("CA encaissé", valeurs, "ca", euros), ecartCa, sousChiffre("Contracté", euros(totalContracte))),
   ].join("");
   brancherInfobulles(cartesCible);
 
@@ -3863,7 +3885,7 @@ function vueTracking() {
   if (zoneRelance) {
     // Suit le même toggle que le classement (TRACK_METRIQUE) : même métrique, même part du total.
     const defRel = TRACK_METRIQUES[TRACK_METRIQUE];
-    const LIBELLE_REL = { leads: "Leads", booke: "Call booké", present: "Call honoré", ventes: "Ventes", ca: "CA contracté", cycle: "Cycle de vente" };
+    const LIBELLE_REL = { leads: "Leads", booke: "Call booké", present: "Call honoré", ventes: "Ventes", ca: "CA encaissé", cycle: "Cycle de vente" };
     const LIBELLE_PART_REL = { leads: "des leads", ca: "du CA", present: "des présents", booke: "des calls bookés", ventes: "des ventes" };
     const aggRel = (lignesRdv, lignesLeads) => ({
       ...statsCycle(lignesRdv, "cycleLead"),
@@ -3872,7 +3894,7 @@ function vueTracking() {
       present: somme(lignesRdv, "present"),
       conclu: somme(lignesRdv, "conclu"),
       ventes: somme(lignesRdv, "vente"),
-      ca: somme(lignesRdv, "montant"),
+      ca: somme(lignesRdv, "encaisse"),
     });
     const totalRel = defRel.valeur(aggRel(rdv, leads)) || 0;
     // Détail par campagne / par setter, sur la même métrique (valeurs triées décroissant).
@@ -4306,7 +4328,7 @@ function courbeMultiSeries(cibleId, blocs, series, format, granulariteActuelle, 
 }
 
 let GRANULARITE_SALES_CLOSING = "semaine";
-let SALES_CLOSING_METRIQUE = "ca"; // "booke" | "present" | "ventes" | "ca"
+let SALES_CLOSING_METRIQUE = "ca"; // "ca" = CA encaissé ; "booke" | "present" | "ventes" | "ca"
 // Metrique propre au graphique Evolution (independante du toggle du Classement).
 let SALES_CLOSING_COURBE_METRIQUE = "ca";
 
@@ -4334,10 +4356,17 @@ const SALES_METRIQUES = {
     secondaire: (v) => (v.honores > 0 ? `${Math.round((v.ventes / v.honores) * 100)} % closing` : null),
   },
   ca: {
-    libelleCourt: "CA",
-    valeur: (v) => v.ca,
+    libelleCourt: "CA encaissé",
+    valeur: (v) => v.encaisse || 0,
     format: euros,
-    secondaire: () => null,
+    secondaire: (v) => (v.ca > 0 ? `contracté ${euros(v.ca)}` : null),
+  },
+  collecte: {
+    libelleCourt: "Taux de collecte",
+    valeur: (v) => (v.ca > 0 ? (v.encaisse || 0) / v.ca : null),
+    format: pourcent,
+    secondaire: (v) => (v.ca > 0 ? `${euros(v.encaisse || 0)} sur ${euros(v.ca)}` : null),
+    ordre: "desc0",
   },
   // Cycle de vente : 1er RDV pris -> signature. Plus court = meilleur (classement croissant).
   cycle: {
@@ -4384,6 +4413,7 @@ function salesStatsBlocCloser(nom, calls, bloc) {
     honores: somme(dansBloc, "present"),
     ventes: somme(dansBloc, "vente"),
     ca: somme(dansBloc, "montant"),
+    encaisse: somme(dansBloc, "encaisse"),
   };
 }
 
@@ -4459,6 +4489,7 @@ function salesStatsCallsClosing(calls) {
   const honores = somme(calls, "present");
   const ventes = somme(calls, "vente");
   const ca = somme(calls, "montant");
+  const encaisse = somme(calls, "encaisse");
   const annules = calls.filter((c) => c.statut === "Annulé").length;
   // Qui a annule : motif iClosed ADMIN_CANCELLED = le closer, CONTACT_CANCELLED = le prospect.
   const annulesCloser = calls.filter(estAnnuleCloser).length;
@@ -4470,6 +4501,8 @@ function salesStatsCallsClosing(calls) {
     honores,
     ventes,
     ca,
+    encaisse,
+    collecte: ratio(encaisse, ca),
     annules,
     annulesCloser,
     annulesProspect,
@@ -4700,7 +4733,18 @@ function vueSalesClosing() {
     carte("RDV conclus", nombre(conclus), (modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)") + ligneSetter("conclus"), sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
     carte("RDV honorés", nombre(honores), (modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`) + ligneSetter("honores"), sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
     carte("Ventes", nombre(ventes), (modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré") + ligneSetter("ventes"), sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
-    carte("CA contracté", euros(ca), (modeTous ? repart("ca", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente") + ligneSetter("ca", euros), sPrec ? ecartDe(ca, sPrec.ca, "salesCa") : null),
+    carte(
+      "CA encaissé",
+      euros(s.encaisse),
+      [sousChiffre("Contracté", euros(ca)), modeTous ? repart("encaisse", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente"].join("<br>") + ligneSetter("encaisse", euros),
+      sPrec ? ecartDe(s.encaisse, sPrec.encaisse, "salesCa") : null
+    ),
+    carte(
+      "Taux de collecte",
+      s.collecte === null ? "—" : pourcent(s.collecte),
+      ca ? `${euros(s.encaisse)} encaissés sur ${euros(ca)} contractés${suffixeRang}` : "aucune vente sur la période" + suffixeRang,
+      s.collecte !== null && sPrec && sPrec.collecte !== null ? ecartPoints(s.collecte, sPrec.collecte) : null
+    ),
   ].join("");
 
   // Cartes-etroit — même traitement que #qualite en Performance (taux
@@ -4775,10 +4819,10 @@ function vueSalesClosing() {
   ].join("");
 
   courbeKpiPage("kpi-closing", {
-    defaut: "ca",
+    defaut: "encaisse",
     groupes: [
-      ["Volumes", ["rdv", "conclus", "honores", "ventes", "ca"]],
-      ["Taux", ["annulation", "presence", "closing", "panier", "cycle"]],
+      ["Volumes", ["rdv", "conclus", "honores", "ventes", "encaisse", "ca"]],
+      ["Taux", ["annulation", "presence", "closing", "collecte", "panier", "cycle"]],
     ],
     metriques: {
       cycle: { libelleCourt: "Cycle de vente (jours)", format: jours1, decimal: true },
@@ -4787,6 +4831,8 @@ function vueSalesClosing() {
       honores: { libelleCourt: "RDV honorés", format: nombre },
       ventes: { libelleCourt: "Ventes", format: nombre },
       ca: { libelleCourt: "CA contracté", format: euros },
+      encaisse: { libelleCourt: "CA encaissé", format: euros },
+      collecte: { libelleCourt: "Taux de collecte", format: pourcent, decimal: true },
       annulation: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
       presence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
       closing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
@@ -4837,16 +4883,17 @@ function vueSalesClosing() {
   calls.forEach((c) => {
     const n = c.closer || "Non renseigné";
     (callsParCloser[n] = callsParCloser[n] || []).push(c);
-    if (!parCloser[n]) parCloser[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 };
+    if (!parCloser[n]) parCloser[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0, encaisse: 0 };
     const p = parCloser[n];
     p.rdv += 1;
     p.conclus += c.conclu;
     p.honores += c.present;
     p.ventes += c.vente;
     p.ca += c.montant;
+    p.encaisse += c.encaisse || 0;
   });
   Object.keys(parCloser).forEach((n) => Object.assign(parCloser[n], statsCycle(callsParCloser[n])));
-  const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].ca - a[1].ca);
+  const lignesCloser = Object.entries(parCloser).sort((a, b) => b[1].encaisse - a[1].encaisse || b[1].ca - a[1].ca);
 
   // Classement — en bas de page, avec son propre toggle RDV prévus/Call
   // présent/Ventes/CA (indépendant de la courbe d'évolution).
@@ -4862,7 +4909,9 @@ function vueSalesClosing() {
     <span>RDV prévus<b>${nombre(v.rdv)}</b></span>
     <span>RDV honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
+    <span>CA encaissé<b>${euros(v.encaisse)}</b></span>
     <span>CA contracté<b>${euros(v.ca)}</b></span>
+    <span>Taux de collecte<b>${v.ca > 0 ? pourcent(v.encaisse / v.ca) : "—"}</b></span>
     ${v.cycleN > 0 ? `<span>Cycle de vente<b>${jours1(v.cycle)} (méd. ${jours1(v.cycleMed)}, ${v.cycleN} vente${v.cycleN > 1 ? "s" : ""})</b></span>` : ""}
     ${v.conclus > 0 ? `<span class="bulle-pied">${v.honores > 0 ? Math.round((v.ventes / v.honores) * 100) : 0} % de closing · ${Math.round((v.honores / v.conclus) * 100)} % de présence</span>` : ""}`;
   salesRenduPodium("sales-closing-classement", lignesCloser, SALES_METRIQUES, SALES_CLOSING_METRIQUE, bulleCloser);
@@ -4870,14 +4919,14 @@ function vueSalesClosing() {
   // Le tableau "Par closer" est remplacé par le classement ci-dessus (même
   // info, mieux hiérarchisée) — demande du 2026-10-04.
   const couleurCloser = Object.fromEntries(lignesCloser.map(([nom], i) => [nom, PALETTE[i % PALETTE.length]]));
-  const partsCa = lignesCloser.filter(([, p]) => p.ca > 0).map(([nom, p]) => [nom, p.ca, couleurCloser[nom]]);
+  const partsCa = lignesCloser.filter(([, p]) => p.encaisse > 0).map(([nom, p]) => [nom, p.encaisse, couleurCloser[nom]]);
   const partsRdv = lignesCloser.filter(([, p]) => p.rdv > 0).map(([nom, p]) => [nom, p.rdv, couleurCloser[nom]]);
   const partsHonores = lignesCloser.filter(([, p]) => p.honores > 0).map(([nom, p]) => [nom, p.honores, couleurCloser[nom]]);
 
   document.getElementById("sales-closing-camemberts").innerHTML = [
     disque(`RDV prévus par closer${suffixeRang}`, partsRdv, nombre),
     disque(`RDV honorés par closer${suffixeRang}`, partsHonores, nombre),
-    disque(`CA contracté par closer${suffixeRang}`, partsCa, euros),
+    disque(`CA encaissé par closer${suffixeRang}`, partsCa, euros),
   ].join("");
 
   brancherSurvol(document.getElementById("sales-closing-camemberts"));
@@ -5076,6 +5125,7 @@ function vueOutbound() {
       present: somme(calls, "present"),
       conclu: somme(calls, "conclu"),
       ca: somme(calls, "montant"),
+      encaisse: somme(calls, "encaisse"),
     };
   };
   const leads = leadsBase.filter((l) => dansPeriode({ jour: l.jourAssignation })).map(enrichir);
@@ -5115,6 +5165,7 @@ function vueOutbound() {
       // Taux de show en LEADS (meme unite que « Closing honores ») : leads dont un call Closing est passe.
       concluLeads: liste.filter((l) => l.conclu > 0).length,
       ca: somme(liste, "ca"),
+      encaisse: somme(liste, "encaisse"),
     };
   };
 
@@ -5181,6 +5232,7 @@ function vueOutbound() {
       honores: liste.filter((c) => c.present).length,
       ventes: liste.filter((c) => c.vente).length,
       ca: somme(liste, "montant"),
+      encaisse: somme(liste, "encaisse"),
     };
   };
   const cj = appelsSetter(dansPeriode);
@@ -5202,7 +5254,7 @@ function vueOutbound() {
     carte("Appels conclus", nombre(cj.conclus), "Honoré ou No-show (hors RDV encore à venir)", evj("conclus")),
     carte("Closing honorés", nombre(cj.honores), "calls via setter honorés sur la période", evj("honores")),
     carte("Ventes", nombre(cj.ventes), "contrats signés sur ces calls", evj("ventes")),
-    carte("CA généré", euros(cj.ca), "montant des contrats signés sur ces calls", evj("ca")),
+    carte("CA encaissé", euros(cj.encaisse), [sousChiffre("Contracté", euros(cj.ca)), "encaissé sur les contrats de ces calls"].join("<br>"), evj("encaisse")),
   ].join("");
   // Taux du Setting : cohorte des leads assignes sur la periode. La transfo ne compte que les leads
   // contactes qui ont un call (closingContacte), donc elle ne depasse jamais 100 %.
@@ -5247,7 +5299,7 @@ function vueOutbound() {
     carte("Appels conclus", nombre(g.conclu), "Honoré ou No-show (hors RDV encore à venir)", ev("conclu")),
     carte("Closing honorés", nombre(g.present), "calls via setter réellement tenus", ev("present")),
     carte("Ventes", nombre(g.callsVentes), "contrats signés sur ces calls", ev("callsVentes")),
-    carte("CA généré", euros(g.ca), "montant des contrats signés sur ces calls", ev("ca")),
+    carte("CA encaissé", euros(g.encaisse), [sousChiffre("Contracté", euros(g.ca)), "encaissé sur les contrats de ces calls"].join("<br>"), ev("encaisse")),
   ].join("");
   document.getElementById(`${prefixeId}-taux-cohorte`).innerHTML = [
     carte("Taux d'annulation", pourcent(ratio(g.annules, g.callsBookes)), g.callsBookes ? `${nombre(g.annules)} annulés sur ${nombre(g.callsBookes)} calls bookés` + detailAnnulation(g.annules, g.annulesCloser, g.annulesProspect) : "aucun call booké", epc(ratio(g.annules, g.callsBookes), gPrec && ratio(gPrec.annules, gPrec.callsBookes), true)),
@@ -5264,7 +5316,8 @@ function vueOutbound() {
       tAnnul: { libelleCourt: "Taux d'annulation", format: pourcent, decimal: true },
       honores: { libelleCourt: "Closing honorés", format: nombre },
       ventes: { libelleCourt: "Ventes", format: nombre },
-      ca: { libelleCourt: "CA généré", format: euros },
+      ca: { libelleCourt: "CA contracté", format: euros },
+      encaisse: { libelleCourt: "CA encaissé", format: euros },
       tContact: { libelleCourt: "Taux de contact", format: pourcent, decimal: true },
       tIssue: { libelleCourt: "Taux d'issue", format: pourcent, decimal: true },
       tTransfo: { libelleCourt: "Taux de transfo", format: pourcent, decimal: true },
@@ -5281,7 +5334,7 @@ function vueOutbound() {
     groupes: [
       ["Travail du setter", ["assignes", "contactes", "issues"]],
       ["Taux du Setting", ["tContact", "tIssue", "tTransfo"]],
-      ["Devenir de la cohorte", ["closing", "conclus", "honores", "ventes", "ca"]],
+      ["Devenir de la cohorte", ["closing", "conclus", "honores", "ventes", "encaisse", "ca"]],
       ["Taux de la cohorte", ["tAnnul", "tShow", "tVente"]],
     ],
     metriques: metriquesCourbe,
@@ -5308,7 +5361,7 @@ function vueOutbound() {
   courbeKpiPage("kpi-setting-cycle", {
     defaut: "closing",
     groupes: [
-      ["Calls via setter", ["closing", "conclus", "honores", "ventes", "ca"]],
+      ["Calls via setter", ["closing", "conclus", "honores", "ventes", "encaisse", "ca"]],
       ["Taux du cycle de vente", ["tAnnul", "tShow", "tVente"]],
       ["Poids du Setting", ["pBookes", "pPresents", "pCa"]],
     ],
@@ -5320,7 +5373,7 @@ function vueOutbound() {
         case "tShow": { const j = appelsSetter(dansCall); return ratio(j.honores, j.conclus); }
         case "tVente": { const j = appelsSetter(dansCall); return ratio(j.ventes, j.honores); }
         case "tAnnul": { const j = appelsSetter(dansCall); return ratio(j.annules, j.closing); }
-        case "closing": case "conclus": case "honores": case "ventes": case "ca": return appelsSetter(dansCall)[cle];
+        case "closing": case "conclus": case "honores": case "ventes": case "ca": case "encaisse": return appelsSetter(dansCall)[cle];
         case "pBookes": { const c = partCalls(dansCall); return ratio(c.bookesSetting, c.bookes); }
         case "pPresents": { const c = partCalls(dansCall); return ratio(c.presentsSetting, c.presents); }
         case "pCa": { const c = partCaSetting(dansCall); return ratio(c.setting, c.total); }
@@ -5374,7 +5427,7 @@ function vueOutbound() {
       format: nombre,
       secondaire: (v) => (v.assignes > 0 ? `${Math.round((v.closing / v.assignes) * 100)} % transfo` : null),
     },
-    ca: { libelleCourt: "CA généré", valeur: (v) => v.ca, format: euros, secondaire: (v) => `${nombre(v.ventes)} vente${v.ventes > 1 ? "s" : ""}` },
+    ca: { libelleCourt: "CA encaissé", valeur: (v) => v.encaisse || 0, format: euros, secondaire: (v) => `${nombre(v.ventes)} vente${v.ventes > 1 ? "s" : ""} · contracté ${euros(v.ca)}` },
   };
   brancherSalesMetrique(
     `${prefixeId}-metrique`,
@@ -5389,7 +5442,8 @@ function vueOutbound() {
     <span>Contactés<b>${nombre(v.contactes)}</b></span>
     <span>Issues<b>${nombre(v.issues)}</b></span>
     <span>Call booké via setter<b>${nombre(v.closing)}</b></span>
-    <span>CA<b>${euros(v.ca)}</b></span>
+    <span>CA encaissé<b>${euros(v.encaisse || 0)}</b></span>
+    <span>CA contracté<b>${euros(v.ca)}</b></span>
     ${v.assignes > 0 ? `<span class="bulle-pied">${Math.round((v.closing / v.assignes) * 100)} % de transfo</span>` : ""}`;
   salesRenduPodium(`${prefixeId}-classement`, lignesSetter, metriquesSetting, OUTBOUND_METRIQUE, bulleSetter);
 
@@ -5815,7 +5869,7 @@ const CC_ACTIVITE_METRIQUES = {
   bookes: { libelleCourt: "Calls bookés réels" },
   honores: { libelleCourt: "Honorés" },
   ventes: { libelleCourt: "Ventes" },
-  ca: { libelleCourt: "CA contracté" },
+  ca: { libelleCourt: "CA encaissé" },
 };
 const ccTaux = (a, b, suffixe) => (b > 0 ? `${Math.round((a / b) * 100)} % ${suffixe}` : null);
 const CC_METRIQUES = {
@@ -5824,18 +5878,19 @@ const CC_METRIQUES = {
   bookes: { libelleCourt: "Calls bookés", valeur: (v) => v.bookes, format: nombre, secondaire: (v) => ccTaux(v.bookes, v.reponse, "des décrochés") },
   honores: { libelleCourt: "Honorés", valeur: (v) => v.honores, format: nombre, secondaire: (v) => ccTaux(v.honores, v.conclus, "présence") },
   ventes: { libelleCourt: "Ventes", valeur: (v) => v.ventes, format: nombre, secondaire: (v) => ccTaux(v.ventes, v.honores, "closing") },
-  ca: { libelleCourt: "CA", valeur: (v) => v.ca, format: euros, secondaire: () => null },
+  ca: { libelleCourt: "CA encaissé", valeur: (v) => v.ca, format: euros, secondaire: (v) => (v.contracte > 0 ? `contracté ${euros(v.contracte)}` : null) },
 };
 // Graphique "Evolution" (top 5 callers) : demarre a l'etape call booke reel.
 // Appeles / Decroches sont deja traces dans "Activite dans le temps".
 const CC_METRIQUES_EVO = Object.fromEntries(["bookes", "honores", "ventes", "ca"].map((k) => [k, CC_METRIQUES[k]]));
-const ccNouvelAgregat = () => ({ assignes: 0, appeles: 0, reponse: 0, callBook: 0, bookes: 0, conclus: 0, honores: 0, ventes: 0, ca: 0 });
+const ccNouvelAgregat = () => ({ assignes: 0, appeles: 0, reponse: 0, callBook: 0, bookes: 0, conclus: 0, honores: 0, ventes: 0, ca: 0, contracte: 0 });
 const ccAjouterRdv = (o, r) => {
   o.bookes += 1;
   o.conclus += r.conclu || 0;
   if ((r.present || 0) > 0) o.honores += 1;
   o.ventes += r.vente || 0;
-  o.ca += r.montant || 0;
+  o.ca += r.encaisse || 0; // "ca" = CA encaissé
+  o.contracte += r.montant || 0;
 };
 
 // Page Outbound : deux vues, comme la page Setting.
@@ -5981,7 +6036,8 @@ function vueColdCall() {
   // à venir (ou annulés) n'y figurent pas, donc le taux de présence ne les compte pas.
   const conclus = rdvOut.reduce((s, r) => s + (r.conclu || 0), 0);
   const ventes = rdvOut.reduce((s, r) => s + (r.vente || 0), 0);
-  const ca = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
+  const ca = rdvOut.reduce((s, r) => s + (r.encaisse || 0), 0);
+  const caContracte = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
 
   document.getElementById("coldcall-book").className = "cartes cols-5";
   document.getElementById("coldcall-book").innerHTML = [
@@ -5989,7 +6045,7 @@ function vueColdCall() {
     carte("Calls conclus", nombre(conclus), "Honoré ou No-show (hors RDV à venir ou annulés)", null),
     carte("Calls honorés", nombre(honores), "le prospect s'est présenté", null),
     carte("Ventes", nombre(ventes), "calls rattachés à un contrat", null),
-    carte("CA contracté", euros(ca), "montant des contrats signés", null),
+    carte("CA encaissé", euros(ca), [sousChiffre("Contracté", euros(caContracte)), "encaissé sur les contrats signés"].join("<br>"), null),
   ].join("");
 
   // Taux de conversion du call booke a la vente, sous les cartes Call book.
@@ -5997,17 +6053,17 @@ function vueColdCall() {
   document.getElementById("coldcall-taux-book").innerHTML = [
     carte("Taux de présence", part(honores, conclus), conclus ? `${nombre(honores)} honorés sur ${nombre(conclus)} calls conclus` : "aucun call conclu", null),
     carte("Taux de closing", part(ventes, honores), honores ? `${nombre(ventes)} ventes sur ${nombre(honores)} honorés` : "—", null),
-    carte("Panier moyen", ventes > 0 ? euros(ca / ventes) : "—", ventes ? `${euros(ca)} sur ${nombre(ventes)} ventes` : "—", null),
+    carte("Panier moyen", ventes > 0 ? euros(caContracte / ventes) : "—", ventes ? `${euros(caContracte)} contractés sur ${nombre(ventes)} ventes` : "—", null),
   ].join("");
 
   // Poids de l'Outbound dans les calls, les ventes et le CA tous canaux.
   const rdvTous = TRACK_RDV_TOUS.filter((r) => dansPeriode(r) && parProduit(r) && duRang(r));
-  const caTotal = rdvTous.reduce((s, r) => s + (r.montant || 0), 0);
+  const caTotal = rdvTous.reduce((s, r) => s + (r.encaisse || 0), 0);
   const ventesTotal = rdvTous.reduce((s, r) => s + (r.vente || 0), 0);
   document.getElementById("coldcall-taux").innerHTML = [
     carte("Part des calls bookés", part(bookes, rdvTous.length), rdvTous.length ? `${nombre(bookes)} calls Outbound sur ${nombre(rdvTous.length)} tous canaux` : "—", null),
     carte("Part des ventes", part(ventes, ventesTotal), ventesTotal ? `${nombre(ventes)} ventes Outbound sur ${nombre(ventesTotal)} tous canaux` : "—", null),
-    carte("Part du CA Outbound", part(ca, caTotal), caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA contracté tous canaux` : "—", null),
+    carte("Part du CA Outbound", part(ca, caTotal), caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA encaissé tous canaux` : "—", null),
   ].join("");
 
   // ---- Entonnoir, evolution, repartition, classement (meme structure que Closing / Setting) ----
@@ -6055,11 +6111,11 @@ function vueColdCall() {
     const n = nomDuRdv(r);
     if (n) remunParCaller[n] = (remunParCaller[n] || 0) + CC_PRIME_HONORE;
   });
-  const caR = rdvOut.reduce((s, r) => s + (r.montant || 0), 0);
+  const caR = rdvOut.reduce((s, r) => s + (r.encaisse || 0), 0);
   document.getElementById("coldcall-cout").innerHTML = [
     carte("Rémunération callers", euros(remun), `${nombre(payesChoisis.length)} calls de closing honorés × ${CC_PRIME_HONORE} €`, null),
     carte("Coût par vente", ventes > 0 ? euros(remun / ventes) : "—", ventes ? `${euros(remun)} pour ${nombre(ventes)} ventes` : "aucune vente sur la période", null),
-    carte("Retour sur rémunération", remun > 0 && caR > 0 ? `x${(caR / remun).toFixed(1).replace(".", ",")}` : "—", remun > 0 ? `${euros(caR)} de CA pour ${euros(remun)} versés` : "—", null),
+    carte("Retour sur rémunération", remun > 0 && caR > 0 ? `x${(caR / remun).toFixed(1).replace(".", ",")}` : "—", remun > 0 ? `${euros(caR)} de CA encaissé pour ${euros(remun)} versés` : "—", null),
   ].join("");
 
   // Activite du jour : aujourd'hui / hier / moyenne par jour travaille (30 derniers
@@ -6419,7 +6475,8 @@ function vueColdCall() {
     <span>Calls bookés<b>${nombre(v.bookes)}</b></span>
     <span>Honorés<b>${nombre(v.honores)}</b></span>
     <span>Ventes<b>${nombre(v.ventes)}</b></span>
-    <span>CA contracté<b>${euros(v.ca)}</b></span>
+    <span>CA encaissé<b>${euros(v.ca)}</b></span>
+    <span>CA contracté<b>${euros(v.contracte || 0)}</b></span>
     <span>Rémunération<b>${euros(remunParCaller[nom] || 0)}</b></span>
     ${v.appeles > 0 ? `<span class="bulle-pied">${Math.round((v.reponse / v.appeles) * 100)} % de réponse${v.reponse > 0 ? ` · ${Math.round((v.bookes / v.reponse) * 100)} % de call book` : ""}</span>` : ""}`;
   salesRenduPodium("coldcall-classement", lignesCaller, CC_METRIQUES, COLDCALL_METRIQUE, bulleCaller);
@@ -6444,7 +6501,7 @@ function vueColdCall() {
       conclus: { libelleCourt: "Calls conclus", format: nombre },
       honores: { libelleCourt: "Calls honorés", format: nombre },
       ventes: { libelleCourt: "Ventes", format: nombre },
-      ca: { libelleCourt: "CA contracté", format: euros },
+      ca: { libelleCourt: "CA encaissé", format: euros },
       tPresence: { libelleCourt: "Taux de présence", format: pourcent, decimal: true },
       tClosing: { libelleCourt: "Taux de closing", format: pourcent, decimal: true },
       panier: { libelleCourt: "Panier moyen", format: euros },
@@ -6468,7 +6525,7 @@ function vueColdCall() {
       const ho = r.filter((x) => (x.present || 0) > 0).length;
       const co = r.reduce((sum, x) => sum + (x.conclu || 0), 0);
       const ve = r.reduce((sum, x) => sum + (x.vente || 0), 0);
-      const ch = r.reduce((sum, x) => sum + (x.montant || 0), 0);
+      const ch = r.reduce((sum, x) => sum + (x.encaisse || 0), 0);
       const rm = payesChoisis.filter((x) => dansBloc(x.jour, b)).length * CC_PRIME_HONORE;
       switch (cle) {
         case "appeles": return appeles;
@@ -6501,7 +6558,7 @@ function vueColdCall() {
   document.getElementById("coldcall-camemberts").innerHTML = [
     disque("Appelés par caller", parts("appeles"), nombre),
     disque(`Calls bookés par caller${suffixeRang}`, partsBookes, nombre),
-    disque(`CA contracté par caller${suffixeRang}`, parts("ca"), euros),
+    disque(`CA encaissé par caller${suffixeRang}`, parts("ca"), euros),
   ].join("");
   brancherSurvol(document.getElementById("coldcall-camemberts"));
 

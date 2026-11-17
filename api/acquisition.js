@@ -98,6 +98,7 @@ const CHAMPS_CONTRATS = {
   fldlhedw3iJNyAITQ: "dateSignature",
   fldz1nshv9SfQLn04: "montantTotal",
   fldcExyrANUkkgBP5: "montantRecu", // rollup : total encaisse sur ce contrat
+  fldy8OIvfHdsHTCCm: "caNet", // CA net = montant recu - rembourse : encaisse AVANT frais plateforme (rembourse deduit)
 };
 
 // Un select Airtable arrive sous forme d'objet { id, name, color } ; un
@@ -164,7 +165,7 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // ne sont pas touches : c'est bien la pub qui a ramene le lead.
 // "ventesJC" = ventes datees du jour du CALL (cohorte), pour Funnel : meme population que les honores.
 // "ventes" / "contracte" restent dates de la signature (Paid Ads, pilotage de la depense).
-const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "annules", "annulesCloser", "annulesProspect"];
+const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
 const nomRel = (f) => "rel" + f.charAt(0).toUpperCase() + f.slice(1);
 const estRelance = (c, contactsSetter) => !!c.relance || (c.contactId != null && contactsSetter.has(c.contactId));
 
@@ -210,6 +211,7 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     const pv = (parCle[cleVente] = parCle[cleVente] || champsVides());
     pv["ventes" + suf] += c.vente || 0;
     pv["contracte" + suf] += c.montant || 0;
+    pv["encaisse" + suf] += c.encaisse || 0;
     const motif = String(c.motif || "").toUpperCase();
     const parCloser = c.annule && motif === "ADMIN_CANCELLED" ? 1 : 0;
     const parProspect = c.annule && motif === "CONTACT_CANCELLED" ? 1 : 0;
@@ -224,6 +226,7 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
       p["relAnnules" + suf] += c.annule || 0;
       pv["relVentes" + suf] += c.vente || 0;
       pv["relContracte" + suf] += c.montant || 0;
+      pv["relEncaisse" + suf] += c.encaisse || 0;
     }
   }
   return parCle;
@@ -268,7 +271,7 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = [], conta
   // que la page Paid Ads recompose selon ses toggles Closing / Rattrapage / Tous et R1 / R2+ / Tous.
   const champsClientVides = () => {
     const o = {};
-    for (const f of ["clients", "contracte1er", "encaisseTous", "relClients", "relContracte1er", "relEncaisseTous"]) {
+    for (const f of ["clients", "contracte1er", "encaisse1er", "contracteTous", "encaisseTous", "relClients", "relContracte1er", "relEncaisse1er", "relContracteTous", "relEncaisseTous"]) {
       o[f] = 0;
       for (const t of ["C1", "C2", "D1", "D2"]) o[`${f}_${t}`] = 0;
     }
@@ -335,18 +338,25 @@ function recalculerParClient(callsBooked, leads, contrats, paiements = [], conta
 
     const p = (parIdAcquisition[idLigne] = parIdAcquisition[idLigne] || champsClientVides());
     const c1 = premier.reduce((s, k) => s + (k.montantTotal || 0), 0);
-    const cT = mesContrats.reduce((s, k) => s + (k.montantRecu || 0), 0);
+    // Encaisse = CA net du contrat (recu moins rembourse, AVANT frais plateforme). Meme date de rattachement que le contracte.
+    const e1 = premier.reduce((s, k) => s + (k.caNet || 0), 0);
+    const cT = mesContrats.reduce((s, k) => s + (k.caNet || 0), 0);
+    const cTcontracte = mesContrats.reduce((s, k) => s + (k.montantTotal || 0), 0);
     const ajouter = (champ, v) => {
       p[champ] += v;
       p[`${champ}_${typeDuClient}`] += v;
     };
     ajouter("clients", 1);
     ajouter("contracte1er", c1);
+    ajouter("encaisse1er", e1);
+    ajouter("contracteTous", cTcontracte);
     ajouter("encaisseTous", cT);
     // Client venu par le travail d'un setter ou d'une campagne de relance : miroir "rel" (retranche des couts / du ROAS Ads).
     if (lead.setter || ligneLead.rel) {
       ajouter("relClients", 1);
       ajouter("relContracte1er", c1);
+      ajouter("relEncaisse1er", e1);
+      ajouter("relContracteTous", cTcontracte);
       ajouter("relEncaisseTous", cT);
     }
 
@@ -391,6 +401,7 @@ export default async function handler(req, res) {
     // contrats du meme client signes le meme jour (ex. abonnement Media Buying
     // pris en option avec un pack). Une seule vente, montant = somme.
     const montantContrat = new Map(contrats.map((k) => [k._id, k.montantTotal || 0]));
+    const encaisseContrat = new Map(contrats.map((k) => [k._id, k.caNet || 0]));
     const contratsParClientJour = new Map();
     const contratParId = new Map(contrats.map((k) => [k._id, k]));
     const cleClientJour = (idClient, k) => `${idClient}|${String(k.dateSignature || "").slice(0, 10)}`;
@@ -413,6 +424,7 @@ export default async function handler(req, res) {
       }
       c.vente = ids.size > 0 ? 1 : 0;
       c.montant = [...ids].reduce((t, id) => t + (montantContrat.get(id) || 0), 0);
+      c.encaisse = [...ids].reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0);
       // Jour de signature (le plus ancien des contrats du call) : la vente et son CA sont rangés a cette date.
       const datesSignature = [...ids].map((id) => String((contratParId.get(id) || {}).dateSignature || "").slice(0, 10)).filter(Boolean).sort();
       c.jourSignature = datesSignature[0] || null;
@@ -429,7 +441,7 @@ export default async function handler(req, res) {
         vide[nomRel(f) + suf] = 0;
       }
     }
-    const videClient = { clients: 0, contracte1er: 0, encaisseTous: 0, relClients: 0, relContracte1er: 0, relEncaisseTous: 0 };
+    const videClient = { clients: 0, contracte1er: 0, encaisse1er: 0, contracteTous: 0, encaisseTous: 0, relClients: 0, relContracte1er: 0, relEncaisse1er: 0, relContracteTous: 0, relEncaisseTous: 0 };
 
     // Lignes = depense ACQUISITION + comptages calcules. On cree une ligne des
     // qu'un lead, un call ou un client existe sur une cle sans depense.
@@ -503,6 +515,8 @@ export default async function handler(req, res) {
         annulesS: r.annulesS,
         clients: cl.clients,
         contracte1er: cl.contracte1er,
+        encaisse1er: cl.encaisse1er,
+        contracteTous: cl.contracteTous,
         encaisseTous: cl.encaisseTous,
       };
     });

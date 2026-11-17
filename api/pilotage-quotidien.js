@@ -29,7 +29,29 @@ const CHAMPS = {
   fld1GgVHXLLo54h8s: "montantDeal",
   fldONsYE6GNJUI15C: "canal",
   fldChsnbeVQFDCmjy: "produit",
+  fldszCN4DEDuhjCzh: "contrats", // lien -> CONTRATS (pour l'encaissé)
 };
+
+const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
+const CHAMPS_CONTRATS = { fldy8OIvfHdsHTCCm: "caNet" }; // CA net = reçu − remboursé (avant frais)
+
+async function lireEncaisseContrats(token) {
+  const map = new Map();
+  let offset;
+  do {
+    const url = new URL(`https://api.airtable.com/v0/${BASE_ID}/${TABLE_CONTRATS}`);
+    url.searchParams.set("pageSize", "100");
+    url.searchParams.set("returnFieldsByFieldId", "true");
+    Object.keys(CHAMPS_CONTRATS).forEach((id) => url.searchParams.append("fields[]", id));
+    if (offset) url.searchParams.set("offset", offset);
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error(`Airtable a répondu ${r.status} : ${await r.text()}`);
+    const d = await r.json();
+    for (const enr of d.records) map.set(enr.id, Number(enr.fields.fldy8OIvfHdsHTCCm) || 0);
+    offset = d.offset;
+  } while (offset);
+  return map;
+}
 
 function valeur(brut) {
   if (brut === undefined || brut === null) return null;
@@ -79,7 +101,7 @@ async function lireTousLesAppels(token) {
 // Regroupe les appels par jour RÉEL d'appel (pas par jour de réservation),
 // canal et produit — même granularité que l'ACQUISITION cohorte, mais sur
 // une clé différente, pour que les deux ne soient jamais confondues.
-function regrouperParJour(appels) {
+function regrouperParJour(appels, encaisseContrat = new Map()) {
   const parCle = new Map();
 
   for (const a of appels) {
@@ -103,6 +125,7 @@ function regrouperParJour(appels) {
         annules: 0,
         ventes: 0,
         contracte: 0,
+        encaisse: 0,
       });
     }
 
@@ -117,6 +140,7 @@ function regrouperParJour(appels) {
     if (a.issue === "SALE") {
       ligne.ventes += 1;
       ligne.contracte += Number(a.montantDeal) || 0;
+      ligne.encaisse += String(a.contrats || "").split(", ").filter(Boolean).reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0);
     }
   }
 
@@ -135,7 +159,8 @@ export default async function handler(req, res) {
 
   try {
     const appels = await lireTousLesAppels(token);
-    const lignes = regrouperParJour(appels);
+    const encaisseContrat = await lireEncaisseContrats(token);
+    const lignes = regrouperParJour(appels, encaisseContrat);
 
     lignes.sort((a, b) => String(b.jour ?? "").localeCompare(String(a.jour ?? "")));
 

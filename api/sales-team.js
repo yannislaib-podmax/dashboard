@@ -82,6 +82,7 @@ const CHAMPS_CONTRATS = {
   fldz1nshv9SfQLn04: "montantTotal",
   fldlhedw3iJNyAITQ: "dateSignature",
   fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
+  fldy8OIvfHdsHTCCm: "caNet", // CA net = montant recu - rembourse (encaisse AVANT frais plateforme)
   fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL : le cycle de vente ne se mesure que sur le 1er achat
 };
 
@@ -197,6 +198,8 @@ export default async function handler(req, res) {
 
     // Montant par contrat (abonnements compris : montant = 1er mois).
     const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
+    // Encaisse (avant frais) par contrat : montant recu moins rembourse. Rattache a la date de signature, comme le contracte.
+    const encaisseContrat = new Map(contratsBrut.map((k) => [k._id, k.caNet || 0]));
 
     // Contrats lies a un call.
     const etendre = contratsAvecFreres(contratsBrut);
@@ -287,6 +290,7 @@ export default async function handler(req, res) {
           motif: c.motif || null,
           rangR: c.rangR,
           montant: liensContrats(c).reduce((t, id) => t + montantContrat.get(id), 0),
+          encaisse: liensContrats(c).reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0),
           source: c.source,
           canal: c.canal,
           produit: c.produit,

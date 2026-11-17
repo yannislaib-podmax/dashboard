@@ -545,6 +545,8 @@ h3.sous-section + .sous-titre { margin: 0 0 16px; font-size: 13.5px; color: var(
   line-height: 1.05;
 }
 .carte .note { font-size: 12px; color: var(--txt3); margin-top: 6px; }
+.carte .sous-chiffre { display: inline-block; margin-top: 2px; font-size: 13px; color: var(--txt2, var(--txt3)); }
+.carte .sous-chiffre b { font-weight: 600; color: var(--txt, inherit); }
 
 /* ---------- Histogramme simple ---------- */
 

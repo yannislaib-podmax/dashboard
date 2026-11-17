@@ -56,6 +56,7 @@ const CHAMPS_CONTRATS = {
   fldz1nshv9SfQLn04: "montantTotal",
   fldlhedw3iJNyAITQ: "dateSignature",
   fldm0apf8f0JU1AIF: "clients", // lien CONTRATS -> CLIENTS (ids joints par ", ")
+  fldy8OIvfHdsHTCCm: "caNet", // CA net = montant recu - rembourse (encaisse AVANT frais plateforme)
   fldzWxYVXBe3ZOqN5: "typeAchat", // NOUVEAU / RENOUVELLEMENT / ADDITIONNEL : cycle de vente mesure sur le 1er achat uniquement
 };
 
@@ -190,6 +191,7 @@ export default async function handler(req, res) {
 
     // Montant par contrat (abonnements compris).
     const montantContrat = new Map(contratsBrut.map((k) => [k._id, k.montantTotal || 0]));
+    const encaisseContrat = new Map(contratsBrut.map((k) => [k._id, k.caNet || 0]));
     const etendre = contratsAvecFreres(contratsBrut);
     const contratsDuCall = (r) => etendre(String(r.contrats || "").split(", ").filter(Boolean));
 
@@ -228,6 +230,7 @@ export default async function handler(req, res) {
           typeAppel: reste.typeAppel === "Closing" ? "Closing" : "Rattrapage",
           vente: ids.length > 0 ? 1 : 0,
           montant: ids.reduce((t, id) => t + montantContrat.get(id), 0),
+          encaisse: ids.reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0),
         };
       });
 

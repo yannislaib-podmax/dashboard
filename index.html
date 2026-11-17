@@ -20,7 +20,7 @@
 
 <!-- ?v= à incrémenter à chaque modification des assets : sans ça, impossible de
      savoir si le navigateur sert la nouvelle version ou l'ancienne en cache. -->
-<link rel="stylesheet" href="/assets/style.css?v=64">
+<link rel="stylesheet" href="/assets/style.css?v=65">
 </head>
 <body>
 
@@ -279,8 +279,8 @@
       <strong>Chaque lead et chaque rendez-vous ne comptent qu'une fois.</strong>
       Changer de dimension (Source / Campagne / Content) ne change pas les
       volumes totaux : ça change seulement la façon de les découper. Le CA
-      contracté compte au jour du rendez-vous, comme dans le reste de
-      l'acquisition.
+      encaissé (avant frais, remboursements déduits) est daté du jour de
+      signature du contrat ; le contracté est rappelé en dessous.
     </p>
 
     <div class="toggle-granularite" id="tracking-dimension">
@@ -300,7 +300,7 @@
       <button type="button" data-metrique="booke">Call booké</button>
       <button type="button" data-metrique="present">Présents + taux de show</button>
       <button type="button" data-metrique="ventes">Ventes + taux de closing</button>
-      <button type="button" class="actif" data-metrique="ca">CA</button>
+      <button type="button" class="actif" data-metrique="ca">CA encaissé</button>
       <button type="button" data-metrique="cycle">Cycle de vente</button>
     </div>
     <div class="glass classement rv" id="tracking-classement"></div>
@@ -409,7 +409,7 @@
       <div id="coldcall-activite"></div>
 
       <h3 class="sous-section">Activité récente</h3>
-      <p class="sous-titre rv">Pour comparer les callers : choisis l'indicateur (appels, décrochés, calls bookés déclarés dans le Sheet, puis calls bookés réels, honorés, ventes et CA contracté dans iClosed), un point par jour, semaine ou mois, sur la période choisie dans l'en-tête. Les indicateurs iClosed comptent tous les types d'appels (Closing et Rattrapage) et tous les rangs.</p>
+      <p class="sous-titre rv">Pour comparer les callers : choisis l'indicateur (appels, décrochés, calls bookés déclarés dans le Sheet, puis calls bookés réels, honorés, ventes et CA encaissé dans iClosed), un point par jour, semaine ou mois, sur la période choisie dans l'en-tête. Les indicateurs iClosed comptent tous les types d'appels (Closing et Rattrapage) et tous les rangs.</p>
       <div class="toggle-granularite" id="coldcall-activite-metrique"></div>
       <p class="sous-titre" id="coldcall-activite-note"></p>
       <div class="glass courbe-carte rv" id="coldcall-activite-courbe"></div>
@@ -447,12 +447,12 @@
       <div id="coldcall-taux-cc" class="cartes cols-3 cartes-taux"></div>
 
       <h3 class="sous-section">Du call booké à la vente</h3>
-      <p class="sous-titre rv">Ce qui est réellement réservé dans iClosed (Airtable), jusqu'au CA contracté. Rang choisi ci-dessus : R1 = premier call du prospect, R2+ = relances, ou tous les rangs.</p>
+      <p class="sous-titre rv">Ce qui est réellement réservé dans iClosed (Airtable), jusqu'au CA encaissé. Rang choisi ci-dessus : R1 = premier call du prospect, R2+ = relances, ou tous les rangs.</p>
       <div id="coldcall-book" class="cartes cols-5"></div>
       <div id="coldcall-taux-book" class="cartes cols-3 cartes-taux"></div>
 
       <h3 class="sous-section">Poids de l'Outbound</h3>
-      <p class="sous-titre rv">Part de l'Outbound dans les calls bookés, les ventes et le CA contracté tous canaux, sur la période.</p>
+      <p class="sous-titre rv">Part de l'Outbound dans les calls bookés, les ventes et le CA encaissé tous canaux, sur la période.</p>
       <div id="coldcall-taux" class="cartes cols-3"></div>
 
       <h3 class="sous-section">Rémunération</h3>
@@ -549,7 +549,7 @@
     </div>
 
     <p class="convention rv">
-      <strong>Le CA contracté est le chiffre de pilotage.</strong>
+      <strong>Sur cette page, le CA contracté reste la référence ; ailleurs le CA encaissé est mis en avant.</strong>
       Il compte au jour de la signature, pas de l'encaissement — c'est ce qui
       dit ce que l'activité commerciale a réellement produit. Le CA encaissé
       est un indicateur de trésorerie : il suit avec du retard, et l'écart
@@ -566,7 +566,7 @@
     <div class="glass courbe-carte rv" id="direction-courbe"></div>
 
     <h3 class="sous-section">Répartition</h3>
-    <p class="sous-titre rv">Qui vend, et ce qui se vend — sur le CA contracté de la période.</p>
+    <p class="sous-titre rv">Qui vend, et ce qui se vend — sur le CA encaissé de la période (contracté rappelé en dessous).</p>
     <div class="camemberts" id="direction-camemberts"></div>
   </section>
 
@@ -632,6 +632,6 @@
   <div id="erreur"></div>
 </main>
 
-<script src="/assets/app.js?v=237"></script>
+<script src="/assets/app.js?v=238"></script>
 </body>
 </html>
