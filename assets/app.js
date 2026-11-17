@@ -4739,12 +4739,6 @@ function vueSalesClosing() {
       [sousChiffre("Contracté", euros(ca)), modeTous ? repart("encaisse", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente"].join("<br>") + ligneSetter("encaisse", euros),
       sPrec ? ecartDe(s.encaisse, sPrec.encaisse, "salesCa") : null
     ),
-    carte(
-      "Taux de collecte",
-      s.collecte === null ? "—" : pourcent(s.collecte),
-      ca ? `${euros(s.encaisse)} encaissés sur ${euros(ca)} contractés${suffixeRang}` : "aucune vente sur la période" + suffixeRang,
-      s.collecte !== null && sPrec && sPrec.collecte !== null ? ecartPoints(s.collecte, sPrec.collecte) : null
-    ),
   ].join("");
 
   // Cartes-etroit — même traitement que #qualite en Performance (taux
@@ -4791,6 +4785,12 @@ function vueSalesClosing() {
       s.closing === null ? "—" : pourcent(s.closing),
       (honores === 0 ? "aucun call honoré sur la période" : `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}`) + suffixeRang,
       s.closing !== null && sPrec && sPrec.closing !== null ? ecartPoints(s.closing, sPrec.closing) : null
+    ),
+    carte(
+      "Taux de collecte",
+      s.collecte === null ? "—" : pourcent(s.collecte),
+      ca ? `${euros(s.encaisse)} encaissés sur ${euros(ca)} contractés${suffixeRang}` : "aucune vente sur la période" + suffixeRang,
+      s.collecte !== null && sPrec && sPrec.collecte !== null ? ecartPoints(s.collecte, sPrec.collecte) : null
     ),
     carte(
       "Panier moyen",
