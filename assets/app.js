@@ -29,13 +29,16 @@ const jourCourt = (iso) => {
 
 const cellule = (v, f = nombre) => `<td${!v ? ' class="zero"' : ""}>${f(v)}</td>`;
 
-const carte = (libelle, chiffre, note, ecart) => `
+// `refDate` (optionnel) : sur quelle date repose le chiffre (« à la prise de RDV », « au jour du RDV », « à la signature »).
+const carte = (libelle, chiffre, note, ecart, refDate) => `
   <div class="glass carte rv">
     <div class="libelle">${libelle}</div>
     <div class="chiffre">${chiffre}</div>
     ${ecart ? `<div class="ecart ${ecart.classe}">${ecart.texte}</div>` : ""}
     ${note ? `<div class="note">${note}</div>` : ""}
+    ${refDate ? `<div class="ref-date">${refDate}</div>` : ""}
   </div>`;
+const REF = { prise: "à la prise de RDV", rdv: "au jour du RDV", signature: "à la signature", lead: "à la capture du lead" };
 
 const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0);
 
@@ -425,16 +428,18 @@ const INDICATEURS = {
   // "Confirmé" (pas encore passé) ne doit pas compter comme une absence :
   // le compter aurait fait chuter artificiellement le taux tant que la
   // période contient des RDV à venir.
-  tauxPresence: (l) => ratio(somme(l, "honores"), somme(l, "rendezVousConclus")),
+  // Taux de presence au JOUR DU RDV (= page Closing) ; les couts restent sur la cohorte de reservation.
+  tauxPresence: (l) => ratio(somme(l, "honoresRdv"), somme(l, "rendezVousConclusRdv")),
 
   // Taux de closing : ventes rapportées aux appels réellement honorés.
-  tauxClosing: (l) => ratio(somme(l, "ventes"), somme(l, "honores")),
+  // Closing, annulation et presence au JOUR DU RDV (= page Closing) ; volumes et couts restent sur la reservation.
+  tauxClosing: (l) => ratio(somme(l, "ventes"), somme(l, "honoresRdv")),
 
   // Taux d'annulation : annulés rapportés à TOUS les rendez-vous pris (pas
   // aux seuls rendez-vous conclus) — l'annulation se joue avant que le call
   // ait lieu, donc sa base est le total réservé, comme le taux de closing se
   // base sur les honorés et le taux de présence sur les conclus.
-  tauxAnnulation: (l) => ratio(somme(l, "annules"), somme(l, "rendezVous")),
+  tauxAnnulation: (l) => ratio(somme(l, "annulesRdv"), somme(l, "rendezVousRdv")),
 };
 
 const SEUIL_FIABILITE = 10;
@@ -460,17 +465,22 @@ function vueConversion(lignes, precedentes) {
   const valeurs = ETAPES.map((e) => INDICATEURS[e.cle](lignes));
   const valeursPrec = precedentes ? ETAPES.map((e) => INDICATEURS[e.cle](precedentes)) : null;
 
+  // Meme jeu de cartes que l'onglet Tracking UTM : + CA encaisse (contracte en sous-chiffre).
+  const caEnc = somme(lignes, "encaisse");
+  const caEncPrec = precedentes ? somme(precedentes, "encaisse") : null;
   document.getElementById("conv").innerHTML = ETAPES.map((e, i) =>
-    carte(e.nom, nombre(valeurs[i]), null, ecart(e.cle))
-  ).join("");
+    carte(e.nom, nombre(valeurs[i]), null, ecart(e.cle), e.cle === "leads" ? REF.lead : e.cle === "ventes" ? REF.signature : REF.prise)
+  ).join("") +
+    carte("CA encaissé", euros(caEnc), sousChiffre("Contracté", euros(somme(lignes, "contracte"))), precedentes ? ecartDe(caEnc, caEncPrec, "contracte") : null, REF.signature);
 
   const presence = INDICATEURS.tauxPresence(lignes);
   const presencePrec = precedentes ? INDICATEURS.tauxPresence(precedentes) : null;
   const rdvConclus = somme(lignes, "rendezVousConclus");
+  const rdvConclusJourRdv = somme(lignes, "rendezVousConclusRdv"); // base du taux de presence (jour du RDV)
 
   const closing = INDICATEURS.tauxClosing(lignes);
   const closingPrec = precedentes ? INDICATEURS.tauxClosing(precedentes) : null;
-  const appels = somme(lignes, "honores");
+  const appels = somme(lignes, "honoresRdv"); // base du taux de closing (jour du RDV)
 
   // Taux d'annulation sur R1 Closing uniquement : `lignes` vient toujours de
   // TOUTES (/api/acquisition), déjà recalculée en ne gardant que les calls
@@ -478,6 +488,8 @@ function vueConversion(lignes, precedentes) {
   const annulation = INDICATEURS.tauxAnnulation(lignes);
   const annulationPrec = precedentes ? INDICATEURS.tauxAnnulation(precedentes) : null;
   const rdvPris = somme(lignes, "rendezVous");
+  const rdvPrevusJourRdv = somme(lignes, "rendezVousRdv"); // base du taux d'annulation (jour du RDV)
+  const annulesJourRdv = somme(lignes, "annulesRdv");
 
   // Pour expliquer le taux "Rendez-vous pris -> RDV conclus" dans l'entonnoir :
   // ce qui n'est ni conclu ni annule est encore "a venir" (RDV futur, pas un souci).
@@ -492,20 +504,23 @@ function vueConversion(lignes, precedentes) {
       carte(
         "Taux d'annulation",
         pourcent(annulation),
-        rdvPris === 0 ? "aucun rendez-vous pris sur la période" : `sur ${nombre(rdvPris)} rendez-vous pris (closing${suffixeDeRang(FUNNEL_RANG)})${fragile(rdvPris)}` + detailAnnulation(annulesCount, somme(lignes, "annulesCloser"), somme(lignes, "annulesProspect")),
-        annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null
+        rdvPrevusJourRdv === 0 ? "aucun rendez-vous prévu sur la période" : `sur ${nombre(rdvPrevusJourRdv)} rendez-vous prévus dans la période (closing${suffixeDeRang(FUNNEL_RANG)})${fragile(rdvPrevusJourRdv)}` + detailAnnulation(annulesJourRdv, somme(lignes, "annulesCloserRdv"), somme(lignes, "annulesProspectRdv")),
+        annulation !== null && annulationPrec !== null ? ecartPoints(annulation, annulationPrec, true) : null,
+        REF.rdv
       ) +
       carte(
         "Taux de présence",
         pourcent(presence),
-        rdvConclus === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclus)} rendez-vous conclu${rdvConclus > 1 ? "s" : ""} (hors RDV encore à venir)${fragile(rdvConclus)}`,
-        presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null
+        rdvConclusJourRdv === 0 ? "aucun rendez-vous conclu sur la période" : `sur ${nombre(rdvConclusJourRdv)} rendez-vous conclu${rdvConclusJourRdv > 1 ? "s" : ""} (RDV tenus dans la période, hors RDV à venir)${fragile(rdvConclusJourRdv)}`,
+        presence !== null && presencePrec !== null ? ecartPoints(presence, presencePrec) : null,
+        REF.rdv
       ) +
       carte(
         "Taux de closing",
         pourcent(closing),
         appels === 0 ? "aucun appel honoré sur la période" : `sur ${nombre(appels)} appel${appels > 1 ? "s" : ""} honoré${appels > 1 ? "s" : ""}${fragile(appels)}`,
-        closing !== null && closingPrec !== null ? ecartPoints(closing, closingPrec) : null
+        closing !== null && closingPrec !== null ? ecartPoints(closing, closingPrec) : null,
+        "ventes à la signature · honorés au jour du RDV"
       );
   }
 
@@ -1843,11 +1858,11 @@ function mesures(lignes) {
 
   return {
     panier: ratio(s("contracte"), s("ventes")),
-    closing: ratio(s("ventes"), s("honores")),
+    closing: ratio(s("ventes"), s("honoresRdv")),
     // Même correctif que partout ailleurs : la base du taux de présence est
     // les RDV CONCLUS (Honoré/No-show), pas tous les RDV pris — sinon les
     // RDV "Confirmé" à venir font chuter artificiellement le taux.
-    presence: ratio(s("honores"), s("rendezVousConclus")),
+    presence: ratio(s("honoresRdv"), s("rendezVousConclusRdv")),
     // Étape que le simulateur oubliait : parmi les RDV pris, ceux qui arrivent
     // à un verdict (Honoré ou No-show). Le reste = annulés + encore à venir.
     conclusion: ratio(s("rendezVousConclus"), s("rendezVous")),
@@ -2808,7 +2823,7 @@ function brancherAcqMode() {
     });
   });
 }
-const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
+const CHAMPS_CALLS_RANG = ["rendezVous", "rendezVousConclus", "honores", "rendezVousConclusRdv", "honoresRdv", "rendezVousRdv", "annulesRdv", "annulesCloserRdv", "annulesProspectRdv", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
 // + champs miroirs "rel*" (calls relances par un setter / une campagne post), qui suivent les memes toggles.
 const CHAMPS_CALLS_RANG_AVEC_REL = [...CHAMPS_CALLS_RANG, ...CHAMPS_CALLS_RANG.map(nomRel)];
 let PAID_RANG = "r1";
@@ -3509,12 +3524,13 @@ function trackCamemberts(valeurs, parValeurPrec) {
 // Carte de stat avec infobulle au survol (même gabarit que carte(), avec
 // un attribut data-info en plus — carte() elle-même n'en a pas besoin
 // ailleurs, donc on ne la modifie pas globalement).
-const carteInfo = (libelle, chiffre, infoHtml, ecart, sousLigne) => `
+const carteInfo = (libelle, chiffre, infoHtml, ecart, sousLigne, refDate) => `
   <div class="glass carte rv"${info(infoHtml)}>
     <div class="libelle">${libelle}</div>
     <div class="chiffre">${chiffre}</div>
     ${ecart ? `<div class="ecart ${ecart.classe}">${ecart.texte}</div>` : ""}
     ${sousLigne ? `<div style="opacity:.65;font-size:.85em;margin-top:4px">${sousLigne}</div>` : ""}
+    ${refDate ? `<div class="ref-date">${refDate}</div>` : ""}
   </div>`;
 
 // Répartition d'une carte de synthèse par la dimension active : top 6
@@ -3869,12 +3885,13 @@ function vueTracking() {
   const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "encaisse"), "contracte") : null;
 
   const cartesCible = document.getElementById("tracking-cartes");
+  // Bandeau de contexte (les totaux et taux de reference sont sur la page Funnel) ; libelles alignes sur le Funnel.
   cartesCible.innerHTML = [
-    carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads),
-    carteInfo("RDV booké", nombre(nbRdvClosing(rdv)), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
-    carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
-    carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes),
-    carteInfo("CA encaissé", euros(totalCa), trackBulleRepartition("CA encaissé", valeurs, "ca", euros), ecartCa, sousChiffre("Contracté", euros(totalContracte))),
+    carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads, null, REF.lead),
+    carteInfo("Rendez-vous pris", nombre(nbRdvClosing(rdv)), trackBulleRepartition("Rendez-vous pris", valeurs, "rdv", nombre), ecartRdv, null, REF.prise),
+    carteInfo("Rendez-vous honorés", nombre(totalPresent), trackBulleRepartition("Rendez-vous honorés", valeurs, "present", nombre), ecartPresent, null, REF.prise),
+    carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes, null, REF.signature),
+    carteInfo("CA encaissé", euros(totalCa), trackBulleRepartition("CA encaissé", valeurs, "ca", euros), ecartCa, sousChiffre("Contracté", euros(totalContracte)), REF.signature),
   ].join("");
   brancherInfobulles(cartesCible);
 
@@ -4740,16 +4757,18 @@ function vueSalesClosing() {
       "RDV prévus",
       nombre(rdv),
       (modeTous ? repart("rdv") : `calls ${typeCall} dont le RDV tombe dans la période${suffixeRang}`) + ligneSetter("rdv"),
-      sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null
+      sPrec ? ecartDe(rdv, sPrec.rdv, "salesRdv") : null,
+      REF.rdv
     ),
-    carte("RDV conclus", nombre(conclus), (modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)") + ligneSetter("conclus"), sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null),
-    carte("RDV honorés", nombre(honores), (modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`) + ligneSetter("honores"), sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null),
-    carte("Ventes", nombre(ventes), (modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré") + ligneSetter("ventes"), sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null),
+    carte("RDV conclus", nombre(conclus), (modeTous ? repart("conclus") : "Honoré ou No-show (hors RDV encore à venir)") + ligneSetter("conclus"), sPrec ? ecartDe(conclus, sPrec.conclus, "salesConclus") : null, REF.rdv),
+    carte("RDV honorés", nombre(honores), (modeTous ? repart("honores") : `calls ${typeCall} réellement tenus`) + ligneSetter("honores"), sPrec ? ecartDe(honores, sPrec.honores, "salesHonores") : null, REF.rdv),
+    carte("Ventes", nombre(ventes), (modeTous ? repart("ventes") : honores ? `sur ${nombre(honores)} honoré${honores > 1 ? "s" : ""}` : "aucun call honoré") + ligneSetter("ventes"), sPrec ? ecartDe(ventes, sPrec.ventes, "salesVentes") : null, REF.signature),
     carte(
       "CA encaissé",
       euros(s.encaisse),
       [sousChiffre("Contracté", euros(ca)), modeTous ? repart("encaisse", euros) : ventes ? `${nombre(ventes)} vente${ventes > 1 ? "s" : ""}` : "aucune vente"].join("<br>") + ligneSetter("encaisse", euros),
-      sPrec ? ecartDe(s.encaisse, sPrec.encaisse, "salesCa") : null
+      sPrec ? ecartDe(s.encaisse, sPrec.encaisse, "salesCa") : null,
+      REF.signature
     ),
   ].join("");
 

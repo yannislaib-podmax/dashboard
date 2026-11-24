@@ -1944,3 +1944,6 @@ tr.total td {
 .kpi-chips button.actif { background: var(--violet-clair); color: #14101c; border-color: transparent; }
 .kpi-select { margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
 .kpi-select select.actif { border-color: var(--violet-clair); }
+
+/* Date de reference d'un chiffre (decision 2026-11-24) */
+.carte .ref-date { margin-top: 6px; font-size: 11px; letter-spacing: .02em; text-transform: none; color: var(--txt3, var(--txt2)); opacity: .75; }

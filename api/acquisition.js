@@ -35,6 +35,7 @@ const CHAMPS_DEPENSE = {
 
 const CHAMPS_CALL_BOOKED = {
   fldOrfHds1MiMVehg: "prisLe",
+  fld1oLvpPAWeppnwM: "jourRdvDt", // jour reel du RDV : honores / conclus / annules y sont ranges (decision 2026-11-24, = page Closing)
   fldLSlGP0yarBWZB8: "contactId", // sert a sortir du Rattrapage les calls d'un contact traite par un setter
   fldONsYE6GNJUI15C: "canal",
   fldChsnbeVQFDCmjy: "produit",
@@ -165,7 +166,7 @@ async function lireTable(token, tableId, champs, champsBruts = []) {
 // ne sont pas touches : c'est bien la pub qui a ramene le lead.
 // "ventesJC" = ventes datees du jour du CALL (cohorte), pour Funnel : meme population que les honores.
 // "ventes" / "contracte" restent dates de la signature (Paid Ads, pilotage de la depense).
-const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
+const CHAMPS_CALLS = ["rendezVous", "rendezVousConclus", "honores", "rendezVousConclusRdv", "honoresRdv", "rendezVousRdv", "annulesRdv", "annulesCloserRdv", "annulesProspectRdv", "ventes", "ventesJC", "contracte", "encaisse", "annules", "annulesCloser", "annulesProspect"];
 const nomRel = (f) => "rel" + f.charAt(0).toUpperCase() + f.slice(1);
 const estRelance = (c, contactsSetter) => !!c.relance || (c.contactId != null && contactsSetter.has(c.contactId));
 
@@ -199,9 +200,22 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     const cle = cleLigne(jour, c.canal, c.produit);
     const p = (parCle[cle] = parCle[cle] || champsVides());
     p["rendezVous" + suf] += 1;
+    // Les calls REELLEMENT TENUS (conclus, honores) et les annulations sont ranges au jour du RDV, comme la page Closing :
+    // un meme taux de show sur la meme periode. Les RDV pris (volume) restent au jour de reservation.
     p["rendezVousConclus" + suf] += c.conclu || 0;
     p["honores" + suf] += c.present || 0;
     p["annules" + suf] += c.annule || 0;
+    // Jumeaux « Rdv » : memes calls conclus / honores mais ranges au JOUR DU RDV (= page Closing). Servent uniquement au
+    // taux de presence / show, pour qu'il soit identique entre Funnel et Closing. Les couts (par call present) restent
+    // sur la cohorte de reservation ci-dessus, alignee sur la depense.
+    const jourRdv = jourParis(c.jourRdvDt) || jour;
+    const pr = (parCle[cleLigne(jourRdv, c.canal, c.produit)] = parCle[cleLigne(jourRdv, c.canal, c.produit)] || champsVides());
+    pr["rendezVousConclusRdv" + suf] += c.conclu || 0;
+    pr["honoresRdv" + suf] += c.present || 0;
+    pr["rendezVousRdv" + suf] += 1;
+    pr["annulesRdv" + suf] += c.annule || 0;
+    pr["annulesCloserRdv" + suf] += c.annule && String(c.motif || "").toUpperCase() === "ADMIN_CANCELLED" ? 1 : 0;
+    pr["annulesProspectRdv" + suf] += c.annule && String(c.motif || "").toUpperCase() === "CONTACT_CANCELLED" ? 1 : 0;
     // DECISION 2026-11-11 : une vente et son CA comptent le jour de SIGNATURE du contrat, pas le jour ou le call
     // a ete pris (sinon la depense d'une periode est divisee par des ventes d'une autre periode). Sans date de
     // signature connue, on garde le jour du call.
@@ -224,6 +238,8 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
       p["relRendezVousConclus" + suf] += c.conclu || 0;
       p["relHonores" + suf] += c.present || 0;
       p["relAnnules" + suf] += c.annule || 0;
+      pr["relRendezVousConclusRdv" + suf] += c.conclu || 0;
+      pr["relHonoresRdv" + suf] += c.present || 0;
       pv["relVentes" + suf] += c.vente || 0;
       pv["relContracte" + suf] += c.montant || 0;
       pv["relEncaisse" + suf] += c.encaisse || 0;
@@ -412,7 +428,9 @@ export default async function handler(req, res) {
         contratsParClientJour.get(cle).push(k._id);
       }
     }
-    for (const c of callsBooked) {
+    // Un contrat n'est compte qu'une fois (1er call chronologique qui le porte), comme Sales Team et Tracking.
+    const reclames = new Set();
+    for (const c of [...callsBooked].sort((a, b) => String(a.jourRdvDt || a.prisLe || "").localeCompare(String(b.jourRdvDt || b.prisLe || "")))) {
       const ids = new Set();
       for (const id of c[CHAMP_LIEN_CONTRATS] || []) {
         const k = contratParId.get(id);
@@ -422,6 +440,8 @@ export default async function handler(req, res) {
           for (const frere of contratsParClientJour.get(cleClientJour(idClient, k)) || []) ids.add(frere);
         }
       }
+      for (const id of [...ids]) if (reclames.has(id)) ids.delete(id);
+      ids.forEach((id) => reclames.add(id));
       c.vente = ids.size > 0 ? 1 : 0;
       c.montant = [...ids].reduce((t, id) => t + (montantContrat.get(id) || 0), 0);
       c.encaisse = [...ids].reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0);
