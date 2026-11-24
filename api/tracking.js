@@ -234,6 +234,35 @@ export default async function handler(req, res) {
         };
       });
 
+    // Ventes datees a la SIGNATURE du contrat (decision 2026-11-24, meme regle partout dans le dashboard) : lignes
+    // « venteSeule » rattachees au call (type, rang, canal, source...) mais datees du jour de signature. Le front
+    // retire vente/CA des lignes de call et ajoute celles-ci. Un contrat n'est compte qu'une fois.
+    const reclames = new Set();
+    const ventes = [];
+    rdvBrut
+      .filter((r) => r.typeAppel === "Closing" || estRattrapage(r))
+      .map((brut, i) => ({ brut, ligne: rdv[i] }))
+      .sort((a, b) => String(a.ligne.jour || "").localeCompare(String(b.ligne.jour || "")))
+      .forEach(({ brut, ligne }) => {
+        const ids = contratsDuCall({ contrats: brut.contrats }).filter((id) => !reclames.has(id));
+        if (!ids.length) return;
+        ids.forEach((id) => reclames.add(id));
+        const ks = ids.map((id) => contratParId.get(id)).filter(Boolean);
+        const signature = ks.map((k) => String(k.dateSignature || "").slice(0, 10)).filter(Boolean).sort()[0];
+        if (!signature) return;
+        ventes.push({
+          ...ligne,
+          jour: signature,
+          venteSeule: true,
+          present: 0,
+          conclu: 0,
+          annule: 0,
+          vente: 1,
+          montant: ks.reduce((t, k) => t + (k.montantTotal || 0), 0),
+          encaisse: ks.reduce((t, k) => t + (k.caNet || 0), 0),
+        });
+      });
+
     res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
 
     return res.status(200).json({
@@ -242,6 +271,7 @@ export default async function handler(req, res) {
       nbRdv: rdv.length,
       leads,
       rdv,
+      ventes,
     });
   } catch (erreur) {
     return res.status(502).json({ erreur: String(erreur.message || erreur) });

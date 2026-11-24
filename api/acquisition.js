@@ -202,7 +202,6 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     p["rendezVousConclus" + suf] += c.conclu || 0;
     p["honores" + suf] += c.present || 0;
     p["annules" + suf] += c.annule || 0;
-    p["ventesJC" + suf] += c.vente || 0;
     // DECISION 2026-11-11 : une vente et son CA comptent le jour de SIGNATURE du contrat, pas le jour ou le call
     // a ete pris (sinon la depense d'une periode est divisee par des ventes d'une autre periode). Sans date de
     // signature connue, on garde le jour du call.
@@ -210,6 +209,7 @@ function recalculerDepuisCallBooked(callsBooked, contactsSetter) {
     const cleVente = cleLigne(jourVente, c.canal, c.produit);
     const pv = (parCle[cleVente] = parCle[cleVente] || champsVides());
     pv["ventes" + suf] += c.vente || 0;
+    pv["ventesJC" + suf] += c.vente || 0; // 2026-11-24 : meme date de signature que les ventes (regle unique)
     pv["contracte" + suf] += c.montant || 0;
     pv["encaisse" + suf] += c.encaisse || 0;
     const motif = String(c.motif || "").toUpperCase();

@@ -263,8 +263,8 @@ export default async function handler(req, res) {
         cycleLead: joursEntre(captureContact.get(c.contactId), sig),
       };
     };
-    const calls = callsBrut
-      .filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage")
+    const callsBrutRetenus = callsBrut.filter((c) => c.typeAppel === "Closing" || c.typeAppel === "Diagnostic" || c.typeAppel === "Rattrapage");
+    const calls = callsBrutRetenus
       .map((c) => {
         // Rattrapage = call de VENTE (prospect disqualifie remis devant l'equipe closer), memes rangs que le
         // Closing. Type "Rattrapage", ou ancien type "Diagnostic" sans prefixe "SETTER-" (historique).
@@ -303,6 +303,39 @@ export default async function handler(req, res) {
         };
       });
 
+    // Ventes datees a la SIGNATURE du contrat (decision 2026-11-24) : la vue Closing compte les ventes, le CA contracte
+    // et le CA encaisse le jour ou le contrat est signe, pas le jour du call. La vente reste rattachee a son call (type
+    // Closing/Rattrapage, closer, rang). Un contrat n'est compte qu'une fois (1er call chronologique qui le porte).
+    // Les ventes directes (contrat sans call) n'y figurent pas.
+    const parIdContrat = new Map(contratsBrut.map((k) => [k._id, k]));
+    const reclames = new Set();
+    const ventes = [];
+    callsBrutRetenus
+      .map((brut, i) => ({ brut, ligne: calls[i] }))
+      .sort((a, b) => String(a.brut.jourRdvDt || "").localeCompare(String(b.brut.jourRdvDt || "")))
+      .forEach(({ brut, ligne }) => {
+        const ids = liensContrats(brut).filter((id) => !reclames.has(id));
+        if (!ids.length) return;
+        ids.forEach((id) => reclames.add(id));
+        const ks = ids.map((id) => parIdContrat.get(id)).filter(Boolean);
+        const signature = ks.map((k) => String(k.dateSignature || "").slice(0, 10)).filter(Boolean).sort()[0];
+        if (!signature) return;
+        ventes.push({
+          ...ligne,
+          jour: signature,
+          // Ligne de vente seule : ni RDV, ni present, ni statut de call.
+          venteSeule: true,
+          statut: "Vente",
+          issue: null,
+          motif: null,
+          present: 0,
+          conclu: 0,
+          vente: 1,
+          montant: ks.reduce((t, k) => t + (k.montantTotal || 0), 0),
+          encaisse: ks.reduce((t, k) => t + (k.caNet || 0), 0),
+        });
+      });
+
     // Reste à encaisser par closer : contracté − reçu sur TOUS les contrats rattachés à ses calls, quelles que soient la
     // période, le rang ou le type du call (stock courant, pas une cohorte). Un contrat n'est compté qu'une fois,
     // chez le closer du premier call qui y est lié ; les contrats annulés sont exclus.
@@ -334,6 +367,7 @@ export default async function handler(req, res) {
       nbCalls: calls.length,
       leads,
       calls,
+      ventes,
     });
   } catch (erreur) {
     return res.status(502).json({ erreur: String(erreur.message || erreur) });

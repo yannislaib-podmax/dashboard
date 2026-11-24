@@ -2283,7 +2283,8 @@ function resiliationsDansPlage(a, b) {
 
 function mesuresDirection(contrats, paiements, resiliations) {
   const caContracte = somme(contrats, "montantTotal");
-  const caEncaisse = somme(paiements, "montantRecu");
+  // CA encaissé = net reçu sur les contrats signés dans la période (règle unique 2026-11-24), pas la date de chaque paiement.
+  const caEncaisse = somme(contrats, "caNet");
   const nbClients = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean)).size;
 
   // Le taux de recouvrement ne doit compter que les échéances déjà ÉCHUES
@@ -2306,10 +2307,8 @@ function mesuresDirection(contrats, paiements, resiliations) {
 }
 
 function tranches7Direction(contrats, paiements, granularite) {
-  const jours = [
-    ...contrats.map((c) => c.dateSignature),
-    ...paiements.map((p) => p.datePaiement),
-  ]
+  const jours = contrats
+    .map((c) => c.dateSignature)
     .filter(Boolean)
     .sort();
   if (!jours.length) return [];
@@ -2322,9 +2321,9 @@ function tranches7Direction(contrats, paiements, granularite) {
       contracte: contrats
         .filter((c) => c.dateSignature >= b.debut && c.dateSignature <= b.fin)
         .reduce((s, c) => s + (c.montantTotal || 0), 0),
-      encaisse: paiements
-        .filter((p) => p.datePaiement >= b.debut && p.datePaiement <= b.fin)
-        .reduce((s, p) => s + (p.montantRecu || 0), 0),
+      encaisse: contrats
+        .filter((c) => c.dateSignature >= b.debut && c.dateSignature <= b.fin)
+        .reduce((s, c) => s + (c.caNet || 0), 0),
     }))
     .filter((b) => b.contracte > 0 || b.encaisse > 0);
 }
@@ -3353,7 +3352,7 @@ function trackAgreger(champ, leads, rdv) {
   rdv.forEach((r) => {
     const p = point(r[champ] || TRACK_NON_RENSEIGNE);
     (rdvParValeur[r[champ] || TRACK_NON_RENSEIGNE] = rdvParValeur[r[champ] || TRACK_NON_RENSEIGNE] || []).push(r);
-    p.rdv += 1;
+    p.rdv += r.venteSeule ? 0 : 1;
     p.present += r.present || 0;
     p.conclu += r.conclu || 0;
     p.ventes += r.vente || 0;
@@ -3561,7 +3560,7 @@ function trackValeurBloc(nom, champ, leads, rdv, bloc) {
 
   const v = {
     leads: lJ.length,
-    rdv: rJ.length,
+    rdv: nbRdvClosing(rJ),
     present: somme(rJ, "present"),
     conclu: somme(rJ, "conclu"),
     ventes: somme(rJ, "vente"),
@@ -3864,7 +3863,7 @@ function vueTracking() {
   // Comparaison à la période précédente, même principe que les autres onglets.
   const precedentes = trackLignesPrecedentes();
   const ecartLeads = precedentes ? ecartDe(leads.length, precedentes.leads.length, "leads") : null;
-  const ecartRdv = precedentes ? ecartDe(rdv.length, precedentes.rdv.length, "rendezVous") : null;
+  const ecartRdv = precedentes ? ecartDe(nbRdvClosing(rdv), nbRdvClosing(precedentes.rdv), "rendezVous") : null;
   const ecartPresent = precedentes ? ecartDe(totalPresent, somme(precedentes.rdv, "present"), "honores") : null;
   const ecartVentes = precedentes ? ecartDe(totalVentes, somme(precedentes.rdv, "vente"), "ventes") : null;
   const ecartCa = precedentes ? ecartDe(totalCa, somme(precedentes.rdv, "encaisse"), "contracte") : null;
@@ -3872,7 +3871,7 @@ function vueTracking() {
   const cartesCible = document.getElementById("tracking-cartes");
   cartesCible.innerHTML = [
     carteInfo("Leads", nombre(leads.length), trackBulleRepartition("Leads", valeurs, "leads", nombre), ecartLeads),
-    carteInfo("RDV booké", nombre(rdv.length), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
+    carteInfo("RDV booké", nombre(nbRdvClosing(rdv)), trackBulleRepartition("RDV booké", valeurs, "rdv", nombre), ecartRdv),
     carteInfo("RDV honoré", nombre(totalPresent), trackBulleRepartition("RDV honoré", valeurs, "present", nombre), ecartPresent),
     carteInfo("Ventes", nombre(totalVentes), trackBulleRepartition("Ventes", valeurs, "ventes", nombre), ecartVentes),
     carteInfo("CA encaissé", euros(totalCa), trackBulleRepartition("CA encaissé", valeurs, "ca", euros), ecartCa, sousChiffre("Contracté", euros(totalContracte))),
@@ -3890,7 +3889,7 @@ function vueTracking() {
     const aggRel = (lignesRdv, lignesLeads) => ({
       ...statsCycle(lignesRdv, "cycleLead"),
       leads: lignesLeads.length,
-      rdv: lignesRdv.length,
+      rdv: nbRdvClosing(lignesRdv),
       present: somme(lignesRdv, "present"),
       conclu: somme(lignesRdv, "conclu"),
       ventes: somme(lignesRdv, "vente"),
@@ -3973,6 +3972,15 @@ let SALES_LEADS = [];
 let SALES_FOLLOWUPS = []; // leads au stage Follow-Up Scheduled (stock courant, setter ou non)
 let CLIENTS_DETAIL = [];
 let SALES_CALLS = [];
+// Lignes de la vue Closing : les calls (RDV, presence, annulations) SANS leurs ventes, plus des lignes « venteSeule »
+// datees a la signature du contrat (decision 2026-11-24). Ventes, CA contracte et CA encaisse suivent la signature ;
+// les RDV restent au jour du call. Les autres vues (Setting...) continuent de lire SALES_CALLS.
+let SALES_CLOSING_ROWS = [];
+const nbRdvClosing = (l) => l.filter((c) => !c.venteSeule).length;
+function construireLignesClosing(calls, ventes) {
+  const activite = calls.map((c) => ({ ...c, venteCall: c.vente, vente: 0, montant: 0, encaisse: 0, cycleRdv: null, cycleLead: null }));
+  return activite.concat(ventes);
+}
 let SALES_SOLDES = {}; // reste à encaisser par closer (stock, indépendant de la période)
 let SALES_CLOSER = "tout";
 // Périmètre de rang R pour les métriques de PERFORMANCE de Closing (taux,
@@ -4030,7 +4038,7 @@ const callDuMode = (c) => {
 };
 // Closing : calls du mode choisi de CALL BOOKED, filtrés période + closer actif + barre.
 const salesCallsClosing = () =>
-  SALES_CALLS.filter(
+  SALES_CLOSING_ROWS.filter(
     (c) => callDuMode(c) && dansPeriode(c) && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 
@@ -4409,7 +4417,7 @@ function salesStatsBlocCloser(nom, calls, bloc) {
   const dansBloc = calls.filter((c) => (c.closer || "Non renseigné") === nom && c.jour >= bloc.debut && c.jour <= bloc.fin);
   return {
     ...statsCycle(dansBloc),
-    rdv: dansBloc.length,
+    rdv: nbRdvClosing(dansBloc),
     conclus: somme(dansBloc, "conclu"),
     honores: somme(dansBloc, "present"),
     ventes: somme(dansBloc, "vente"),
@@ -4485,7 +4493,7 @@ function salesRenduClassement(cibleId, entries, metriquesObj, metriqueActive, bu
 // être calculé identiquement sur la période actuelle et la période
 // précédente (comparaison ↑/↓ sur les cartes).
 function salesStatsCallsClosing(calls) {
-  const rdv = calls.length;
+  const rdv = nbRdvClosing(calls);
   const conclus = somme(calls, "conclu");
   const honores = somme(calls, "present");
   const ventes = somme(calls, "vente");
@@ -4521,7 +4529,7 @@ function salesCallsClosingPrecedentes() {
   const plage = plagePrecedente();
   if (!plage) return null;
   const [a, b] = plage;
-  return SALES_CALLS.filter(
+  return SALES_CLOSING_ROWS.filter(
     (c) => callDuMode(c) && c.jour && c.jour >= a && c.jour <= b && parFiltresBarre(c) && (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER)
   );
 }
@@ -4538,6 +4546,9 @@ function salesCallsClosingPrecedentes() {
 // bookés, seulement les R1 présents. On rapproche par contact (un même lead
 // peut avoir plusieurs lignes de call), pas par simple comptage de lignes.
 function salesStatsR1R2(calls) {
+  const ventesR1 = somme(calls.filter((c) => c.rangR === 1), "vente");
+  const ventesR2 = somme(calls.filter((c) => c.rangR > 1), "vente");
+  calls = calls.filter((c) => !c.venteSeule);
   const r1 = calls.filter((c) => c.rangR === 1);
   const r2 = calls.filter((c) => c.rangR > 1);
   const r1Presents = r1.filter((c) => c.present);
@@ -4563,8 +4574,8 @@ function salesStatsR1R2(calls) {
     honoresR2,
     presenceR1: ratio(honoresR1, conclusR1),
     presenceR2: ratio(honoresR2, conclusR2),
-    closingR1: ratio(somme(r1, "vente"), honoresR1),
-    closingR2: ratio(somme(r2, "vente"), honoresR2),
+    closingR1: ratio(ventesR1, honoresR1),
+    closingR2: ratio(ventesR2, honoresR2),
     // Annulation : part des calls bookés qui ont été annulés (avant d'avoir lieu).
     annulesR1: r1.filter((c) => c.statut === "Annulé").length,
     annulesR2: r2.filter((c) => c.statut === "Annulé").length,
@@ -4677,7 +4688,7 @@ function vueSalesClosing() {
   const cible = document.getElementById("vue-sales-closing");
   if (!cible) return;
 
-  const closers = [...new Set(SALES_CALLS.filter((c) => callDuMode(c) && c.closer).map((c) => c.closer))].sort();
+  const closers = [...new Set(SALES_CLOSING_ROWS.filter((c) => callDuMode(c) && c.closer).map((c) => c.closer))].sort();
   brancherSalesToggle(
     "sales-closing-filtre",
     closers,
@@ -4757,13 +4768,13 @@ function vueSalesClosing() {
     parFiltresBarre(c) &&
     (SALES_CLOSER === "tout" || c.closer === SALES_CLOSER) &&
     rangAccepte(SALES_CLOSING_RANG, c);
-  const caClosingEtRatt = somme(SALES_CALLS.filter((c) => tousTypes(c) && dansPeriode(c)), "montant");
+  const caClosingEtRatt = somme(SALES_CLOSING_ROWS.filter((c) => tousTypes(c) && dansPeriode(c)), "montant");
   // Meme calcul sur la periode precedente (pour le badge d'evolution).
   const plagePrec = plagePrecedente();
   const partModePrec = (() => {
     if (!plagePrec) return null;
     const [pa, pb] = plagePrec;
-    const liste = SALES_CALLS.filter((c) => tousTypes(c) && c.jour && c.jour >= pa && c.jour <= pb);
+    const liste = SALES_CLOSING_ROWS.filter((c) => tousTypes(c) && c.jour && c.jour >= pa && c.jour <= pb);
     const total = somme(liste, "montant");
     return total ? somme(liste.filter(callDuMode), "montant") / total : null;
   })();
@@ -4857,7 +4868,7 @@ function vueSalesClosing() {
 
   // A traiter : toutes dates confondues (le filtre closer s'applique), mais le rang suit le toggle R1 / Tous les rangs
   // (sinon des R2 a venir s'affichaient en mode R1).
-  const closingsTous = SALES_CALLS.filter(
+  const closingsTous = SALES_CLOSING_ROWS.filter(
     (c) =>
       callDuMode(c) &&
       parFiltresBarre(c) &&
@@ -4866,7 +4877,7 @@ function vueSalesClosing() {
   );
   const aVenirClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour >= AUJOURDHUI);
   const passesSansStatutClosing = closingsTous.filter((c) => c.statut === "Confirmé" && c.jour && c.jour < AUJOURDHUI);
-  const conclusSansIssueClosing = closingsTous.filter((c) => c.conclu && !c.issue && !c.vente);
+  const conclusSansIssueClosing = closingsTous.filter((c) => c.conclu && !c.issue && !c.vente && !c.venteCall);
   const prochainClosing = aVenirClosing.map((c) => c.jour).sort()[0];
   document.getElementById("sales-closing-traiter").innerHTML = [
     carte("Closing à venir", nombre(aVenirClosing.length), prochainClosing ? `prochain le ${jourCourt(prochainClosing)}` : "aucun à venir"),
@@ -4898,7 +4909,7 @@ function vueSalesClosing() {
     (callsParCloser[n] = callsParCloser[n] || []).push(c);
     if (!parCloser[n]) parCloser[n] = { rdv: 0, conclus: 0, honores: 0, ventes: 0, ca: 0, encaisse: 0 };
     const p = parCloser[n];
-    p.rdv += 1;
+    p.rdv += c.venteSeule ? 0 : 1;
     p.conclus += c.conclu;
     p.honores += c.present;
     p.ventes += c.vente;
@@ -5096,7 +5107,7 @@ function vueOutbound() {
   });
   const closingsParContact = new Map();
   // Le call de vente qui suit une approbation : Closing, ou Rattrapage (call de vente traite par les closers).
-  SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && c.contactId != null).forEach((c) => {
+  SALES_CLOSING_ROWS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && c.contactId != null).forEach((c) => {
     if (!closingsParContact.has(c.contactId)) closingsParContact.set(c.contactId, []);
     closingsParContact.get(c.contactId).push(c);
   });
@@ -5107,7 +5118,8 @@ function vueOutbound() {
   const leadsBase = leadsPerimetre.filter(
     (l) => parFiltresBarre(l) && (OUTBOUND_SETTER === "tout" || l.setter === OUTBOUND_SETTER)
   );
-  const enrichir = (l) => {
+  // `plage` : fenetre de SIGNATURE des ventes (regle unique 2026-11-24) ; les calls restent ceux du lead, a toute date.
+  const enrichir = (l, plage) => {
     // Etapes valides du setter (decision 2026-11-04) : assigne (New Lead) -> Contacted -> Approved / Rejected.
     // Les autres etapes iClosed (Follow-Up, Not a Fit, Budget Issue...) ne sont pas du travail du setter. Le stage iClosed
     // ACTUEL fait foi ; sans stage (contact sans fiche LEADS), on retombe sur la ligne d'issue saisie par le setter.
@@ -5118,13 +5130,15 @@ function vueOutbound() {
     const issues = stage ? [stage === "approved" ? "APPROVED" : "REJECTED"] : lignesIssue;
     // Memes calls que l'onglet « Cycle de vente » et que la page Closing (colonne « via setter ») :
     // uniquement les calls viaSetting. Un Closing direct d'un contact qui a eu une issue n'est pas compte ici.
-    const calls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => estCallSetting(c) && duRang(c));
+    const tousCalls = (l.contactId != null ? closingsParContact.get(l.contactId) || [] : []).filter((c) => estCallSetting(c) && duRang(c));
+    const calls = tousCalls.filter((c) => !c.venteSeule);
+    const ventesSignees = tousCalls.filter((c) => c.venteSeule && plage(c));
     return {
       nbCalls: calls.length,
       nbAnnules: calls.filter((c) => c.statut === "Annulé").length,
       nbAnnulesCloser: calls.filter(estAnnuleCloser).length,
       nbAnnulesProspect: calls.filter(estAnnuleProspect).length,
-      nbVentes: somme(calls, "vente"),
+      nbVentes: somme(ventesSignees, "vente"),
       setter: l.setter,
       jour: l.jourAssignation,
       contacte: stage ? stage === "contacted" || /^follow[\s-]*up/.test(stage) || issueStage : issue,
@@ -5134,17 +5148,17 @@ function vueOutbound() {
       approuve: issue && issues.includes("APPROVED"),
       closing: calls.length > 0,
       honore: calls.some((c) => c.present),
-      vendu: calls.some((c) => c.vente),
+      vendu: ventesSignees.length > 0,
       present: somme(calls, "present"),
       conclu: somme(calls, "conclu"),
-      ca: somme(calls, "montant"),
-      encaisse: somme(calls, "encaisse"),
+      ca: somme(ventesSignees, "montant"),
+      encaisse: somme(ventesSignees, "encaisse"),
     };
   };
-  const leads = leadsBase.filter((l) => dansPeriode({ jour: l.jourAssignation })).map(enrichir);
+  const leads = leadsBase.filter((l) => dansPeriode({ jour: l.jourAssignation })).map((l) => enrichir(l, dansPeriode));
   const plagePrec = plagePrecedente();
   const leadsPrec = plagePrec
-    ? leadsBase.filter((l) => l.jourAssignation && l.jourAssignation >= plagePrec[0] && l.jourAssignation <= plagePrec[1]).map(enrichir)
+    ? leadsBase.filter((l) => l.jourAssignation && l.jourAssignation >= plagePrec[0] && l.jourAssignation <= plagePrec[1]).map((l) => enrichir(l, (c) => c.jour && c.jour >= plagePrec[0] && c.jour <= plagePrec[1]))
     : null;
 
   const agreger = (liste) => {
@@ -5189,7 +5203,7 @@ function vueOutbound() {
   // JOUR est dans la periode, filtres de la barre appliques, tous rangs). Origine
   // "setting" selon origineCaFn : les trois parts (Closing direct, Rattrapage,
   // Setting) se partagent le meme CA et font 100 %.
-  const closingsPerimetre = SALES_CALLS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && parFiltresBarre(c) && duRang(c));
+  const closingsPerimetre = SALES_CLOSING_ROWS.filter((c) => (c.typeAppel === "Closing" || c.rattrapage === true || c.viaSetting === true) && parFiltresBarre(c) && duRang(c));
   // Setter d'un contact : celui de la ligne LEADS, a defaut celui qui a saisi l'issue (ligne CALL BOOKED « SETTER- »).
   // Les calls de vente eux-memes n'ont pas de setter : on remonte au contact.
   const setterParContact = new Map();
@@ -5217,8 +5231,8 @@ function vueOutbound() {
     const dansPlage = closingsPerimetre.filter(dansLaPlage);
     const setting = dansPlage.filter((c) => estCallSetting(c) && duSetter(c));
     return {
-      bookes: dansPlage.length,
-      bookesSetting: setting.length,
+      bookes: nbRdvClosing(dansPlage),
+      bookesSetting: nbRdvClosing(setting),
       presents: somme(dansPlage, "present"),
       presentsSetting: somme(setting, "present"),
     };
@@ -5236,8 +5250,8 @@ function vueOutbound() {
         duSetter(c)
     );
     return {
-      closing: liste.length,
-      leadsCall: new Set(liste.map((c) => c.contactId)).size,
+      closing: nbRdvClosing(liste),
+      leadsCall: new Set(liste.filter((c) => !c.venteSeule).map((c) => c.contactId)).size,
       annules: liste.filter((c) => c.statut === "Annulé").length,
       annulesCloser: liste.filter(estAnnuleCloser).length,
       annulesProspect: liste.filter(estAnnuleProspect).length,
@@ -5710,7 +5724,11 @@ async function charger() {
       const donneesTracking = await reponseTracking.json();
       if (reponseTracking.ok) {
         TRACK_LEADS = donneesTracking.leads || [];
-        const rdvBrut = donneesTracking.rdv || [];
+        // Ventes et CA datés de la signature du contrat (règle unique du dashboard) : on retire vente/CA des
+        // lignes de call et on ajoute les lignes « venteSeule » renvoyées par l'API (même type, rang, canal).
+        const rdvBrut = (donneesTracking.rdv || [])
+          .map((r) => ({ ...r, vente: 0, montant: 0, encaisse: 0, cycleLead: null }))
+          .concat(donneesTracking.ventes || []);
         TRACK_CLOSING_TOUS = rdvBrut.filter((r) => r.typeAppel !== "Rattrapage");
         TRACK_RATT = rdvBrut.filter((r) => r.typeAppel === "Rattrapage");
         appliquerDonneesTrack();
@@ -5729,6 +5747,7 @@ async function charger() {
         SALES_LEADS = (donneesSales.leads || []).map(avecSource);
         SALES_FOLLOWUPS = (donneesSales.followUps || []).map(avecSource);
         SALES_CALLS = (donneesSales.calls || []).map(avecSource);
+        SALES_CLOSING_ROWS = construireLignesClosing(SALES_CALLS, (donneesSales.ventes || []).map(avecSource));
         SALES_SOLDES = donneesSales.soldes || {};
         vueSalesClosing();
         initSalesMode();
@@ -5899,6 +5918,12 @@ const CC_METRIQUES = {
 const CC_METRIQUES_EVO = Object.fromEntries(["bookes", "honores", "ventes", "ca"].map((k) => [k, CC_METRIQUES[k]]));
 const ccNouvelAgregat = () => ({ assignes: 0, appeles: 0, reponse: 0, callBook: 0, bookes: 0, conclus: 0, honores: 0, ventes: 0, ca: 0, contracte: 0 });
 const ccAjouterRdv = (o, r) => {
+  if (r.venteSeule) {
+    o.ventes += r.vente || 0;
+    o.ca += r.encaisse || 0;
+    o.contracte += r.montant || 0;
+    return;
+  }
   o.bookes += 1;
   o.conclus += r.conclu || 0;
   if ((r.present || 0) > 0) o.honores += 1;
@@ -6044,7 +6069,7 @@ function vueColdCall() {
   const rdvBase = enPerf ? [...TRACK_CLOSING_TOUS, ...TRACK_RATT] : TRACK_RDV_TOUS;
   const rdvAll = exclu ? [] : rdvBase.filter((r) => ccEstOutbound(r) && dansPeriode(r) && parProduit(r) && (enPerf || duRang(r)));
   const rdvOut = COLDCALL_CALLER === "tout" ? rdvAll : rdvAll.filter(dansCallers);
-  const bookes = rdvOut.length;
+  const bookes = nbRdvClosing(rdvOut);
   const honores = rdvOut.filter((r) => (r.present || 0) > 0).length;
   // Conclus = Honoré ou No-show : le call a eu lieu et son issue est connue. Les RDV encore
   // à venir (ou annulés) n'y figurent pas, donc le taux de présence ne les compte pas.
@@ -6075,7 +6100,7 @@ function vueColdCall() {
   const caTotal = rdvTous.reduce((s, r) => s + (r.encaisse || 0), 0);
   const ventesTotal = rdvTous.reduce((s, r) => s + (r.vente || 0), 0);
   document.getElementById("coldcall-taux").innerHTML = [
-    carte("Part des calls bookés", part(bookes, rdvTous.length), rdvTous.length ? `${nombre(bookes)} calls Outbound sur ${nombre(rdvTous.length)} tous canaux` : "—", null),
+    carte("Part des calls bookés", part(bookes, nbRdvClosing(rdvTous)), nbRdvClosing(rdvTous) ? `${nombre(bookes)} calls Outbound sur ${nombre(nbRdvClosing(rdvTous))} tous canaux` : "—", null),
     carte("Part des ventes", part(ventes, ventesTotal), ventesTotal ? `${nombre(ventes)} ventes Outbound sur ${nombre(ventesTotal)} tous canaux` : "—", null),
     carte("Part du CA Outbound", part(ca, caTotal), caTotal ? `${euros(ca)} sur ${euros(caTotal)} de CA encaissé tous canaux` : "—", null),
   ].join("");

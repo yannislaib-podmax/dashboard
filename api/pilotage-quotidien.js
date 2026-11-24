@@ -33,7 +33,8 @@ const CHAMPS = {
 };
 
 const TABLE_CONTRATS = "tbl3SDo8VkXxXdzdA";
-const CHAMPS_CONTRATS = { fldy8OIvfHdsHTCCm: "caNet" }; // CA net = reçu − remboursé (avant frais)
+// CA net = reçu − remboursé (avant frais). Ventes et CA sont datés de la SIGNATURE du contrat (règle unique, 2026-11-24).
+const CHAMPS_CONTRATS = { fldy8OIvfHdsHTCCm: "caNet", fldz1nshv9SfQLn04: "montantTotal", fldlhedw3iJNyAITQ: "dateSignature", fldm0apf8f0JU1AIF: "clients" };
 
 async function lireEncaisseContrats(token) {
   const map = new Map();
@@ -47,7 +48,15 @@ async function lireEncaisseContrats(token) {
     const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) throw new Error(`Airtable a répondu ${r.status} : ${await r.text()}`);
     const d = await r.json();
-    for (const enr of d.records) map.set(enr.id, Number(enr.fields.fldy8OIvfHdsHTCCm) || 0);
+    for (const enr of d.records) {
+      const f = enr.fields;
+      map.set(enr.id, {
+        caNet: Number(f.fldy8OIvfHdsHTCCm) || 0,
+        montantTotal: Number(f.fldz1nshv9SfQLn04) || 0,
+        dateSignature: String(f.fldlhedw3iJNyAITQ || "").slice(0, 10),
+        clients: Array.isArray(f.fldm0apf8f0JU1AIF) ? f.fldm0apf8f0JU1AIF.join(",") : String(f.fldm0apf8f0JU1AIF || ""),
+      });
+    }
     offset = d.offset;
   } while (offset);
   return map;
@@ -137,12 +146,47 @@ function regrouperParJour(appels, encaisseContrat = new Map()) {
     if (a.statut === "No-show") ligne.noShow += 1;
     if (a.statut === "Annulé") ligne.annules += 1;
 
-    if (a.issue === "SALE") {
-      ligne.ventes += 1;
-      ligne.contracte += Number(a.montantDeal) || 0;
-      ligne.encaisse += String(a.contrats || "").split(", ").filter(Boolean).reduce((t, id) => t + (encaisseContrat.get(id) || 0), 0);
+  }
+
+  // Ventes / CA : datés du jour de SIGNATURE du contrat (et non du call), source = CONTRATS. Un contrat n'est compté
+  // qu'une fois (1er call chronologique) ; les contrats du même client signés le même jour forment une seule vente.
+  const parClientJour = new Map();
+  for (const [id, k] of encaisseContrat) {
+    for (const cl of String(k.clients || "").split(",").filter(Boolean)) {
+      const c = `${cl}|${k.dateSignature}`;
+      if (!parClientJour.has(c)) parClientJour.set(c, []);
+      parClientJour.get(c).push(id);
     }
   }
+  const reclames = new Set();
+  [...appels]
+    .filter((a) => a.contrats)
+    .sort((a, b) => String(a.dateAppel || "").localeCompare(String(b.dateAppel || "")))
+    .forEach((a) => {
+      const ids = new Set();
+      for (const id of String(a.contrats).split(", ").filter(Boolean)) {
+        const k = encaisseContrat.get(id);
+        if (!k) continue;
+        ids.add(id);
+        for (const cl of String(k.clients || "").split(",").filter(Boolean)) for (const f of parClientJour.get(`${cl}|${k.dateSignature}`) || []) ids.add(f);
+      }
+      const libres = [...ids].filter((id) => !reclames.has(id));
+      if (!libres.length) return;
+      libres.forEach((id) => reclames.add(id));
+      const ks = libres.map((id) => encaisseContrat.get(id));
+      const jour = ks.map((k) => k.dateSignature).filter(Boolean).sort()[0];
+      if (!jour) return;
+      const canal = a.canal || "Autre";
+      const produit = a.produit || "Autre";
+      const cle = `${jour} | ${canal} | ${produit}`;
+      if (!parCle.has(cle)) {
+        parCle.set(cle, { cle, jour, canal, produit, appelsPrevus: 0, appelsConclus: 0, honores: 0, noShow: 0, annules: 0, ventes: 0, contracte: 0, encaisse: 0 });
+      }
+      const l = parCle.get(cle);
+      l.ventes += 1;
+      l.contracte += ks.reduce((t, k) => t + k.montantTotal, 0);
+      l.encaisse += ks.reduce((t, k) => t + k.caNet, 0);
+    });
 
   return [...parCle.values()];
 }
