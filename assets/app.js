@@ -2301,6 +2301,9 @@ function mesuresDirection(contrats, paiements, resiliations) {
   // CA encaissé = net reçu sur les contrats signés dans la période (règle unique 2026-11-24), pas la date de chaque paiement.
   const caEncaisse = somme(contrats, "caNet");
   const nbClients = new Set(contrats.map((c) => idLie(c.client)).filter(Boolean)).size;
+  // Une vente = un client par jour de signature (comme Sales Team / Funnel / Tracking) : les contrats
+  // d'un même client signés le même jour comptent pour une seule vente.
+  const nbVentes = new Set(contrats.map((c) => (idLie(c.client) || c.id) + "|" + c.dateSignature)).size;
 
   // Le taux de recouvrement ne doit compter que les échéances déjà ÉCHUES
   // (date passée). Une échéance à venir n'a simplement pas encore son tour —
@@ -2314,7 +2317,8 @@ function mesuresDirection(contrats, paiements, resiliations) {
     caContracte,
     caEncaisse,
     nbClients,
-    panierMoyen: contrats.length ? caContracte / contrats.length : null,
+    nbVentes,
+    panierMoyen: nbVentes ? caContracte / nbVentes : null,
     tauxRecouvrement: montantPrevuEchu > 0 ? montantRecuEchu / montantPrevuEchu : null,
     ltvMoyenne: nbClients ? somme(contrats, "montantLtv") / nbClients : null,
     resiliations,

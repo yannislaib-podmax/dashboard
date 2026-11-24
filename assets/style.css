@@ -1888,6 +1888,9 @@ tr.total td {
   .cartes.cols-4 { grid-template-columns: repeat(4, 1fr); }
   .cartes.cols-5 { grid-template-columns: repeat(5, 1fr); }
 }
+@media (min-width: 1280px) {
+  .cartes.cols-6 { grid-template-columns: repeat(6, 1fr); }
+}
 
 /* Outbound : une rangee de taux sous une rangee de cartes, avec le meme ecart que la grille. */
 .cartes + .cartes.cartes-taux { margin-top: 16px; }
