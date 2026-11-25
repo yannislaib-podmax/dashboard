@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PodMax · Reporting hebdo Acquisition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --violet:#7B2FF7;--violet2:#9B6BFF;--magenta:#E619B0;--ciel:#C9A6FF;
+  --nuit:#0B0714;--nuit2:#170F28;--verre:rgba(255,255,255,.06);--bord:rgba(255,255,255,.12);
+  --txt:rgba(255,255,255,.90);--txt2:rgba(255,255,255,.62);--vert:#6FD3A3;--ambre:#F0B95A;--rouge:#FF5C7A;
+  --sans:"Poppins",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--nuit);color:var(--txt);font-family:var(--sans);min-height:100vh;padding:0 0 60px;font-variant-numeric:tabular-nums}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+   radial-gradient(55vw 55vw at 90% -8%,rgba(123,47,247,.40),transparent 60%),
+   radial-gradient(45vw 45vw at -8% 40%,rgba(230,25,176,.20),transparent 60%),
+   radial-gradient(40vw 40vw at 100% 90%,rgba(111,211,163,.10),transparent 60%),
+   linear-gradient(180deg,var(--nuit),var(--nuit2));}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 24px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:28px 0 8px}
+.top img{height:30px;display:block}
+.top span{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--txt2)}
+.hero{display:grid;grid-template-columns:1.25fr 1fr;gap:26px;align-items:stretch;margin:26px 0 8px}
+.kicker{font-size:.78rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ciel);margin-bottom:14px}
+h1{font-size:clamp(2.4rem,5.4vw,4.4rem);line-height:1.03;font-weight:800;letter-spacing:-.025em}
+.grad{background:linear-gradient(90deg,var(--violet2),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+.range{margin-top:16px;font-size:1.05rem;color:var(--txt2)}
+.pill{display:inline-block;margin-top:22px;padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,var(--violet),var(--magenta));font-size:.8rem;font-weight:600}
+.sample{display:inline-block;margin-left:10px;padding:7px 14px;border-radius:999px;border:1px dashed var(--ambre);color:var(--ambre);font-size:.75rem;font-weight:600}
+.glass{background:var(--verre);border:1px solid var(--bord);border-radius:24px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.headline{padding:26px 28px;display:flex;flex-direction:column;justify-content:center;gap:18px;background:linear-gradient(145deg,rgba(123,47,247,.35),rgba(230,25,176,.22));border:1px solid rgba(255,255,255,.18)}
+.headline .row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:14px}
+.headline .row:last-child{border:0;padding-bottom:0}
+.headline .l{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.headline .v{font-size:2rem;font-weight:800;letter-spacing:-.02em}
+.headline .c{font-size:.8rem;font-weight:700;margin-left:10px}
+h2{font-size:clamp(1.4rem,2.6vw,2rem);font-weight:700;letter-spacing:-.015em;margin:48px 0 6px}
+.sub{color:var(--txt2);font-size:.92rem;margin-bottom:22px;max-width:46em}
+.ins{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.insc{padding:22px 24px;position:relative;overflow:hidden}
+.insc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.insc .t{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1rem;margin-bottom:8px}
+.insc .t i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 22%,transparent)}
+.insc p{font-size:.9rem;color:var(--txt2);line-height:1.55}
+.insc p b{color:#fff}
+.gt{display:flex;align-items:center;gap:10px;margin:30px 0 14px;font-size:.78rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--c)}
+.gt::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--c),transparent);opacity:.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.kpi{padding:20px 22px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;background:var(--c);opacity:.16;filter:blur(24px)}
+.kpi.star{border:1px solid var(--c);box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent),0 12px 40px color-mix(in srgb,var(--c) 28%,transparent)}
+.kt{display:flex;align-items:center;gap:8px;font-size:.74rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2)}
+.kv{font-size:2.15rem;font-weight:800;letter-spacing:-.02em;margin:8px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kd{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--txt2);margin-top:6px}
+.chip{font-weight:700;font-size:.75rem;border-radius:999px;padding:3px 10px}
+.chip.good{background:rgba(111,211,163,.16);color:var(--vert)}
+.chip.bad{background:rgba(255,92,122,.16);color:var(--rouge)}
+.chip.flat{background:rgba(255,255,255,.08);color:var(--txt2)}
+.spark{display:block;margin:2px 0 6px}
+.two{display:grid;grid-template-columns:1.35fr 1fr;gap:18px}
+.eq{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{padding:24px 26px}
+.panel h3{font-size:1.02rem;font-weight:700;margin-bottom:4px}
+.panel .hint{font-size:.8rem;color:var(--txt2);margin-bottom:14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.76rem;color:var(--txt2);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+svg text{font-family:var(--sans)}
+.funnel .fr{display:grid;grid-template-columns:150px 1fr 120px;gap:14px;align-items:center;margin:12px 0}
+.funnel .n{font-size:.9rem;font-weight:600}
+.funnel .b{height:36px;border-radius:12px;background:linear-gradient(90deg,var(--violet),var(--magenta));display:flex;align-items:center;padding-left:14px;font-weight:800;box-shadow:0 6px 22px rgba(123,47,247,.35);min-width:48px}
+.funnel .cv{font-size:.8rem;color:var(--txt2)}
+.funnel .cv b{color:var(--vert);font-weight:700}
+.tbl{width:100%;border-collapse:collapse;font-size:.86rem}
+.tbl th{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2);font-weight:600;text-align:right;padding:10px 10px;border-bottom:1px solid var(--bord)}
+.tbl td{text-align:right;padding:14px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl .nm{font-weight:600;display:flex;align-items:center;gap:10px}
+.tbl .nm i{font-style:normal;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.08)}
+.tbl .cash{min-width:170px}
+.tbl .cash .bar{height:6px;border-radius:6px;background:rgba(255,255,255,.1);margin-top:6px;overflow:hidden}
+.tbl .cash .bar span{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--violet2),var(--magenta))}
+.tbl tr.tot td{font-weight:800;border-bottom:0;background:rgba(255,255,255,.05)}
+.tbl tr.tot td:first-child{border-radius:12px 0 0 12px}.tbl tr.tot td:last-child{border-radius:0 12px 12px 0}
+.al{display:flex;gap:16px;align-items:flex-start;padding:18px 22px;margin-bottom:12px;position:relative;overflow:hidden}
+.al::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.al i{font-style:normal;font-size:1.3rem}
+.al b{color:#fff}
+.al p{font-size:.92rem;color:var(--txt2);line-height:1.55}
+.foot{margin-top:46px;font-size:.76rem;color:var(--txt2);line-height:1.8;text-align:center}
+.foot b{color:var(--ciel)}
+@media (max-width:900px){.hero,.two,.eq,.ins{grid-template-columns:1fr}.funnel .fr{grid-template-columns:100px 1fr}.funnel .cv{grid-column:1/-1}.tbl{display:block;overflow-x:auto}}
+/* ===== IMPRESSION / PDF (Cloudflare Browser Rendering : format A4, printBackground:true) ===== */
+@page{size:A4;margin:8mm}
+@media print{
+  html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--nuit)}
+  body{padding:0;min-height:0}
+  body::before{position:absolute;height:100%}
+  .wrap{max-width:none;width:1180px;zoom:.61;padding:0 20px}
+  .glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(255,255,255,.07)}
+  /* A4 est etroit : on garde les mises en page "bureau" (les media queries mobiles ne s'appliquent pas au PDF) */
+  .hero{grid-template-columns:1.25fr 1fr}
+  .two{grid-template-columns:1.35fr 1fr}
+  .eq{grid-template-columns:1fr 1fr}
+  .ins{grid-template-columns:repeat(3,1fr)}
+  .grid{grid-template-columns:repeat(3,1fr)}
+  .funnel .fr{grid-template-columns:150px 1fr 120px}
+  .funnel .cv{grid-column:auto}
+  .tbl{display:table;overflow:visible}
+  /* un bloc ne se coupe jamais entre deux pages */
+  .glass,.kpi,.panel,.insc,.al,.fr,.hero,.headline,.tbl tr,svg{break-inside:avoid;page-break-inside:avoid}
+  h2,.gt,.sub{break-after:avoid;page-break-after:avoid}
+  h2{margin-top:34px}
+  .foot{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img src="data:image/png;base64,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" alt="podmax"><span>Reporting hebdomadaire · Acquisition</span></div>
+  <div id="app"></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+/*DATA_START*/
+const DATA = {
+  sample: true,
+  week: {num: 47, label: "du lundi 16 au dimanche 22 novembre 2026", generated: "lundi 23 novembre · 8h00"},
+  days: ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"],
+  daily: {
+    spend:[380,410,455,398,511,350,338], leads:[9,11,12,10,15,9,8], booked:[5,6,7,6,9,4,4],
+    cpc:[76,68.3,65,66.3,56.8,87.5,84.5], cpl:[42.2,37.3,37.9,39.8,34.1,38.9,42.3],
+    done:[3,4,5,4,3,2,2], noshow:[2,3,2,3,2,1,2], planned:[5,7,7,7,5,3,4],
+    sales:[1,0,2,1,1,1,0], signed:[2800,0,5400,3200,2600,3400,0], coll:[1200,900,2100,1840,1500,1400,1000]
+  },
+  headline: [
+    {l:"Leads", v:"74", c:"+12 %", good:true},
+    {l:"Coût par call booké", v:"69,32 €", c:"−8 %", good:true},
+    {l:"Cash signé", v:"17 400 €", c:"+18 %", good:true}
+  ],
+  insights: [
+    {type:"good", title:"Ce qui marche", text:"Le <b>coût par call booké</b> tombe à <b>69,32 €</b>, le plus bas des 5 dernières semaines, porté par Instagram (46,40 €). Les leads progressent de 12 %."},
+    {type:"warn", title:"À surveiller", text:"<b>4 260 €</b> restent à collecter (taux de collecte à <b>70 %</b>, −9 pts vs la moyenne), dont 3 200 € d'échéances en impayé."},
+    {type:"bad", title:"Point faible", text:"Le <b>taux de show tombe à 60 %</b> (moyenne : 68 %). 15 no-shows représentent environ <b>1 040 €</b> de dépense pub perdue."}
+  ],
+  groups: [
+    {title:"Acquisition", icon:"📣", color:"#9B6BFF", items:[
+      {l:"Dépense pub", v:"2 842 €", d1:5, d4:1, better:"down", t:"%", spark:"spend"},
+      {l:"Leads", v:"74", d1:12, d4:9, better:"up", t:"%", spark:"leads"},
+      {l:"Coût par lead", v:"38,41 €", d1:-6, d4:-8, better:"down", t:"%", spark:"cpl"},
+      {l:"Calls bookés", v:"41", d1:14, d4:10, better:"up", t:"%", spark:"booked"},
+      {l:"Coût par call booké", v:"69,32 €", d1:-8, d4:-11, better:"down", t:"%", spark:"cpc", hero:true, icon:"🎯"},
+      {l:"Coût par vente (CAC)", v:"568 €", d1:-4, d4:-1, better:"down", t:"%", spark:null}
+    ]},
+    {title:"Calls", icon:"📞", color:"#E619B0", items:[
+      {l:"Calls prévus", v:"38", d1:9, d4:6, better:"up", t:"%", spark:"planned"},
+      {l:"Calls réalisés", v:"23", d1:1, d4:-4, better:"up", t:"%", spark:"done"},
+      {l:"Taux de show", v:"60 %", d1:-5, d4:-8, better:"up", t:"pts", ring:60, hero:true, icon:"👤"},
+      {l:"Coût par call réalisé", v:"123,57 €", d1:-3, d4:2, better:"down", t:"%", spark:null}
+    ]},
+    {title:"Ventes & cash", icon:"🏆", color:"#6FD3A3", items:[
+      {l:"Ventes", v:"6", d1:2, d4:1, better:"up", t:"abs", spark:"sales"},
+      {l:"Nouveaux clients", v:"5", d1:2, d4:1, better:"up", t:"abs", spark:null},
+      {l:"Cash signé", v:"17 400 €", d1:18, d4:7, better:"up", t:"%", spark:"signed"},
+      {l:"Cash collecté", v:"9 940 €", d1:11, d4:2, better:"up", t:"%", spark:"coll"},
+      {l:"Taux de collecte", v:"70 %", d1:-6, d4:-9, better:"up", t:"pts", ring:70, hero:true, icon:"💵"},
+      {l:"Reste à collecter", v:"4 260 €", d1:22, d4:15, better:"down", t:"%", spark:null}
+    ]}
+  ],
+  funnel: [["🧲","Leads",74],["📥","Calls bookés",41],["📅","Calls prévus",38],["✅","Calls réalisés",23],["🏆","Ventes",6]],
+  sources: [
+    {i:"📘",n:"Fb ads",spend:2610,leads:51,booked:28,done:15,sales:3,signed:8400,col:"#9B6BFF"},
+    {i:"📷",n:"Instagram",spend:232,leads:9,booked:5,done:3,sales:2,signed:6400,col:"#E619B0"},
+    {i:"📞",n:"Cold call",spend:0,leads:8,booked:6,done:3,sales:1,signed:2600,col:"#6FD3A3"},
+    {i:"🌐",n:"Site web",spend:0,leads:6,booked:2,done:2,sales:0,signed:0,col:"#F0B95A"}
+  ],
+  trend: [
+    {t:"Coût par lead (€)", pts:[43.2,42.0,40.7,40.9,38.4], better:"down", fmt:"eur"},
+    {t:"Coût par call booké (€)", pts:[80.0,79.5,77.5,75.4,69.3], better:"down", fmt:"eur"},
+    {t:"Taux de show (%)", pts:[70,69,68,65,60], better:"up", fmt:"pct"}
+  ],
+  weeks: ["S43","S44","S45","S46","S47"],
+  alerts: [
+    {c:"#FF5C7A", i:"🚨", t:"Taux de show à 60 %", x:"Sous le seuil de 65 % et en baisse de 8 points vs la moyenne des 4 dernières semaines."},
+    {c:"#F0B95A", i:"⚠️", t:"Taux de collecte à 70 %", x:"4 260 € restent à collecter, dont 3 200 € d'échéances en impayé."},
+    {c:"#6FD3A3", i:"✅", t:"Coût par call booké au plus bas", x:"69,32 € contre 78,10 € en moyenne sur 4 semaines."}
+  ]
+};
+/*DATA_END*/
+
+/* ===== RENDU ===== */
+const $ = (id)=>document.getElementById(id);
+const fm=(v,d)=>{const s=Math.abs(v).toFixed(d);const p=s.split('.');let i=p[0],g='';while(i.length>3){g=' '+i.slice(-3)+g;i=i.slice(0,-3)}return (v<0?'-':'')+i+g+(p[1]?','+p[1]:'')};
+const eur=(v)=>v==null||isNaN(v)?'—':fm(v,Math.abs(v-Math.round(v))<0.005?0:2)+' €';
+const dv=(a,b)=>b>0?a/b:null;
+const mix=(c,p)=>`color-mix(in srgb,${c} ${p}%,transparent)`;
+
+function chip(d,better,t){
+  const a=Math.abs(d), thr=t==='%'?2:1;
+  let cls='flat'; if(a>=thr){cls=((d>0)===(better==='up'))?'good':'bad'}
+  const arrow=d>0?'▲':d<0?'▼':'■', sign=d>0?'+':d<0?'−':'';
+  const txt=sign+a+(t==='%'?' %':t==='pts'?' pts':'');
+  return `<span class="chip ${cls}">${arrow} ${txt}</span>`;
+}
+function spark(arr,color){
+  const w=190,h=40,mn=Math.min(...arr),mx=Math.max(...arr),rg=(mx-mn)||1;
+  const pts=arr.map((v,i)=>[6+i*(w-12)/(arr.length-1), h-6-((v-mn)/rg)*(h-14)]);
+  const line=pts.map(p=>p.join(',')).join(' ');
+  const area=`6,${h} `+line+` ${w-6},${h}`;
+  const id='g'+Math.random().toString(36).slice(2,8);
+  const last=pts[pts.length-1];
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="100%" height="40" preserveAspectRatio="none">
+   <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".45"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+   <polygon points="${area}" fill="url(#${id})"/><polyline points="${line}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+   <circle cx="${last[0]}" cy="${last[1]}" r="3.6" fill="${color}" stroke="#0B0714" stroke-width="1.5"/></svg>`;
+}
+function ring(p,color){
+  const r=27,c=2*Math.PI*r,d=c*p/100;
+  return `<svg width="70" height="70" viewBox="0 0 70 70"><circle cx="35" cy="35" r="${r}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="8"/>
+   <circle cx="35" cy="35" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${d} ${c}" transform="rotate(-90 35 35)" style="filter:drop-shadow(0 0 6px ${color})"/></svg>`;
+}
+function kpi(k,color){
+  const vis = k.ring!=null ? ring(k.ring,color) : '';
+  const sp = (k.ring==null && k.spark) ? spark(DATA.daily[k.spark],color) : '<div style="height:46px"></div>';
+  return `<div class="glass kpi ${k.hero?"star":""}" style="--c:${color}">
+   <div class="kt">${k.icon?`<span>${k.icon}</span>`:''}<span>${k.l}</span></div>
+   <div class="kv"><span>${k.v}</span>${vis}</div>${k.ring!=null?'<div style="height:6px"></div>':sp}
+   <div class="kd"><span>vs S-1</span>${chip(k.d1,k.better,k.t)}</div>
+   <div class="kd"><span>vs moy. 4 sem.</span>${chip(k.d4,k.better,k.t)}</div></div>`;
+}
+function combo(){
+  const D=DATA.daily,W=600,H=270,l=30,r=42,t=26,b=36,n=7,step=(W-l-r)/n,bw=36;
+  const maxL=Math.max(1,...D.leads)*1.3,mnC=Math.min(...D.cpc)-12,mxC=Math.max(...D.cpc)+12;
+  const x=i=>l+step*i+step/2,yl=v=>H-b-(v/maxL)*(H-b-t),yc=v=>H-b-((v-mnC)/(mxC-mnC))*(H-b-t);
+  const _nb=D.booked.reduce((a,c)=>a+c,0),avg=_nb>0?D.cpc.reduce((a,c,i)=>a+c*D.booked[i],0)/_nb:(D.cpc.reduce((a,c)=>a+c,0)/D.cpc.length||0);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%"><defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9B6BFF"/><stop offset="1" stop-color="#7B2FF7" stop-opacity=".55"/></linearGradient></defs>`;
+  [0.25,0.5,0.75,1].forEach(f=>{const y=H-b-f*(H-b-t);s+=`<line x1="${l}" y1="${y}" x2="${W-r}" y2="${y}" stroke="rgba(255,255,255,.07)"/>`});
+  D.leads.forEach((v,i)=>{s+=`<rect x="${x(i)-bw/2}" y="${yl(v)}" width="${bw}" height="${H-b-yl(v)}" rx="9" fill="url(#gv)"/><text x="${x(i)}" y="${yl(v)-7}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${v}</text>`});
+  s+=`<line x1="${l}" y1="${yc(avg)}" x2="${W-r}" y2="${yc(avg)}" stroke="#F0B95A" stroke-dasharray="5 5" opacity=".8"/><text x="${W-r+4}" y="${yc(avg)+4}" font-size="10" fill="#F0B95A">moy.</text>`;
+  const pts=D.cpc.map((v,i)=>x(i)+','+yc(v)).join(' ');
+  s+=`<polyline points="${pts}" fill="none" stroke="#E619B0" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round" style="filter:drop-shadow(0 0 6px rgba(230,25,176,.7))"/>`;
+  D.cpc.forEach((v,i)=>{const good=v<=avg;s+=`<circle cx="${x(i)}" cy="${yc(v)}" r="6" fill="${good?'#6FD3A3':'#FF5C7A'}" stroke="#0B0714" stroke-width="2"/><text x="${x(i)}" y="${yc(v)-12}" font-size="11" font-weight="700" fill="${good?'#6FD3A3':'#FF8FA3'}" text-anchor="middle">${Math.round(v)}€</text>`});
+  DATA.days.forEach((d,i)=>{s+=`<text x="${x(i)}" y="${H-12}" font-size="11" fill="rgba(255,255,255,.6)" text-anchor="middle">${d}</text>`});
+  return s+'</svg>';
+}
+function calls(){
+  const D=DATA.daily,W=420,H=270,l=16,r=16,t=26,b=36,n=7,step=(W-l-r)/n,bw=30;
+  const mx=(Math.max(1,...D.planned,...D.done.map((d,i)=>d+D.noshow[i])))*1.25,y=v=>(v/mx)*(H-b-t);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  [0.25,0.5,0.75,1].forEach(f=>{const yy=H-b-f*(H-b-t);s+=`<line x1="${l}" y1="${yy}" x2="${W-r}" y2="${yy}" stroke="rgba(255,255,255,.07)"/>`});
+  DATA.days.forEach((d,i)=>{
+    const cx=l+step*i+step/2,hd=y(D.done[i]),hn=y(D.noshow[i]),base=H-b;
+    s+=`<rect x="${cx-bw/2}" y="${base-hd}" width="${bw}" height="${hd}" rx="8" fill="#6FD3A3"/>`;
+    s+=`<rect x="${cx-bw/2}" y="${base-hd-hn-2}" width="${bw}" height="${hn}" rx="8" fill="#FF5C7A"/>`;
+    const _c=D.done[i]+D.noshow[i];if(_c>0)s+=`<text x="${cx}" y="${base-hd-hn-9}" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${Math.round(D.done[i]/_c*100)}%</text>`;
+    s+=`<text x="${cx}" y="${H-12}" font-size="11" fill="rgba(255,255,255,.6)" text-anchor="middle">${d}</text>`;
+  });
+  return s+'</svg>';
+}
+function funnel(){
+  const F=DATA.funnel,mx=Math.max(1,F[0][2]);
+  return F.map((f,i)=>{
+    const w=Math.max(8,f[2]/mx*100), prev=i? F[i-1][2]:null;
+    const cv=i?`<b>${(prev>0?Math.round(f[2]/prev*100):0)} %</b> de l'étape précédente`:'point de départ';
+    return `<div class="fr"><div class="n">${f[0]} ${f[1]}</div><div><div class="b" style="width:${w}%;opacity:${1-i*0.1}">${f[2]}</div></div><div class="cv">${cv}</div></div>`;
+  }).join('');
+}
+function donut(){
+  const S=DATA.sources,tot=S.reduce((a,s)=>a+s.leads,0),R=62,C=2*Math.PI*R;let off=0,seg='',leg='';
+  S.forEach(s=>{const d=s.leads/(tot||1)*C;seg+=`<circle cx="90" cy="90" r="${R}" fill="none" stroke="${s.col}" stroke-width="22" stroke-dasharray="${d-3} ${C-d+3}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;off+=d;
+    leg+=`<div style="display:flex;justify-content:space-between;gap:14px;margin:7px 0;font-size:.85rem"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${s.col};margin-right:8px"></i>${s.n}</span><b>${s.leads} <span style="color:var(--txt2);font-weight:500">(${Math.round(s.leads/tot*100)} %)</span></b></div>`});
+  return `<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170"><circle cx="90" cy="90" r="${R}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="22"/>${seg}
+   <text x="90" y="88" font-size="30" font-weight="800" fill="#fff" text-anchor="middle">${tot}</text><text x="90" y="108" font-size="11" fill="rgba(255,255,255,.6)" text-anchor="middle">leads</text></svg><div style="flex:1;min-width:170px">${leg}</div></div>`;
+}
+function trend(T){
+  const W=330,H=170,l=24,r=24,t=30,b=30,p=T.pts,n=p.length,mn=Math.min(...p)-(Math.max(...p)-Math.min(...p))*.25,mx=Math.max(...p)+(Math.max(...p)-Math.min(...p))*.25+(Math.max(...p)===Math.min(...p)?1:0);
+  const x=i=>l+i*(W-l-r)/(n-1),y=v=>H-b-((v-mn)/(mx-mn))*(H-b-t);
+  const avg=p.slice(0,n-1).reduce((a,c)=>a+c,0)/(n-1);
+  const lastGood=T.better==='down'?p[n-1]<=avg:p[n-1]>=avg, col=lastGood?'#6FD3A3':'#FF5C7A';
+  const f=v=>T.fmt==='pct'?Math.round(v)+'%':fm(v,1).replace(',0','');
+  const id='t'+Math.random().toString(36).slice(2,7);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".35"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`;
+  s+=`<line x1="${l}" y1="${y(avg)}" x2="${W-r}" y2="${y(avg)}" stroke="#F0B95A" stroke-dasharray="4 4" opacity=".7"/><text x="${W-r}" y="${y(avg)-6}" font-size="9.5" fill="#F0B95A" text-anchor="end">moy. 4 sem.</text>`;
+  s+=`<polygon points="${x(0)},${H-b} ${p.map((v,i)=>x(i)+','+y(v)).join(' ')} ${x(n-1)},${H-b}" fill="url(#${id})"/>`;
+  s+=`<polyline points="${p.map((v,i)=>x(i)+','+y(v)).join(' ')}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  p.forEach((v,i)=>{const last=i===n-1;s+=`<circle cx="${x(i)}" cy="${y(v)}" r="${last?6:4}" fill="${last?col:'#0B0714'}" stroke="${col}" stroke-width="2.4"/><text x="${x(i)}" y="${y(v)-12}" font-size="${last?12:10}" font-weight="${last?800:500}" fill="${last?'#fff':'rgba(255,255,255,.7)'}" text-anchor="middle">${f(v)}</text><text x="${x(i)}" y="${H-10}" font-size="10" fill="rgba(255,255,255,.55)" text-anchor="middle">${DATA.weeks[i]}</text>`});
+  return `<div class="glass panel"><h3>${T.t}</h3>${s}</svg></div>`;
+}
+function sources(){
+  const S=DATA.sources,tot=S.reduce((a,s)=>({spend:a.spend+s.spend,leads:a.leads+s.leads,booked:a.booked+s.booked,done:a.done+s.done,sales:a.sales+s.sales,signed:a.signed+s.signed}),{spend:0,leads:0,booked:0,done:0,sales:0,signed:0});
+  const row=s=>`<tr><td><div class="nm"><i>${s.i}</i>${s.n}</div></td><td>${s.spend?eur(s.spend):'—'}</td><td>${s.leads}</td><td>${s.spend?eur(dv(s.spend,s.leads)):'—'}</td><td>${s.booked}</td><td><b>${s.spend?eur(dv(s.spend,s.booked)):'—'}</b></td><td>${s.done}</td><td>${s.sales}</td>
+   <td class="cash"><b>${eur(s.signed)}</b><div class="bar"><span style="width:${tot.signed?Math.round(s.signed/tot.signed*100):0}%;background:linear-gradient(90deg,${s.col},#E619B0)"></span></div></td></tr>`;
+  return `<table class="tbl"><tr><th>Source</th><th>Dépense</th><th>Leads</th><th>Coût / lead</th><th>Bookés</th><th>Coût / call booké</th><th>Réalisés</th><th>Ventes</th><th>Cash signé</th></tr>${S.map(row).join('')}
+   <tr class="tot"><td>Total</td><td>${eur(tot.spend)}</td><td>${tot.leads}</td><td>${eur(dv(tot.spend,tot.leads))}</td><td>${tot.booked}</td><td>${eur(dv(tot.spend,tot.booked))}</td><td>${tot.done}</td><td>${tot.sales}</td><td>${eur(tot.signed)}</td></tr></table>`;
+}
+function render(){
+  const W=DATA.week, col={good:'#6FD3A3',warn:'#F0B95A',bad:'#FF5C7A'}, ico={good:'🚀',warn:'⚠️',bad:'🚨'};
+  let h=`<div class="hero"><div><div class="kicker">Reporting hebdomadaire · Acquisition</div><h1>Semaine <span class="grad">${W.num}</span></h1>
+   <div class="range">${W.label}</div><span class="pill">Généré automatiquement · ${W.generated}</span>${DATA.sample?'<span class="sample">Données d\'exemple</span>':''}</div>
+   <div class="glass headline">${DATA.headline.map(x=>`<div class="row"><span class="l">${x.l}</span><span><span class="v">${x.v}</span><span class="c" style="color:${x.good?'#6FD3A3':'#FF5C7A'}">${x.c}</span></span></div>`).join('')}</div></div>`;
+  h+=`<h2>La semaine en un coup d'œil</h2><p class="sub">Rédigé automatiquement à partir des chiffres : ce qui va bien, ce qu'il faut surveiller, ce qui coince.</p>
+   <div class="ins">${DATA.insights.map(i=>`<div class="glass insc" style="--c:${col[i.type]}"><div class="t"><i>${ico[i.type]}</i>${i.title}</div><p>${i.text}</p></div>`).join('')}</div>`;
+  h+=`<h2>Les chiffres de la semaine</h2><p class="sub">Chaque KPI est comparé à la semaine précédente (S-1) et à la moyenne des 4 dernières semaines. Vert = bonne évolution, rouge = mauvaise évolution.</p>`;
+  DATA.groups.forEach(g=>{h+=`<div class="gt" style="--c:${g.color}">${g.icon} ${g.title}</div><div class="grid">${g.items.map(k=>kpi(k,g.color)).join('')}</div>`});
+  h+=`<h2>Jour par jour</h2><p class="sub">Pour repérer le jour où ça a décroché.</p>
+   <div class="two"><div class="glass panel"><h3>Leads et coût par call booké</h3><div class="hint">Barres : leads du jour · Courbe : coût par call booké (vert = sous la moyenne de la semaine)</div>${combo()}</div>
+   <div class="glass panel"><h3>Calls réalisés et no-shows</h3><div class="hint">Le pourcentage affiché est le taux de show du jour</div>${calls()}<div class="legend"><span><i style="background:#6FD3A3"></i>Réalisés</span><span><i style="background:#FF5C7A"></i>No-shows</span></div></div></div>`;
+  h+=`<h2>Entonnoir et origine des leads</h2><p class="sub">Où perd-on le plus de monde entre la dépense et la vente ?</p>
+   <div class="two"><div class="glass panel funnel">${funnel()}</div><div class="glass panel"><h3>Répartition des leads par source</h3><div class="hint">Volume de la semaine</div>${donut()}</div></div>`;
+  h+=`<h2>Tendance sur 5 semaines</h2><p class="sub">Les trois KPI que l'équipe suit le plus. La ligne pointillée est la moyenne des 4 semaines précédentes.</p>
+   <div class="ins">${DATA.trend.map(trend).join('')}</div>`;
+  h+=`<h2>Performance par source</h2><p class="sub">La dépense pub est celle de Meta (Fb ads + Instagram). Les autres sources n'ont pas de dépense associée.</p><div class="glass panel" style="padding:14px 18px">${sources()}</div>`;
+  h+=`<h2>Points d'attention</h2><p class="sub">Alertes générées automatiquement quand un seuil est franchi.</p>${DATA.alerts.map(a=>`<div class="glass al" style="--c:${a.c}"><i>${a.i}</i><div><b>${a.t}</b><p>${a.x}</p></div></div>`).join('')}`;
+  $('app').innerHTML=h;
+  $('foot').innerHTML=`Calls bookés = Closing + Rattrapage de rang R1, comptés au jour de prise du RDV · coûts = dépense Meta totale ÷ volume total, comme le dashboard<br>Cash collecté = échéances de la période · Semaine du lundi au dimanche, heure de Paris<br><b>PODMAX</b> · rapport généré automatiquement`;
+}
+render();
+</script>
+</body>
+</html>

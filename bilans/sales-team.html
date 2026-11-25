@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PodMax · Reporting hebdo Sales Team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --violet:#7B2FF7;--violet2:#9B6BFF;--magenta:#E619B0;--ciel:#C9A6FF;
+  --nuit:#0B0714;--nuit2:#170F28;--verre:rgba(255,255,255,.06);--bord:rgba(255,255,255,.12);
+  --txt:rgba(255,255,255,.90);--txt2:rgba(255,255,255,.62);--vert:#6FD3A3;--ambre:#F0B95A;--rouge:#FF5C7A;
+  --sans:"Poppins",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:var(--nuit);color:var(--txt);font-family:var(--sans);min-height:100vh;padding:0 0 60px;font-variant-numeric:tabular-nums}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+   radial-gradient(55vw 55vw at 90% -8%,rgba(123,47,247,.40),transparent 60%),
+   radial-gradient(45vw 45vw at -8% 40%,rgba(230,25,176,.20),transparent 60%),
+   radial-gradient(40vw 40vw at 100% 90%,rgba(111,211,163,.10),transparent 60%),
+   linear-gradient(180deg,var(--nuit),var(--nuit2));}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:0 24px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:28px 0 8px}
+.top img{height:30px;display:block}
+.top span{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--txt2)}
+.hero{display:grid;grid-template-columns:1.25fr 1fr;gap:26px;align-items:stretch;margin:26px 0 8px}
+.kicker{font-size:.78rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ciel);margin-bottom:14px}
+h1{font-size:clamp(2.4rem,5.4vw,4.4rem);line-height:1.03;font-weight:800;letter-spacing:-.025em}
+.grad{background:linear-gradient(90deg,var(--violet2),var(--magenta));-webkit-background-clip:text;background-clip:text;color:transparent}
+.range{margin-top:16px;font-size:1.05rem;color:var(--txt2)}
+.pill{display:inline-block;margin-top:22px;padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,var(--violet),var(--magenta));font-size:.8rem;font-weight:600}
+.sample{display:inline-block;margin-left:10px;padding:7px 14px;border-radius:999px;border:1px dashed var(--ambre);color:var(--ambre);font-size:.75rem;font-weight:600}
+.glass{background:var(--verre);border:1px solid var(--bord);border-radius:24px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.headline{padding:26px 28px;display:flex;flex-direction:column;justify-content:center;gap:18px;background:linear-gradient(145deg,rgba(123,47,247,.35),rgba(230,25,176,.22));border:1px solid rgba(255,255,255,.18)}
+.headline .row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid rgba(255,255,255,.12);padding-bottom:14px}
+.headline .row:last-child{border:0;padding-bottom:0}
+.headline .l{font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.headline .v{font-size:2rem;font-weight:800;letter-spacing:-.02em}
+.headline .c{font-size:.8rem;font-weight:700;margin-left:10px}
+h2{font-size:clamp(1.4rem,2.6vw,2rem);font-weight:700;letter-spacing:-.015em;margin:48px 0 6px}
+.sub{color:var(--txt2);font-size:.92rem;margin-bottom:22px;max-width:46em}
+.ins{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.insc{padding:22px 24px;position:relative;overflow:hidden}
+.insc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.insc .t{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1rem;margin-bottom:8px}
+.insc .t i{font-style:normal;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 22%,transparent)}
+.insc p{font-size:.9rem;color:var(--txt2);line-height:1.55}
+.insc p b{color:#fff}
+.gt{display:flex;align-items:center;gap:10px;margin:30px 0 14px;font-size:.78rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--c)}
+.gt::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--c),transparent);opacity:.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.kpi{padding:20px 22px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;background:var(--c);opacity:.16;filter:blur(24px)}
+.kpi.star{border:1px solid var(--c);box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent),0 12px 40px color-mix(in srgb,var(--c) 28%,transparent)}
+.kt{display:flex;align-items:center;gap:8px;font-size:.74rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2)}
+.kv{font-size:2.15rem;font-weight:800;letter-spacing:-.02em;margin:8px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kd{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--txt2);margin-top:6px}
+.chip{font-weight:700;font-size:.75rem;border-radius:999px;padding:3px 10px}
+.chip.good{background:rgba(111,211,163,.16);color:var(--vert)}
+.chip.bad{background:rgba(255,92,122,.16);color:var(--rouge)}
+.chip.flat{background:rgba(255,255,255,.08);color:var(--txt2)}
+.spark{display:block;margin:2px 0 6px}
+.two{display:grid;grid-template-columns:1.35fr 1fr;gap:18px}
+.eq{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.panel{padding:24px 26px}
+.panel h3{font-size:1.02rem;font-weight:700;margin-bottom:4px}
+.panel .hint{font-size:.8rem;color:var(--txt2);margin-bottom:14px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.76rem;color:var(--txt2);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+svg text{font-family:var(--sans)}
+.funnel .fr{display:grid;grid-template-columns:150px 1fr 120px;gap:14px;align-items:center;margin:12px 0}
+.funnel .n{font-size:.9rem;font-weight:600}
+.funnel .b{height:36px;border-radius:12px;background:linear-gradient(90deg,var(--violet),var(--magenta));display:flex;align-items:center;padding-left:14px;font-weight:800;box-shadow:0 6px 22px rgba(123,47,247,.35);min-width:48px}
+.funnel .cv{font-size:.8rem;color:var(--txt2)}
+.funnel .cv b{color:var(--vert);font-weight:700}
+.tbl{width:100%;border-collapse:collapse;font-size:.86rem}
+.tbl th{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2);font-weight:600;text-align:right;padding:10px 10px;border-bottom:1px solid var(--bord)}
+.tbl td{text-align:right;padding:14px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl .nm{font-weight:600;display:flex;align-items:center;gap:10px}
+.tbl .nm i{font-style:normal;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.08)}
+.tbl .cash{min-width:170px}
+.tbl .cash .bar{height:6px;border-radius:6px;background:rgba(255,255,255,.1);margin-top:6px;overflow:hidden}
+.tbl .cash .bar span{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--violet2),var(--magenta))}
+.tbl tr.tot td{font-weight:800;border-bottom:0;background:rgba(255,255,255,.05)}
+.tbl tr.tot td:first-child{border-radius:12px 0 0 12px}.tbl tr.tot td:last-child{border-radius:0 12px 12px 0}
+.al{display:flex;gap:16px;align-items:flex-start;padding:18px 22px;margin-bottom:12px;position:relative;overflow:hidden}
+.al::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.al i{font-style:normal;font-size:1.3rem}
+.al b{color:#fff}
+.al p{font-size:.92rem;color:var(--txt2);line-height:1.55}
+.foot{margin-top:46px;font-size:.76rem;color:var(--txt2);line-height:1.8;text-align:center}
+.foot b{color:var(--ciel)}
+@media (max-width:900px){.hero,.two,.eq,.ins{grid-template-columns:1fr}.funnel .fr{grid-template-columns:100px 1fr}.funnel .cv{grid-column:1/-1}.tbl{display:block;overflow-x:auto}}
+@media print{body{padding:0}.glass{break-inside:avoid}}
+
+.blk{margin-top:10px}
+.blk h2{margin-top:56px}
+@page{size:A4;margin:10mm}
+@media print{
+ html,body{background:#0B0714!important}
+ body{padding:0;min-height:0}
+ body::before{display:none}
+ .wrap{max-width:none;padding:0}
+ .glass,.kpi,.insc,.al,.panel,.tbl tr,.hero{break-inside:avoid;page-break-inside:avoid}
+ h2,.gt{break-after:avoid;page-break-after:avoid}
+ .blk{break-before:page;page-break-before:always}
+ .grid{grid-template-columns:repeat(3,1fr)}
+ .ins{grid-template-columns:repeat(3,1fr)}
+ .glass{backdrop-filter:none;-webkit-backdrop-filter:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><img src="data:image/png;base64,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" alt="podmax"><span>Reporting hebdomadaire · Acquisition</span></div>
+  <div id="app"></div>
+  <div class="foot" id="foot"></div>
+</div>
+<script>
+/*DATA_START*/
+const DATA = {
+  sample: true,
+  week: {num:"S47", label:"Du 16 nov. au 22 nov. 2026", generated:"23/11 à 08:00"},
+  headline: [
+    {l:"CA contracté", v:"18 400 €", c:"+22 % vs S-1", good:true},
+    {l:"Ventes", v:"6", c:"+50 % vs S-1", good:true},
+    {l:"Taux de show", v:"68 %", c:"-6 pts vs S-1", good:false}
+  ],
+  insights: [
+    {type:"good", title:"Closing : CA contracté à 18 400 €", text:"<b>+22 %</b> vs S-1 et +15 % vs la moyenne des 4 dernières semaines."},
+    {type:"warn", title:"Setting : calls de closing bookés à 9", text:"Stable par rapport à la semaine précédente."},
+    {type:"bad", title:"Cold call : calls bookés déclarés à 4", text:"<b>-20 %</b> vs S-1 et -12 % vs la moyenne des 4 dernières semaines."}
+  ],
+  blocks: [
+    {id:"closer", icon:"🎯", title:"Closer", color:"#9B6BFF",
+     kpis:[
+      {l:"Calls de vente (RDV)", v:"31", d1:10, d4:6, better:"up", t:"%"},
+      {l:"Taux de show", v:"68 %", d1:-6, d4:-4, better:"up", t:"pts", ring:68, hero:true, icon:"👀"},
+      {l:"Ventes", v:"6", d1:50, d4:20, better:"up", t:"%"},
+      {l:"Taux de closing", v:"29 %", d1:8, d4:5, better:"up", t:"pts", ring:29, hero:true, icon:"🏆"},
+      {l:"CA contracté", v:"18 400 €", d1:22, d4:15, better:"up", t:"%"},
+      {l:"CA encaissé", v:"9 940 €", d1:11, d4:2, better:"up", t:"%"},
+      {l:"Panier moyen", v:"3 067 €", d1:-18, d4:-4, better:"up", t:"%"},
+      {l:"Annulations", v:"5", d1:25, d4:10, better:"down", t:"%"}],
+     table:{cols:[{k:"rdv",l:"RDV",t:"n"},{k:"presents",l:"Présents",t:"n"},{k:"show",l:"Show",t:"pct"},{k:"ventes",l:"Ventes",t:"n"},{k:"closing",l:"Closing",t:"pct"},{k:"ca",l:"CA contracté",t:"eur",bar:true},{k:"encaisse",l:"CA encaissé",t:"eur"}],
+      rows:[{nom:"Closer A",rdv:18,presents:12,show:67,ventes:4,closing:33,ca:12400,encaisse:6900},{nom:"Closer B",rdv:13,presents:9,show:69,ventes:2,closing:22,ca:6000,encaisse:3040}],
+      total:{nom:"Total",rdv:31,presents:21,show:68,ventes:6,closing:29,ca:18400,encaisse:9940}},
+     alerts:[{c:"#FF5C7A",i:"🚨",t:"Taux de show à 68 %",x:"Exemple d'alerte."}]},
+    {id:"setter", icon:"📞", title:"Setter", color:"#E619B0",
+     kpis:[
+      {l:"Leads assignés", v:"58", d1:5, d4:8, better:"up", t:"%"},
+      {l:"Taux de contact", v:"62 %", d1:3, d4:-2, better:"up", t:"pts", ring:62, hero:true, icon:"☎️"},
+      {l:"Issues renseignées", v:"27", d1:12, d4:9, better:"up", t:"%"},
+      {l:"Taux d'approbation", v:"41 %", d1:-4, d4:2, better:"up", t:"pts", ring:41},
+      {l:"Calls de closing bookés", v:"9", d1:0, d4:12, better:"up", t:"%", icon:"📅", hero:true},
+      {l:"Closing honorés", v:"5", d1:25, d4:10, better:"up", t:"%"},
+      {l:"Ventes (cohorte)", v:"2", d1:100, d4:50, better:"up", t:"%"},
+      {l:"CA encaissé (cohorte)", v:"3 200 €", d1:40, d4:18, better:"up", t:"%"}],
+     table:{cols:[{k:"assignes",l:"Assignés",t:"n"},{k:"contactes",l:"Contactés",t:"n"},{k:"issues",l:"Issues",t:"n"},{k:"approuves",l:"Approuvés",t:"n"},{k:"callsBookes",l:"Calls bookés",t:"n"},{k:"honores",l:"Honorés",t:"n"},{k:"ventes",l:"Ventes",t:"n"},{k:"ca",l:"CA contracté",t:"eur",bar:true}],
+      rows:[{nom:"Setter A",assignes:34,contactes:22,issues:16,approuves:7,callsBookes:6,honores:3,ventes:1,ca:4500},{nom:"Setter B",assignes:24,contactes:14,issues:11,approuves:4,callsBookes:3,honores:2,ventes:1,ca:3200}],
+      total:{nom:"Total",assignes:58,contactes:36,issues:27,approuves:11,callsBookes:9,honores:5,ventes:2,ca:7700}},
+     alerts:[{c:"#6FD3A3",i:"✅",t:"9 call(s) de closing bookés",x:"Exemple d'alerte."}]},
+    {id:"coldcall", icon:"☎️", title:"Cold call", color:"#6FD3A3",
+     kpis:[
+      {l:"Appels passés", v:"412", d1:-8, d4:-3, better:"up", t:"%"},
+      {l:"Décrochés", v:"61", d1:-12, d4:-6, better:"up", t:"%"},
+      {l:"Taux de réponse", v:"15 %", d1:-1, d4:0, better:"up", t:"pts", ring:15, hero:true, icon:"📲"},
+      {l:"Calls bookés déclarés", v:"4", d1:-20, d4:-12, better:"up", t:"%", icon:"📅", hero:true},
+      {l:"Booking / décroché", v:"7 %", d1:-1, d4:-1, better:"up", t:"pts", ring:7}],
+     table:{cols:[{k:"appeles",l:"Appelés",t:"n",bar:true},{k:"reponse",l:"Décrochés",t:"n"},{k:"tauxRep",l:"% réponse",t:"pct"},{k:"callBook",l:"Calls bookés",t:"n"},{k:"tauxBook",l:"% booking",t:"pct"}],
+      rows:[{nom:"Caller 1",appeles:230,reponse:36,tauxRep:16,callBook:3,tauxBook:8},{nom:"Caller 2",appeles:182,reponse:25,tauxRep:14,callBook:1,tauxBook:4}],
+      total:{nom:"Total",appeles:412,reponse:61,tauxRep:15,callBook:4,tauxBook:7}},
+     alerts:[]}
+  ],
+  weeks:["S43","S44","S45","S46","S47"],
+  trend:[
+    {t:"CA contracté (€)", pts:[11200,14800,12600,15100,18400], better:"up", fmt:"eur"},
+    {t:"Taux de show (%)", pts:[72,70,71,74,68], better:"up", fmt:"pct"},
+    {t:"Calls de closing bookés via setter", pts:[7,8,10,9,9], better:"up", fmt:"n"}
+  ],
+  alerts:[]
+};
+/*DATA_END*/
+
+/* ===== RENDU ===== */
+const $ = (id)=>document.getElementById(id);
+const fm=(v,d)=>{const s=Math.abs(v).toFixed(d);const p=s.split('.');let i=p[0],g='';while(i.length>3){g=' '+i.slice(-3)+g;i=i.slice(0,-3)}return (v<0?'-':'')+i+g+(p[1]?','+p[1]:'')};
+const eur=(v)=>v==null||isNaN(v)?'—':fm(v,0)+' €';
+const FMT={n:v=>v==null?'—':fm(v,0),eur:eur,pct:v=>v==null?'—':Math.round(v)+' %',txt:v=>v==null?'—':v};
+
+function chip(d,better,t){
+  const a=Math.abs(d), thr=t==='%'?2:1;
+  let cls='flat'; if(a>=thr){cls=((d>0)===(better==='up'))?'good':'bad'}
+  const arrow=d>0?'▲':d<0?'▼':'■', sign=d>0?'+':d<0?'−':'';
+  return `<span class="chip ${cls}">${arrow} ${sign}${a}${t==='%'?' %':' pts'}</span>`;
+}
+function ring(p,color){
+  const r=27,c=2*Math.PI*r,d=c*p/100;
+  return `<svg width="70" height="70" viewBox="0 0 70 70"><circle cx="35" cy="35" r="${r}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="8"/>
+   <circle cx="35" cy="35" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${d} ${c}" transform="rotate(-90 35 35)"/></svg>`;
+}
+function kpi(k,color){
+  const vis = k.ring!=null ? ring(k.ring,color) : '';
+  return `<div class="glass kpi ${k.hero?"star":""}" style="--c:${color}">
+   <div class="kt">${k.icon?`<span>${k.icon}</span>`:''}<span>${k.l}</span></div>
+   <div class="kv"><span>${k.v}</span>${vis}</div>
+   <div class="kd"><span>vs S-1</span>${chip(k.d1,k.better,k.t)}</div>
+   <div class="kd"><span>vs moy. 4 sem.</span>${chip(k.d4,k.better,k.t)}</div></div>`;
+}
+function trend(T){
+  const W=330,H=170,l=24,r=24,t=30,b=30,p=T.pts,n=p.length,rg=(Math.max(...p)-Math.min(...p))||1,mn=Math.min(...p)-rg*.25,mx=Math.max(...p)+rg*.25;
+  const x=i=>l+i*(W-l-r)/(n-1),y=v=>H-b-((v-mn)/(mx-mn))*(H-b-t);
+  const avg=p.slice(0,n-1).reduce((a,c)=>a+c,0)/(n-1);
+  const lastGood=T.better==='down'?p[n-1]<=avg:p[n-1]>=avg, col=lastGood?'#6FD3A3':'#FF5C7A';
+  const f=v=>T.fmt==='pct'?Math.round(v)+'%':T.fmt==='eur'?(v>=1000?(v/1000).toFixed(1).replace('.',',')+'k':Math.round(v)):fm(v,0);
+  const id='t'+Math.random().toString(36).slice(2,7);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".35"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>`;
+  s+=`<line x1="${l}" y1="${y(avg)}" x2="${W-r}" y2="${y(avg)}" stroke="#F0B95A" stroke-dasharray="4 4" opacity=".7"/><text x="${W-r}" y="${y(avg)-6}" font-size="9.5" fill="#F0B95A" text-anchor="end">moy. 4 sem.</text>`;
+  s+=`<polygon points="${x(0)},${H-b} ${p.map((v,i)=>x(i)+','+y(v)).join(' ')} ${x(n-1)},${H-b}" fill="url(#${id})"/>`;
+  s+=`<polyline points="${p.map((v,i)=>x(i)+','+y(v)).join(' ')}" fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  p.forEach((v,i)=>{const last=i===n-1;s+=`<circle cx="${x(i)}" cy="${y(v)}" r="${last?6:4}" fill="${last?col:'#0B0714'}" stroke="${col}" stroke-width="2.4"/><text x="${x(i)}" y="${y(v)-12}" font-size="${last?12:10}" font-weight="${last?800:500}" fill="${last?col:'rgba(255,255,255,.7)'}" text-anchor="middle">${f(v)}</text><text x="${x(i)}" y="${H-10}" font-size="10" fill="rgba(255,255,255,.55)" text-anchor="middle">${DATA.weeks[i]||''}</text>`});
+  return `<div class="glass panel"><h3>${T.t}</h3>${s}</svg></div>`;
+}
+function table(T,color){
+  const mx=Math.max(1,...T.rows.map(r=>Math.max(...T.cols.filter(c=>c.bar).map(c=>r[c.k]||0))));
+  const head=`<tr><th>${''}</th>${T.cols.map(c=>`<th>${c.l}</th>`).join('')}</tr>`;
+  const row=r=>`<tr><td><div class="nm"><i>👤</i>${r.nom}</div></td>${T.cols.map(c=>c.bar?`<td class="cash"><b>${FMT[c.t](r[c.k])}</b><div class="bar"><span style="width:${Math.round((r[c.k]||0)/mx*100)}%;background:linear-gradient(90deg,${color},#E619B0)"></span></div></td>`:`<td>${FMT[c.t](r[c.k])}</td>`).join('')}</tr>`;
+  const tot=`<tr class="tot"><td>${T.total.nom}</td>${T.cols.map(c=>`<td>${FMT[c.t](T.total[c.k])}</td>`).join('')}</tr>`;
+  return `<table class="tbl">${head}${T.rows.map(row).join('')}${tot}</table>`;
+}
+function render(){
+  const W=DATA.week, col={good:'#6FD3A3',warn:'#F0B95A',bad:'#FF5C7A'}, ico={good:'🚀',warn:'⚠️',bad:'🚨'};
+  let h=`<div class="hero"><div><div class="kicker">Reporting hebdomadaire · Sales Team</div><h1>Semaine <span class="grad">${W.num}</span></h1>
+   <div class="range">${W.label}</div><span class="pill">Généré automatiquement · ${W.generated}</span>${DATA.sample?'<span class="sample">Données d\'exemple</span>':''}</div>
+   <div class="glass headline">${DATA.headline.map(x=>`<div class="row"><span class="l">${x.l}</span><span><span class="v">${x.v}</span><span class="c" style="color:${x.good?'#6FD3A3':'#FF5C7A'}">${x.c}</span></span></div>`).join('')}</div></div>`;
+  h+=`<h2>La semaine en un coup d'œil</h2><p class="sub">Rédigé automatiquement à partir des chiffres : ce qui va bien, ce qu'il faut surveiller, ce qui coince.</p>
+   <div class="ins">${DATA.insights.map(i=>`<div class="glass insc" style="--c:${col[i.type]}"><div class="t"><i>${ico[i.type]}</i>${i.title}</div><p>${i.text}</p></div>`).join('')}</div>`;
+  DATA.blocks.forEach(b=>{
+    h+=`<section class="blk"><h2>${b.icon} ${b.title}</h2><p class="sub">Chaque KPI est comparé à la semaine précédente (S-1) et à la moyenne des 4 dernières semaines. Vert = bonne évolution, rouge = mauvaise évolution.</p>
+     <div class="grid">${b.kpis.map(k=>kpi(k,b.color)).join('')}</div>
+     <div class="gt" style="--c:${b.color};margin-top:26px">Détail par personne</div>
+     <div class="glass panel" style="padding:14px 18px">${b.table.rows.length?table(b.table,b.color):'<p class="sub" style="margin:10px 0">Aucune activité sur la semaine.</p>'}</div>`;
+    if(b.erreur) h+=`<p class="sub" style="margin-top:10px;color:var(--ambre)">⚠️ ${b.erreur}</p>`;
+    if(b.alerts&&b.alerts.length) h+=`<div class="gt" style="--c:${b.color};margin-top:26px">Points d'attention</div>`+b.alerts.map(a=>`<div class="glass al" style="--c:${a.c}"><i>${a.i}</i><div><b>${a.t}</b><p>${a.x}</p></div></div>`).join('');
+    h+=`</section>`;
+  });
+  h+=`<section class="blk"><h2>Tendance sur 5 semaines</h2><p class="sub">Les indicateurs clés de l'équipe. La ligne pointillée est la moyenne des 4 semaines précédentes.</p><div class="ins">${DATA.trend.map(trend).join('')}</div></section>`;
+  $('app').innerHTML=h;
+  $('foot').innerHTML=`Closer : RDV comptés au jour du call (tous rangs) · ventes et CA à la signature du contrat · show = présents ÷ calls conclus<br>Setter : cohorte des leads assignés dans la semaine · Cold call : agrégats du Sheet des callers (calls bookés déclarés)<br>Semaine du lundi au dimanche, heure de Paris · <b>PODMAX</b> · rapport généré automatiquement`;
+}
+render();
+// Mode live (dashboard) : /bilans/sales-team.html?live=1&semaine=2026-S48 charge /api/bilan-sales-team puis rend.
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(!q.has('live')) { window.__ready=true; return; }
+  fetch('/api/bilan-sales-team'+(q.get('semaine')?'?semaine='+encodeURIComponent(q.get('semaine')):''))
+    .then(r=>r.json()).then(d=>{ if(d.erreur) throw new Error(d.erreur); Object.assign(DATA,d); render(); })
+    .catch(e=>{ $('app').innerHTML='<div class="glass al" style="--c:#FF5C7A"><i>🚨</i><div><b>Données indisponibles</b><p>'+e.message+'</p></div></div>'; })
+    .finally(()=>{ window.__ready=true; });
+})();
+</script>
+</body>
+</html>
