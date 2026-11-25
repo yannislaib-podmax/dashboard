@@ -336,17 +336,26 @@ function aggCallers(callers, w) {
   return { par, total };
 }
 
+const DELAI_COLDCALL_MS = 8000;
+
 async function lireColdCall() {
   const url = process.env.OUTBOUND_SHEET_URL;
   const token = process.env.OUTBOUND_SHEET_TOKEN;
   if (!url || !token) return { callers: [], erreur: "OUTBOUND_SHEET_URL / OUTBOUND_SHEET_TOKEN absents" };
+  const controle = new AbortController();
+  const minuteur = setTimeout(() => controle.abort(), DELAI_COLDCALL_MS);
   try {
-    const reponse = await fetch(`${url}?token=${encodeURIComponent(token)}`, { redirect: "follow" });
+    // Apps Script peut mettre longtemps a demarrer a froid : on coupe a 8 s pour ne jamais
+    // bloquer le reste du bilan (le bloc Cold call passe alors en « donnees indisponibles »).
+    const reponse = await fetch(`${url}?token=${encodeURIComponent(token)}`, { redirect: "follow", signal: controle.signal });
     const donnees = JSON.parse(await reponse.text());
     if (donnees.erreur) throw new Error(donnees.erreur);
     return { callers: donnees.callers || [], erreur: null };
   } catch (e) {
-    return { callers: [], erreur: String(e.message || e) };
+    const coupe = e && e.name === "AbortError";
+    return { callers: [], erreur: coupe ? `Sheet cold call trop lent (plus de ${DELAI_COLDCALL_MS / 1000} s)` : String(e.message || e) };
+  } finally {
+    clearTimeout(minuteur);
   }
 }
 
@@ -601,7 +610,8 @@ export default async function handler(req, res) {
       ],
     };
 
-    res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=300");
+    // Le bilan d'une semaine passee ne bouge pas : 5 min au CDN, ancienne reponse servie 10 min pendant le rafraichissement.
+    res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
     return res.status(200).json({
       genereLe: new Date().toISOString(),
       semaine: semaine.code,

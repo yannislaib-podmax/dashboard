@@ -96,23 +96,39 @@ svg text{font-family:var(--sans)}
 .foot{margin-top:46px;font-size:.76rem;color:var(--txt2);line-height:1.8;text-align:center}
 .foot b{color:var(--ciel)}
 @media (max-width:900px){.hero,.two,.eq,.ins{grid-template-columns:1fr}.funnel .fr{grid-template-columns:100px 1fr}.funnel .cv{grid-column:1/-1}.tbl{display:block;overflow-x:auto}}
-@media print{body{padding:0}.glass{break-inside:avoid}}
 
 .blk{margin-top:10px}
 .blk h2{margin-top:56px}
-@page{size:A4;margin:10mm}
+/* ===== IMPRESSION / PDF (Cloudflare Browser Rendering : A4, printBackground) =====
+   Meme methode que bilans/acquisition.html : mise en page "bureau" a 1180 px puis zoom .61 pour tenir
+   dans la largeur A4 (les media queries mobiles s'appliquent a la largeur de page, donc on les neutralise). */
+@page{size:A4;margin:8mm}
 @media print{
- html,body{background:#0B0714!important}
- body{padding:0;min-height:0}
- body::before{display:none}
- .wrap{max-width:none;padding:0}
- .glass,.kpi,.insc,.al,.panel,.tbl tr,.hero{break-inside:avoid;page-break-inside:avoid}
- h2,.gt{break-after:avoid;page-break-after:avoid}
- .blk{break-before:page;page-break-before:always}
- .grid{grid-template-columns:repeat(3,1fr)}
- .ins{grid-template-columns:repeat(3,1fr)}
- .glass{backdrop-filter:none;-webkit-backdrop-filter:none}
+  html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#0B0714!important}
+  body{padding:0;min-height:0}
+  body::before{display:none}
+  .wrap{max-width:none;width:1180px;zoom:.61;padding:0 20px}
+  /* rien de ce qui est rasterise et gonfle le PDF : flous, ombres, filtres, animations */
+  *,*::before,*::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;animation:none!important;transition:none!important}
+  .kpi::before{display:none}
+  .glass{background:rgba(255,255,255,.07)}
+  h1{font-size:4.2rem}
+  h2{font-size:2rem;margin-top:34px}
+  /* mises en page bureau forcees */
+  .hero{grid-template-columns:1.25fr 1fr}
+  .two{grid-template-columns:1.35fr 1fr}
+  .eq{grid-template-columns:1fr 1fr}
+  .ins{grid-template-columns:repeat(3,1fr)}
+  .funnel .fr{grid-template-columns:150px 1fr 120px}
+  .funnel .cv{grid-column:auto}
+  .tbl{display:table;overflow:visible}
+  /* un bloc ne se coupe jamais entre deux pages ; un titre reste avec ce qui le suit */
+  .glass,.kpi,.panel,.insc,.al,.fr,.hero,.headline,.tbl tr,.legend,svg{break-inside:avoid;page-break-inside:avoid}
+  h2,h3,.gt,.sub,.hint{break-after:avoid;page-break-after:avoid}
+  .grid,.ins,.two,.eq{break-inside:avoid;page-break-inside:avoid}
+  .foot{break-inside:avoid;margin-top:24px}
 }
+@media print{.blk{break-inside:auto}.blk h2{margin-top:34px}}
 </style>
 </head>
 <body>

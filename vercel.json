@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/bilan-*.js": { "maxDuration": 30 }
+  }
+}
