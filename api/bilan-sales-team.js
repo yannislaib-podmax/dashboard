@@ -8,7 +8,7 @@
 //  - Setter  : COHORTE des leads dont jourAssignation est dans la semaine ; calls "via setter" suivis a toute date,
 //              ventes datees a la signature dans la semaine.
 //  - Cold call : agregats du Google Sheet (appeles / decroches / calls bookes declares) par jour.
-// Rangs : tous les rangs (R1, R2+) pour les volumes et les taux (l'ecran Closing du dash filtre R1 pour ses taux de performance).
+// Rangs : tous les rangs (R1, R2+) pour les volumes ; taux de show / closing sur R1 uniquement (comme l'ecran Closing du dash, SALES_CLOSING_RANG = "r1").
 //
 // Reponse : { genereLe, semaine, sample:false, week, headline, insights, blocks:[closer,setter,coldcall], weeks, trend, alerts, slack }
 // Le jeton Airtable ne quitte jamais le serveur (AIRTABLE_TOKEN).
@@ -238,14 +238,22 @@ function aggClosers({ calls, ventes }, w) {
   const calcul = (L, V) => {
     const presents = somme(L, "present");
     const conclus = somme(L, "conclu");
+    // Taux de PERFORMANCE sur R1 uniquement (comme l'ecran Closing du dashboard, SALES_CLOSING_RANG = "r1") ;
+    // les volumes (RDV, presents, ventes, CA) restent sur tous les rangs.
+    const L1 = L.filter((c) => c.rangR === 1);
+    const V1 = V.filter((c) => c.rangR === 1);
+    const presents1 = somme(L1, "present");
+    const conclus1 = somme(L1, "conclu");
     return {
       rdv: L.length,
       annules: L.filter((c) => c.statut === "Annulé").length,
       presents,
       conclus,
-      show: conclus > 0 ? (presents / conclus) * 100 : null,
+      show: conclus1 > 0 ? (presents1 / conclus1) * 100 : null,
+      showTous: conclus > 0 ? (presents / conclus) * 100 : null,
       ventes: somme(V, "vente"),
-      closing: presents > 0 ? (somme(V, "vente") / presents) * 100 : null,
+      closing: presents1 > 0 ? (somme(V1, "vente") / presents1) * 100 : null,
+      closingTous: presents > 0 ? (somme(V, "vente") / presents) * 100 : null,
       ca: somme(V, "montant"),
       encaisse: somme(V, "encaisse"),
     };
@@ -523,10 +531,10 @@ export default async function handler(req, res) {
     const vert = "#6FD3A3";
     const T = cur.closer.total;
     if (T.show != null) {
-      if (T.show < 65) closer.alerts.push({ c: rouge, i: "🚨", t: `Taux de show à ${Math.round(T.show)} %`, x: `${T.presents} présents sur ${T.conclus} calls conclus (seuil d'alerte 65 %).` });
-      else if (T.show >= 80) closer.alerts.push({ c: vert, i: "✅", t: `Taux de show à ${Math.round(T.show)} %`, x: `${T.presents} présents sur ${T.conclus} calls conclus.` });
+      if (T.show < 65) closer.alerts.push({ c: rouge, i: "🚨", t: `Taux de show à ${Math.round(T.show)} %`, x: `Sur les R1 (1er call de chaque lead, comme l'écran Closing). Toutes relances comprises : ${T.presents} présents sur ${T.conclus} calls conclus (seuil d'alerte 65 %).` });
+      else if (T.show >= 80) closer.alerts.push({ c: vert, i: "✅", t: `Taux de show à ${Math.round(T.show)} %`, x: `Sur les R1 (1er call de chaque lead). Tous rangs : ${T.presents} présents sur ${T.conclus} calls conclus.` });
     }
-    if (T.presents >= 5 && T.closing != null && T.closing < 20) closer.alerts.push({ c: ambre, i: "⚠️", t: `Taux de closing à ${Math.round(T.closing)} %`, x: `${T.ventes} vente(s) pour ${T.presents} présents.` });
+    if (T.presents >= 5 && T.closing != null && T.closing < 20) closer.alerts.push({ c: ambre, i: "⚠️", t: `Taux de closing à ${Math.round(T.closing)} % (R1)`, x: `${T.ventes} vente(s) au total pour ${T.presents} présents (tous rangs : ${Math.round(T.closingTous ?? 0)} %).` });
     const meilleur = Object.entries(cur.closer.par).filter(([, o]) => o.ca > 0).sort((a, b) => b[1].ca - a[1].ca)[0];
     if (meilleur) closer.alerts.push({ c: vert, i: "🏆", t: `${meilleur[0]} en tête`, x: `${fmtEur(meilleur[1].ca)} contractés, ${meilleur[1].ventes} vente(s).` });
     const annulFort = T.rdv >= 5 && T.annules / T.rdv >= 0.25;

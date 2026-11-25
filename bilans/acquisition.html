@@ -53,11 +53,21 @@ h2{font-size:clamp(1.4rem,2.6vw,2rem);font-weight:700;letter-spacing:-.015em;mar
 .gt{display:flex;align-items:center;gap:10px;margin:30px 0 14px;font-size:.78rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--c)}
 .gt::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--c),transparent);opacity:.5}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.grid.g4{grid-template-columns:repeat(4,1fr)}
+.grid.g4 .kv{font-size:1.85rem}
+.grid.g4 .ksub{min-height:2.6em}
+.mini{display:grid;grid-template-columns:repeat(4,1fr);padding:16px 6px;position:relative;overflow:hidden}
+.mini .mi{padding:2px 20px;border-left:1px solid var(--bord)}
+.mini .mi:first-child{border-left:0}
+.mini .mt{font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2)}
+.mini .mv{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px}
+.mini .ms{font-size:.74rem;color:var(--txt2);line-height:1.4;min-height:2.1em;margin-bottom:6px}
 .kpi{padding:20px 22px;position:relative;overflow:hidden}
 .kpi::before{content:"";position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;background:var(--c);opacity:.16;filter:blur(24px)}
 .kpi.star{border:1px solid var(--c);box-shadow:0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent),0 12px 40px color-mix(in srgb,var(--c) 28%,transparent)}
 .kt{display:flex;align-items:center;gap:8px;font-size:.74rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--txt2)}
 .kv{font-size:2.15rem;font-weight:800;letter-spacing:-.02em;margin:8px 0 4px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ksub{font-size:.72rem;color:var(--txt2);margin:-2px 0 4px;min-height:1em}
 .kd{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--txt2);margin-top:6px}
 .chip{font-weight:700;font-size:.75rem;border-radius:999px;padding:3px 10px}
 .chip.good{background:rgba(111,211,163,.16);color:var(--vert)}
@@ -84,6 +94,13 @@ svg text{font-family:var(--sans)}
 .tbl .nm{font-weight:600;display:flex;align-items:center;gap:10px}
 .tbl .nm i{font-style:normal;width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:rgba(255,255,255,.08)}
 .tbl .cash{min-width:170px}
+.note{font-size:.78rem;color:var(--txt2);margin:12px 4px 0;line-height:1.5}
+.tbl.top td:first-child{max-width:260px;word-break:break-word}
+.tbl .src{font-size:.7rem;color:var(--txt2);font-weight:500;margin-top:2px}
+.tbl.top th.key,.tbl.top td.key{color:#fff;background:rgba(155,107,255,.14)}
+.tbl.top td.key b{font-size:1rem}
+.tbl.top tr.oth td{color:var(--txt2);font-size:.82rem}
+.tbl.top td.rk{width:34px;color:var(--txt2);font-weight:700}
 .tbl .cash .bar{height:6px;border-radius:6px;background:rgba(255,255,255,.1);margin-top:6px;overflow:hidden}
 .tbl .cash .bar span{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--violet2),var(--magenta))}
 .tbl tr.tot td{font-weight:800;border-bottom:0;background:rgba(255,255,255,.05)}
@@ -95,7 +112,22 @@ svg text{font-family:var(--sans)}
 .al p{font-size:.92rem;color:var(--txt2);line-height:1.55}
 .foot{margin-top:46px;font-size:.76rem;color:var(--txt2);line-height:1.8;text-align:center}
 .foot b{color:var(--ciel)}
-@media (max-width:900px){.hero,.two,.eq,.ins{grid-template-columns:1fr}.funnel .fr{grid-template-columns:100px 1fr}.funnel .cv{grid-column:1/-1}.tbl{display:block;overflow-x:auto}}
+@media (max-width:900px){.grid.g4,.mini{grid-template-columns:repeat(2,1fr)}.grid.g4 .kv{font-size:1.5rem}.mini .mi{border-left:0;padding:8px 14px}.hero,.two,.eq,.ins{grid-template-columns:1fr}.funnel .fr{grid-template-columns:100px 1fr}.funnel .cv{grid-column:1/-1}.tbl{display:block;overflow-x:auto}}
+/* Cartes KPI : même schéma que l'onglet Closing / Funnel du dashboard. Chaque ligne = une grille à 5 rangées partagées (subgrid) :
+   libellé, chiffre, variations, notes, référence de date -> tous les chiffres, variations et notes sont alignés d'une carte à l'autre. */
+.cartes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(5,auto);column-gap:16px}
+.carte{grid-row:1 / span 5;display:grid;grid-template-rows:subgrid;row-gap:0;padding:22px 24px;border-left:3px solid var(--bd);background-image:linear-gradient(135deg,color-mix(in srgb,var(--bd) 14%,transparent),transparent 62%);position:relative}
+.carte .lib{font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--txt2);line-height:1.35;min-height:2.7em}
+.carte .chf{font-size:2.05rem;font-weight:900;letter-spacing:-.025em;color:var(--tx);line-height:1.05;margin-top:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.carte .vr{margin-top:10px;display:grid;gap:3px;align-content:start;min-height:2.9em}
+.carte .ev{display:flex;align-items:baseline;gap:8px;font-size:13px;line-height:1.35}
+.carte .ev small{font-size:11px;color:var(--txt2);font-weight:400}
+.carte .ecart{font-weight:900;font-variant-numeric:tabular-nums;min-width:4.6em}
+.carte .ecart.bon{color:var(--vert)}.carte .ecart.mauvais{color:var(--rouge)}.carte .ecart.stable{color:var(--ambre)}
+.carte .nt{margin-top:10px;font-size:12px;line-height:1.5;color:var(--txt2);min-height:4.5em}
+.carte .nt b{color:#fff;font-weight:700}
+.carte .rf{margin-top:8px;font-size:11px;color:var(--txt2);opacity:.75}
+@media (max-width:900px){.cartes{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(10,auto);row-gap:16px}.carte:nth-child(-n+2){grid-row:1 / span 5}.carte:nth-child(n+3){grid-row:6 / span 5}.carte .chf{font-size:1.6rem}}
 /* ===== IMPRESSION / PDF (Cloudflare Browser Rendering : format A4, printBackground:true) ===== */
 @page{size:A4;margin:8mm}
 @media print{
@@ -110,11 +142,17 @@ svg text{font-family:var(--sans)}
   .eq{grid-template-columns:1fr 1fr}
   .ins{grid-template-columns:repeat(3,1fr)}
   .grid{grid-template-columns:repeat(3,1fr)}
+  .grid.g4,.mini{grid-template-columns:repeat(4,1fr)}
+  .cartes{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(5,auto);row-gap:0}
+  .carte:nth-child(n){grid-row:1 / span 5}
+  .carte .chf{font-size:2.05rem}
+  .mini .mi{border-left:1px solid var(--bord);padding:2px 20px}
+  .mini .mi:first-child{border-left:0}
   .funnel .fr{grid-template-columns:150px 1fr 120px}
   .funnel .cv{grid-column:auto}
   .tbl{display:table;overflow:visible}
   /* un bloc ne se coupe jamais entre deux pages */
-  .glass,.kpi,.panel,.insc,.al,.fr,.hero,.headline,.tbl tr,svg{break-inside:avoid;page-break-inside:avoid}
+  .glass,.kpi,.panel,.insc,.al,.fr,.hero,.headline,.mini,.tbl tr,svg{break-inside:avoid;page-break-inside:avoid}
   h2,.gt,.sub{break-after:avoid;page-break-after:avoid}
   h2{margin-top:34px}
   .foot{break-inside:avoid}
@@ -131,67 +169,746 @@ svg text{font-family:var(--sans)}
 <script>
 /*DATA_START*/
 const DATA = {
-  sample: true,
-  week: {num: 47, label: "du lundi 16 au dimanche 22 novembre 2026", generated: "lundi 23 novembre · 8h00"},
-  days: ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"],
-  daily: {
-    spend:[380,410,455,398,511,350,338], leads:[9,11,12,10,15,9,8], booked:[5,6,7,6,9,4,4],
-    cpc:[76,68.3,65,66.3,56.8,87.5,84.5], cpl:[42.2,37.3,37.9,39.8,34.1,38.9,42.3],
-    done:[3,4,5,4,3,2,2], noshow:[2,3,2,3,2,1,2], planned:[5,7,7,7,5,3,4],
-    sales:[1,0,2,1,1,1,0], signed:[2800,0,5400,3200,2600,3400,0], coll:[1200,900,2100,1840,1500,1400,1000]
-  },
-  headline: [
-    {l:"Leads", v:"74", c:"+12 %", good:true},
-    {l:"Coût par call booké", v:"69,32 €", c:"−8 %", good:true},
-    {l:"Cash signé", v:"17 400 €", c:"+18 %", good:true}
+ "semaine": "2026-S47",
+ "debut": "2026-11-16",
+ "fin": "2026-11-22",
+ "genereLe": "2026-11-25T16:54:35.102Z",
+ "sample": true,
+ "week": {
+  "num": 47,
+  "label": "du lundi 16 au dimanche 22 novembre 2026",
+  "generated": "mercredi 25 novembre · 17h54"
+ },
+ "days": [
+  "Lun",
+  "Mar",
+  "Mer",
+  "Jeu",
+  "Ven",
+  "Sam",
+  "Dim"
+ ],
+ "daily": {
+  "spend": [
+   286.8,
+   266.38,
+   348.63,
+   407.32,
+   511.06,
+   531.52,
+   702.55
   ],
-  insights: [
-    {type:"good", title:"Ce qui marche", text:"Le <b>coût par call booké</b> tombe à <b>69,32 €</b>, le plus bas des 5 dernières semaines, porté par Instagram (46,40 €). Les leads progressent de 12 %."},
-    {type:"warn", title:"À surveiller", text:"<b>4 260 €</b> restent à collecter (taux de collecte à <b>70 %</b>, −9 pts vs la moyenne), dont 3 200 € d'échéances en impayé."},
-    {type:"bad", title:"Point faible", text:"Le <b>taux de show tombe à 60 %</b> (moyenne : 68 %). 15 no-shows représentent environ <b>1 040 €</b> de dépense pub perdue."}
+  "impr": [
+   18680,
+   13584,
+   14744,
+   12442,
+   15385,
+   16773,
+   20335
   ],
-  groups: [
-    {title:"Acquisition", icon:"📣", color:"#9B6BFF", items:[
-      {l:"Dépense pub", v:"2 842 €", d1:5, d4:1, better:"down", t:"%", spark:"spend"},
-      {l:"Leads", v:"74", d1:12, d4:9, better:"up", t:"%", spark:"leads"},
-      {l:"Coût par lead", v:"38,41 €", d1:-6, d4:-8, better:"down", t:"%", spark:"cpl"},
-      {l:"Calls bookés", v:"41", d1:14, d4:10, better:"up", t:"%", spark:"booked"},
-      {l:"Coût par call booké", v:"69,32 €", d1:-8, d4:-11, better:"down", t:"%", spark:"cpc", hero:true, icon:"🎯"},
-      {l:"Coût par vente (CAC)", v:"568 €", d1:-4, d4:-1, better:"down", t:"%", spark:null}
-    ]},
-    {title:"Calls", icon:"📞", color:"#E619B0", items:[
-      {l:"Calls prévus", v:"38", d1:9, d4:6, better:"up", t:"%", spark:"planned"},
-      {l:"Calls réalisés", v:"23", d1:1, d4:-4, better:"up", t:"%", spark:"done"},
-      {l:"Taux de show", v:"60 %", d1:-5, d4:-8, better:"up", t:"pts", ring:60, hero:true, icon:"👤"},
-      {l:"Coût par call réalisé", v:"123,57 €", d1:-3, d4:2, better:"down", t:"%", spark:null}
-    ]},
-    {title:"Ventes & cash", icon:"🏆", color:"#6FD3A3", items:[
-      {l:"Ventes", v:"6", d1:2, d4:1, better:"up", t:"abs", spark:"sales"},
-      {l:"Nouveaux clients", v:"5", d1:2, d4:1, better:"up", t:"abs", spark:null},
-      {l:"Cash signé", v:"17 400 €", d1:18, d4:7, better:"up", t:"%", spark:"signed"},
-      {l:"Cash collecté", v:"9 940 €", d1:11, d4:2, better:"up", t:"%", spark:"coll"},
-      {l:"Taux de collecte", v:"70 %", d1:-6, d4:-9, better:"up", t:"pts", ring:70, hero:true, icon:"💵"},
-      {l:"Reste à collecter", v:"4 260 €", d1:22, d4:15, better:"down", t:"%", spark:null}
-    ]}
+  "cpm": [
+   15.35,
+   19.61,
+   23.65,
+   32.74,
+   33.22,
+   31.69,
+   34.55
   ],
-  funnel: [["🧲","Leads",74],["📥","Calls bookés",41],["📅","Calls prévus",38],["✅","Calls réalisés",23],["🏆","Ventes",6]],
-  sources: [
-    {i:"📘",n:"Fb ads",spend:2610,leads:51,booked:28,done:15,sales:3,signed:8400,col:"#9B6BFF"},
-    {i:"📷",n:"Instagram",spend:232,leads:9,booked:5,done:3,sales:2,signed:6400,col:"#E619B0"},
-    {i:"📞",n:"Cold call",spend:0,leads:8,booked:6,done:3,sales:1,signed:2600,col:"#6FD3A3"},
-    {i:"🌐",n:"Site web",spend:0,leads:6,booked:2,done:2,sales:0,signed:0,col:"#F0B95A"}
+  "ctr": [
+   2.88,
+   3.51,
+   3.96,
+   3.8,
+   2.93,
+   2.62,
+   2.47
   ],
-  trend: [
-    {t:"Coût par lead (€)", pts:[43.2,42.0,40.7,40.9,38.4], better:"down", fmt:"eur"},
-    {t:"Coût par call booké (€)", pts:[80.0,79.5,77.5,75.4,69.3], better:"down", fmt:"eur"},
-    {t:"Taux de show (%)", pts:[70,69,68,65,60], better:"up", fmt:"pct"}
+  "leads": [
+   4,
+   6,
+   13,
+   16,
+   15,
+   18,
+   21
   ],
-  weeks: ["S43","S44","S45","S46","S47"],
-  alerts: [
-    {c:"#FF5C7A", i:"🚨", t:"Taux de show à 60 %", x:"Sous le seuil de 65 % et en baisse de 8 points vs la moyenne des 4 dernières semaines."},
-    {c:"#F0B95A", i:"⚠️", t:"Taux de collecte à 70 %", x:"4 260 € restent à collecter, dont 3 200 € d'échéances en impayé."},
-    {c:"#6FD3A3", i:"✅", t:"Coût par call booké au plus bas", x:"69,32 € contre 78,10 € en moyenne sur 4 semaines."}
+  "booked": [
+   1,
+   2,
+   8,
+   6,
+   6,
+   10,
+   2
+  ],
+  "cpc": [
+   286.8,
+   133.19,
+   43.58,
+   67.89,
+   85.18,
+   53.15,
+   351.28
+  ],
+  "cpl": [
+   71.7,
+   44.4,
+   26.82,
+   25.46,
+   34.07,
+   29.53,
+   33.45
+  ],
+  "done": [
+   1,
+   2,
+   0,
+   1,
+   2,
+   2,
+   2
+  ],
+  "noshow": [
+   0,
+   0,
+   0,
+   1,
+   4,
+   1,
+   1
+  ],
+  "planned": [
+   1,
+   4,
+   0,
+   5,
+   6,
+   5,
+   4
+  ],
+  "sales": [
+   2,
+   0,
+   1,
+   0,
+   1,
+   0,
+   0
+  ],
+  "signed": [
+   3450,
+   0,
+   2800,
+   0,
+   3200,
+   0,
+   0
+  ],
+  "coll": [
+   3875,
+   0,
+   1400,
+   0,
+   0,
+   0,
+   0
   ]
+ },
+ "headline": [
+  {
+   "l": "Leads",
+   "v": "93",
+   "c": "+37 %",
+   "good": true
+  },
+  {
+   "l": "Coût par call booké",
+   "v": "87,26 €",
+   "c": "+3 %",
+   "good": false
+  },
+  {
+   "l": "CA contracté",
+   "v": "9 450 €",
+   "c": "+29 %",
+   "good": true
+  }
+ ],
+ "insights": [
+  {
+   "type": "good",
+   "title": "Ce qui marche",
+   "text": "Le <b>nombre de calls bookés</b> progresse de <b>84 %</b> vs S-1 (<b>35</b>). Nombre de leads : +37 %."
+  },
+  {
+   "type": "warn",
+   "title": "À surveiller",
+   "text": "<b>3 200 €</b> restent à collecter (taux de collecte à <b>62 %</b>), dont <b>3 200 €</b> d'échéances en impayé."
+  },
+  {
+   "type": "bad",
+   "title": "Point faible",
+   "text": "Le <b>CPM</b> monte de <b>51 %</b> vs S-1 (<b>27,28 €</b>). 7 no-shows sur la semaine."
+  }
+ ],
+ "groups": [
+  {
+   "title": "Média",
+   "icon": "📣",
+   "color": "#9B6BFF",
+   "items": [
+    {
+     "l": "Dépense pub",
+     "v": "3 054 €",
+     "d1": 90,
+     "d4": 126,
+     "better": "down",
+     "t": "%",
+     "c": "bleu",
+     "sub": [
+      "Meta : Fb ads + Instagram"
+     ],
+     "ref": "au jour de la dépense"
+    },
+    {
+     "l": "Impressions",
+     "v": "111 943",
+     "d1": 26,
+     "d4": 107,
+     "better": "up",
+     "t": "%",
+     "c": "violet",
+     "sub": [
+      "impressions Meta"
+     ],
+     "ref": "au jour de la diffusion"
+    },
+    {
+     "l": "CPM",
+     "v": "27,28 €",
+     "d1": 51,
+     "d4": 1,
+     "better": "down",
+     "t": "%",
+     "c": "magenta",
+     "sub": [
+      "coût pour 1 000 impressions"
+     ],
+     "ref": "dépense ÷ impressions"
+    },
+    {
+     "l": "CTR",
+     "v": "3,10 %",
+     "d1": -6,
+     "d4": -15,
+     "better": "up",
+     "t": "%",
+     "c": "vert",
+     "sub": [
+      "3 465 clics"
+     ],
+     "ref": "clics ÷ impressions"
+    }
+   ]
+  },
+  {
+   "title": "Volumes",
+   "icon": "📊",
+   "color": "#E619B0",
+   "items": [
+    {
+     "l": "Leads",
+     "v": "93",
+     "d1": 37,
+     "d4": 51,
+     "better": "up",
+     "t": "%",
+     "c": "bleu",
+     "ref": "à la capture du lead"
+    },
+    {
+     "l": "Rendez-vous pris",
+     "v": "53",
+     "d1": 83,
+     "d4": 119,
+     "better": "up",
+     "t": "%",
+     "c": "violet",
+     "rep": [
+      "<b>35</b> Closing",
+      "<b>18</b> Rattrapage"
+     ],
+     "ref": "à la prise de RDV"
+    },
+    {
+     "l": "Rendez-vous honorés",
+     "v": "13",
+     "d1": -24,
+     "d4": 4,
+     "better": "up",
+     "t": "%",
+     "c": "vert",
+     "rep": [
+      "<b>10</b> Closing",
+      "<b>3</b> Rattrapage"
+     ],
+     "sub": [
+      "sur 21 conclus · 8 no-shows"
+     ],
+     "ref": "au jour du RDV"
+    },
+    {
+     "l": "Ventes",
+     "v": "4",
+     "d1": 2,
+     "d4": 2,
+     "better": "up",
+     "t": "abs",
+     "c": "jaune",
+     "rep": [
+      "<b>1</b> Closing",
+      "<b>3</b> Rattrapage"
+     ],
+     "sub": [
+      "5 contrats · clients ayant signé"
+     ],
+     "ref": "à la signature"
+    }
+   ]
+  },
+  {
+   "title": "Coûts",
+   "icon": "💶",
+   "color": "#F0B95A",
+   "items": [
+    {
+     "l": "Coût par lead",
+     "v": "32,84 €",
+     "d1": 39,
+     "d4": 51,
+     "better": "down",
+     "t": "%",
+     "c": "bleu",
+     "sub": [
+      "3 054 € ÷ 93 leads"
+     ],
+     "ref": "à la capture du lead"
+    },
+    {
+     "l": "Coût par call booké",
+     "v": "87,26 €",
+     "d1": 3,
+     "d4": -14,
+     "better": "down",
+     "t": "%",
+     "c": "violet",
+     "sub": [
+      "3 054 € ÷ 35 calls Closing R1"
+     ],
+     "ref": "à la prise de RDV"
+    },
+    {
+     "l": "Coût par call présent",
+     "v": "206,26 €",
+     "d1": 16,
+     "d4": 25,
+     "better": "down",
+     "t": "%",
+     "c": "vert",
+     "sub": [
+      "dépense mûre ÷ 11 présents"
+     ],
+     "ref": "calls pris dans la semaine"
+    },
+    {
+     "l": "Coût par vente",
+     "v": "567 €",
+     "d1": -29,
+     "d4": -21,
+     "better": "down",
+     "t": "%",
+     "c": "jaune",
+     "sub": [
+      "dépense mûre ÷ 4 ventes"
+     ],
+     "ref": "à la signature"
+    }
+   ]
+  },
+  {
+   "title": "CA & cash",
+   "icon": "💵",
+   "color": "#6FD3A3",
+   "items": [
+    {
+     "l": "CA contracté",
+     "v": "9 450 €",
+     "d1": 29,
+     "d4": 35,
+     "better": "up",
+     "t": "%",
+     "c": "bleu",
+     "rep": [
+      "<b>1 600 €</b> Closing",
+      "<b>7 850 €</b> Rattrapage"
+     ],
+     "ref": "à la signature"
+    },
+    {
+     "l": "Encaissé sur les signatures",
+     "v": "3 925 €",
+     "d1": -46,
+     "d4": -15,
+     "better": "up",
+     "t": "%",
+     "c": "violet",
+     "rep": [
+      "<b>1 600 €</b> Closing",
+      "<b>2 325 €</b> Rattrapage"
+     ],
+     "sub": [
+      "42 % du CA contracté"
+     ],
+     "ref": "à la signature"
+    },
+    {
+     "l": "Cash collecté",
+     "v": "5 275 €",
+     "d1": -28,
+     "d4": 23,
+     "better": "up",
+     "t": "%",
+     "c": "vert",
+     "sub": [
+      "dont 1 350 € d'échéances de contrats antérieurs"
+     ],
+     "ref": "à la date d'échéance"
+    },
+    {
+     "l": "Taux de collecte",
+     "v": "62 %",
+     "d1": -38,
+     "d4": -18,
+     "better": "up",
+     "t": "pts",
+     "c": "jaune",
+     "sub": [
+      "3 200 € restent à collecter"
+     ],
+     "ref": "cash collecté ÷ échéances dues"
+    }
+   ]
+  }
+ ],
+ "funnel": [
+  [
+   "🧲",
+   "Leads",
+   93
+  ],
+  [
+   "📥",
+   "Calls bookés",
+   35
+  ],
+  [
+   "📅",
+   "Calls prévus",
+   25
+  ],
+  [
+   "✅",
+   "Calls réalisés",
+   10
+  ],
+  [
+   "🏆",
+   "Ventes R1",
+   1
+  ]
+ ],
+ "funnelNote": "Ventes R1 = ventes issues d'un call Closing de rang R1. Signatures de la semaine, tous rangs : <b>4 clients</b> · 5 contrats · <b>9 450 €</b> contractés.",
+ "sources": [
+  {
+   "i": "📘",
+   "n": "Fb ads",
+   "spend": 2943.32,
+   "leads": 62,
+   "booked": 17,
+   "done": 7,
+   "sales": 2,
+   "signed": 6000,
+   "col": "#9B6BFF"
+  },
+  {
+   "i": "📣",
+   "n": "Cold call",
+   "spend": 0,
+   "leads": 14,
+   "booked": 13,
+   "done": 1,
+   "sales": 0,
+   "signed": 0,
+   "col": "#E619B0"
+  },
+  {
+   "i": "📷",
+   "n": "Instagram",
+   "spend": 110.94,
+   "leads": 10,
+   "booked": 2,
+   "done": 1,
+   "sales": 1,
+   "signed": 1850,
+   "col": "#6FD3A3"
+  },
+  {
+   "i": "📣",
+   "n": "Site Podmax Studio",
+   "spend": 0,
+   "leads": 5,
+   "booked": 2,
+   "done": 1,
+   "sales": 0,
+   "signed": 0,
+   "col": "#F0B95A"
+  },
+  {
+   "i": "📣",
+   "n": "Opérateur",
+   "spend": 0,
+   "leads": 2,
+   "booked": 1,
+   "done": 0,
+   "sales": 1,
+   "signed": 1600,
+   "col": "#5BC0EB"
+  }
+ ],
+ "top": {
+  "sources": [
+   "Ads"
+  ],
+  "base": "Classement par ventes, puis CA contracté, puis calls bookés · ventes et CA contracté = toutes les signatures de la semaine (R1, R2 et R3), rangées à l'UTM du call qui porte le contrat · leads captés dans la semaine · bookés = calls Closing R1 pris dans la semaine · honorés = présents parmi ces calls · campagnes et créas sans vente classées seulement pour la pub payante (source Ads), le reste est regroupé dans « Autres »",
+  "cout": {
+   "depense": 3054.26,
+   "ventesPub": 2,
+   "signedPub": 6000,
+   "coutParVentePub": 1527.13,
+   "note": "La dépense Meta n'est pas ventilée par campagne ni par créa dans META_DEPENSE : le coût par vente est donné pour l'ensemble de la pub payante (dépense Meta de la semaine ÷ ventes sur source Ads)."
+  },
+  "campagnes": {
+   "total": {
+    "leads": 93,
+    "booked": 35,
+    "done": 11,
+    "sales": 4,
+    "signed": 9450
+   },
+   "lignes": [
+    {
+     "n": "04_SCHEDULE_FRANCO_CBO_TEST",
+     "src": "Ads",
+     "leads": 33,
+     "booked": 9,
+     "done": 5,
+     "sales": 2,
+     "signed": 6000
+    },
+    {
+     "n": "linktree",
+     "src": "Organique",
+     "leads": 10,
+     "booked": 2,
+     "done": 1,
+     "sales": 1,
+     "signed": 1850
+    },
+    {
+     "n": "operateur",
+     "src": "Apporteur d'affaires",
+     "leads": 2,
+     "booked": 1,
+     "done": 0,
+     "sales": 1,
+     "signed": 1600
+    },
+    {
+     "n": "01_SCHEDULE_FRANCO_CBO_ALLSTAR",
+     "src": "Ads",
+     "leads": 23,
+     "booked": 6,
+     "done": 1,
+     "sales": 0,
+     "signed": 0
+    },
+    {
+     "n": "02_SCHEDULE_FRANCO_CBO_RT",
+     "src": "Ads",
+     "leads": 6,
+     "booked": 2,
+     "done": 1,
+     "sales": 0,
+     "signed": 0
+    }
+   ],
+   "autres": {
+    "n": "Autres (3)",
+    "leads": 19,
+    "booked": 15,
+    "done": 3,
+    "sales": 0,
+    "signed": 0
+   }
+  },
+  "creas": {
+   "total": {
+    "leads": 93,
+    "booked": 35,
+    "done": 11,
+    "sales": 4,
+    "signed": 9450
+   },
+   "lignes": [
+    {
+     "n": "TournéLesAdsMarvin_13s",
+     "src": "Ads",
+     "leads": 6,
+     "booked": 2,
+     "done": 2,
+     "sales": 2,
+     "signed": 6000
+    },
+    {
+     "n": "bio-link",
+     "src": "Organique",
+     "leads": 10,
+     "booked": 2,
+     "done": 1,
+     "sales": 1,
+     "signed": 1850
+    },
+    {
+     "n": "seidi",
+     "src": "Apporteur d'affaires",
+     "leads": 0,
+     "booked": 0,
+     "done": 0,
+     "sales": 1,
+     "signed": 1600
+    },
+    {
+     "n": "OnAPrisLePackÀ2500€_1m22",
+     "src": "Ads",
+     "leads": 8,
+     "booked": 5,
+     "done": 3,
+     "sales": 0,
+     "signed": 0
+    },
+    {
+     "n": "CombienFoisEstceTuMe_27s - Copie",
+     "src": "Ads",
+     "leads": 8,
+     "booked": 4,
+     "done": 0,
+     "sales": 0,
+     "signed": 0
+    }
+   ],
+   "autres": {
+    "n": "Autres (15)",
+    "leads": 61,
+    "booked": 22,
+    "done": 5,
+    "sales": 0,
+    "signed": 0
+   }
+  }
+ },
+ "trend": [
+  {
+   "t": "Coût par lead (€)",
+   "pts": [
+    20,
+    18.2,
+    25,
+    23.6,
+    32.8
+   ],
+   "better": "down",
+   "fmt": "eur"
+  },
+  {
+   "t": "Coût par call booké (€)",
+   "pts": [
+    125,
+    101.1,
+    93.2,
+    84.6,
+    87.3
+   ],
+   "better": "down",
+   "fmt": "eur"
+  },
+  {
+   "t": "Taux de show (%)",
+   "pts": [
+    100,
+    77,
+    100,
+    67,
+    59
+   ],
+   "better": "up",
+   "fmt": "pct"
+  }
+ ],
+ "weeks": [
+  "S43",
+  "S44",
+  "S45",
+  "S46",
+  "S47"
+ ],
+ "alerts": [
+  {
+   "c": "#FF5C7A",
+   "i": "🚨",
+   "t": "Taux de show à 59 %",
+   "x": "Sous le seuil de 65 % et en baisse de 27 points vs la moyenne des 4 dernières semaines. 7 no-shows sur 17 calls conclus."
+  },
+  {
+   "c": "#F0B95A",
+   "i": "⚠️",
+   "t": "Taux de collecte à 62 %",
+   "x": "3 200 € restent à collecter sur 8 475 € d'échéances de la semaine, dont 3 200 € en impayé."
+  }
+ ],
+ "slack": {
+  "titre": "📣 Bilan hebdo Acquisition · S47 (16 → 22 novembre 2026)",
+  "lignes": [
+   "Dépense pub : *3 054 €* (▲ 90 % ⚠️ vs S-1)",
+   "Leads : *93* (▲ 37 % ✅) · coût par lead *32,84 €*",
+   "Calls bookés : *35* (▲ 84 % ✅) · coût par call booké *87,26 €* (▲ 3 % ⚠️)",
+   "Calls réalisés : *10* sur 25 prévus · taux de show *59 %* (▼ 8 pts ⚠️)",
+   "Média : CPM *27,28 €* (▲ 51 % ⚠️) · CTR *3,10 %* (▼ 6 % ⚠️)",
+   "Ventes : *4 clients* (5 contrats, dont *4* nouveaux clients) · CA contracté *9 450 €* (▲ 29 % ✅) · encaissé sur ces signatures *3 925 €*",
+   "Cash collecté : *5 275 €* (dont 1 350 € d'échéances de contrats antérieurs) · taux de collecte *62 %* · reste à collecter *3 200 €*",
+   "Top campagne : *04_SCHEDULE_FRANCO_CBO_TEST* (2 ventes, 6 000 €) · top créa : *TournéLesAdsMarvin_13s* (2 ventes, 6 000 €)",
+   "🚨 *Taux de show à 59 %* — Sous le seuil de 65 % et en baisse de 27 points vs la moyenne des 4 dernières semaines. 7 no-shows sur 17 calls conclus.",
+   "⚠️ *Taux de collecte à 62 %* — 3 200 € restent à collecter sur 8 475 € d'échéances de la semaine, dont 3 200 € en impayé."
+  ],
+  "texte": "📣 Bilan hebdo Acquisition · S47 (16 → 22 novembre 2026)\nDépense pub : *3 054 €* (▲ 90 % ⚠️ vs S-1)\nLeads : *93* (▲ 37 % ✅) · coût par lead *32,84 €*\nCalls bookés : *35* (▲ 84 % ✅) · coût par call booké *87,26 €* (▲ 3 % ⚠️)\nCalls réalisés : *10* sur 25 prévus · taux de show *59 %* (▼ 8 pts ⚠️)\nMédia : CPM *27,28 €* (▲ 51 % ⚠️) · CTR *3,10 %* (▼ 6 % ⚠️)\nVentes : *4 clients* (5 contrats, dont *4* nouveaux clients) · CA contracté *9 450 €* (▲ 29 % ✅) · encaissé sur ces signatures *3 925 €*\nCash collecté : *5 275 €* (dont 1 350 € d'échéances de contrats antérieurs) · taux de collecte *62 %* · reste à collecter *3 200 €*\nTop campagne : *04_SCHEDULE_FRANCO_CBO_TEST* (2 ventes, 6 000 €) · top créa : *TournéLesAdsMarvin_13s* (2 ventes, 6 000 €)\n🚨 *Taux de show à 59 %* — Sous le seuil de 65 % et en baisse de 27 points vs la moyenne des 4 dernières semaines. 7 no-shows sur 17 calls conclus.\n⚠️ *Taux de collecte à 62 %* — 3 200 € restent à collecter sur 8 475 € d'échéances de la semaine, dont 3 200 € en impayé."
+ },
+ "meta": {
+  "perimetre": "Calls : Closing R1 (vue par défaut du dashboard), RDV au jour de prise, calls tenus au jour du RDV · Ventes et CA : contrats signés dans la semaine (jour de signature, comme la page Sales Team)",
+  "ventes": "Ventes = clients ayant signé dans la semaine ; nouveaux clients = au moins un contrat de type NOUVEAU ; CA contracté = montant total des contrats ; encaissé = CA net des contrats signés dans la semaine",
+  "collecte": "Échéances PAIEMENTS datées dans la semaine, hors Annulé / Remboursé",
+  "coutsManquants": "Un jour sans lead ou sans call booké reprend la moyenne de la semaine dans les courbes quotidiennes (totaux inchangés)"
+ }
 };
 /*DATA_END*/
 
@@ -226,14 +943,24 @@ function ring(p,color){
   return `<svg width="70" height="70" viewBox="0 0 70 70"><circle cx="35" cy="35" r="${r}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="8"/>
    <circle cx="35" cy="35" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${d} ${c}" transform="rotate(-90 35 35)" style="filter:drop-shadow(0 0 6px ${color})"/></svg>`;
 }
-function kpi(k,color){
-  const vis = k.ring!=null ? ring(k.ring,color) : '';
-  const sp = (k.ring==null && k.spark) ? spark(DATA.daily[k.spark],color) : '<div style="height:46px"></div>';
-  return `<div class="glass kpi ${k.hero?"star":""}" style="--c:${color}">
-   <div class="kt">${k.icon?`<span>${k.icon}</span>`:''}<span>${k.l}</span></div>
-   <div class="kv"><span>${k.v}</span>${vis}</div>${k.ring!=null?'<div style="height:6px"></div>':sp}
-   <div class="kd"><span>vs S-1</span>${chip(k.d1,k.better,k.t)}</div>
-   <div class="kd"><span>vs moy. 4 sem.</span>${chip(k.d4,k.better,k.t)}</div></div>`;
+const PAL={bleu:['#4FC3F7','#7DD3FC'],violet:['#9B6BFF','#C4A6FF'],magenta:['#E619B0','#F893DA'],vert:['#5DCAA5','#9FE1CB'],jaune:['#F0B95A','#F7D08A']};
+function dlt(d,better,t){
+  const a=Math.abs(d), thr=t==='%'?2:1;
+  let cls='stable'; if(a>=thr){cls=((d>0)===(better==='up'))?'bon':'mauvais'}
+  const arrow=d>0?'↑':d<0?'↓':'→';
+  const txt=a===0?'→ stable':arrow+' '+a+(t==='%'?' %':t==='pts'?' pts':'');
+  return `<span class="ecart ${cls}">${txt}</span>`;
+}
+// Carte au schéma de l'onglet Closing du dashboard : libellé, chiffre, variations, notes (répartition Closing / Rattrapage), référence de date.
+function carte(k){
+  const [bd,tx]=PAL[k.c]||PAL.violet;
+  const notes=[].concat(k.rep||[],k.sub||[]).map(x=>`<div>${x}</div>`).join('');
+  return `<div class="glass carte" style="--bd:${bd};--tx:${tx}">
+   <div class="lib">${k.l}</div>
+   <div class="chf">${k.v}</div>
+   <div class="vr"><div class="ev">${dlt(k.d1,k.better,k.t)}<small>vs S-1</small></div><div class="ev">${dlt(k.d4,k.better,k.t)}<small>vs moy. 4 sem.</small></div></div>
+   <div class="nt">${notes}</div>
+   <div class="rf">${k.ref||''}</div></div>`;
 }
 function combo(){
   const D=DATA.daily,W=600,H=270,l=30,r=42,t=26,b=36,n=7,step=(W-l-r)/n,bw=36;
@@ -273,11 +1000,12 @@ function funnel(){
   }).join('');
 }
 function donut(){
-  const S=DATA.sources,tot=S.reduce((a,s)=>a+s.leads,0),R=62,C=2*Math.PI*R;let off=0,seg='',leg='';
-  S.forEach(s=>{const d=s.leads/(tot||1)*C;seg+=`<circle cx="90" cy="90" r="${R}" fill="none" stroke="${s.col}" stroke-width="22" stroke-dasharray="${d-3} ${C-d+3}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;off+=d;
-    leg+=`<div style="display:flex;justify-content:space-between;gap:14px;margin:7px 0;font-size:.85rem"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${s.col};margin-right:8px"></i>${s.n}</span><b>${s.leads} <span style="color:var(--txt2);font-weight:500">(${Math.round(s.leads/tot*100)} %)</span></b></div>`});
+  const S=DATA.sources.filter(s=>s.booked>0),tot=S.reduce((a,s)=>a+s.booked,0),R=62,C=2*Math.PI*R;let off=0,seg='',leg='';
+  if(!tot) return '<div class="hint">Aucun call booké sur la semaine.</div>';
+  S.forEach(s=>{const d=s.booked/tot*C;seg+=`<circle cx="90" cy="90" r="${R}" fill="none" stroke="${s.col}" stroke-width="22" stroke-dasharray="${Math.max(0,d-3)} ${C-d+3}" stroke-dashoffset="${-off}" transform="rotate(-90 90 90)"/>`;off+=d;
+    leg+=`<div style="display:flex;justify-content:space-between;gap:14px;margin:7px 0;font-size:.85rem"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${s.col};margin-right:8px"></i>${s.n}</span><b>${s.booked} <span style="color:var(--txt2);font-weight:500">(${Math.round(s.booked/tot*100)} %)</span></b></div>`});
   return `<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap"><svg viewBox="0 0 180 180" width="170"><circle cx="90" cy="90" r="${R}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="22"/>${seg}
-   <text x="90" y="88" font-size="30" font-weight="800" fill="#fff" text-anchor="middle">${tot}</text><text x="90" y="108" font-size="11" fill="rgba(255,255,255,.6)" text-anchor="middle">leads</text></svg><div style="flex:1;min-width:170px">${leg}</div></div>`;
+   <text x="90" y="88" font-size="30" font-weight="800" fill="#fff" text-anchor="middle">${tot}</text><text x="90" y="108" font-size="11" fill="rgba(255,255,255,.6)" text-anchor="middle">calls bookés</text></svg><div style="flex:1;min-width:170px">${leg}</div></div>`;
 }
 function trend(T){
   const W=330,H=170,l=24,r=24,t=30,b=30,p=T.pts,n=p.length,mn=Math.min(...p)-(Math.max(...p)-Math.min(...p))*.25,mx=Math.max(...p)+(Math.max(...p)-Math.min(...p))*.25+(Math.max(...p)===Math.min(...p)?1:0);
@@ -297,8 +1025,16 @@ function sources(){
   const S=DATA.sources,tot=S.reduce((a,s)=>({spend:a.spend+s.spend,leads:a.leads+s.leads,booked:a.booked+s.booked,done:a.done+s.done,sales:a.sales+s.sales,signed:a.signed+s.signed}),{spend:0,leads:0,booked:0,done:0,sales:0,signed:0});
   const row=s=>`<tr><td><div class="nm"><i>${s.i}</i>${s.n}</div></td><td>${s.spend?eur(s.spend):'—'}</td><td>${s.leads}</td><td>${s.spend?eur(dv(s.spend,s.leads)):'—'}</td><td>${s.booked}</td><td><b>${s.spend?eur(dv(s.spend,s.booked)):'—'}</b></td><td>${s.done}</td><td>${s.sales}</td>
    <td class="cash"><b>${eur(s.signed)}</b><div class="bar"><span style="width:${tot.signed?Math.round(s.signed/tot.signed*100):0}%;background:linear-gradient(90deg,${s.col},#E619B0)"></span></div></td></tr>`;
-  return `<table class="tbl"><tr><th>Source</th><th>Dépense</th><th>Leads</th><th>Coût / lead</th><th>Bookés</th><th>Coût / call booké</th><th>Réalisés</th><th>Ventes</th><th>Cash signé</th></tr>${S.map(row).join('')}
+  return `<table class="tbl"><tr><th>Source</th><th>Dépense</th><th>Leads</th><th>Coût / lead</th><th>Bookés</th><th>Coût / call booké</th><th>Réalisés</th><th>Ventes</th><th>CA contracté</th></tr>${S.map(row).join('')}
    <tr class="tot"><td>Total</td><td>${eur(tot.spend)}</td><td>${tot.leads}</td><td>${eur(dv(tot.spend,tot.leads))}</td><td>${tot.booked}</td><td>${eur(dv(tot.spend,tot.booked))}</td><td>${tot.done}</td><td>${tot.sales}</td><td>${eur(tot.signed)}</td></tr></table>`;
+}
+function topTable(T,lib){
+  if(!T||!T.lignes||!T.lignes.length) return '<div class="hint">Aucune donnée sur la semaine.</div>';
+  const mx=Math.max(1,...T.lignes.map(x=>x.signed));
+  const row=(x,i)=>`<tr><td class="rk">${i+1}</td><td>${x.n}${x.src?`<div class="src">${x.src}</div>`:''}<div class="cash"><div class="bar"><span style="width:${Math.round(x.signed/mx*100)}%"></span></div></div></td><td>${x.leads}</td><td>${x.booked}</td><td>${x.done}</td><td class="key"><b>${x.sales}</b></td><td class="key"><b>${x.signed?eur(x.signed):'—'}</b></td></tr>`;
+  const ex=x=>`<tr class="oth"><td></td><td>${x.n}</td><td>${x.leads}</td><td>${x.booked}</td><td>${x.done}</td><td class="key">${x.sales}</td><td class="key">${x.signed?eur(x.signed):'—'}</td></tr>`;
+  return `<table class="tbl top"><tr><th></th><th>${lib}</th><th>Leads</th><th>Bookés</th><th>Honorés</th><th class="key">Ventes</th><th class="key">CA contracté</th></tr>${T.lignes.map(row).join('')}${T.autres?ex(T.autres):''}
+   <tr class="tot"><td></td><td>Total semaine</td><td>${T.total.leads}</td><td>${T.total.booked}</td><td>${T.total.done}</td><td>${T.total.sales}</td><td>${eur(T.total.signed)}</td></tr></table>`;
 }
 function render(){
   const W=DATA.week, col={good:'#6FD3A3',warn:'#F0B95A',bad:'#FF5C7A'}, ico={good:'🚀',warn:'⚠️',bad:'🚨'};
@@ -308,18 +1044,19 @@ function render(){
   h+=`<h2>La semaine en un coup d'œil</h2><p class="sub">Rédigé automatiquement à partir des chiffres : ce qui va bien, ce qu'il faut surveiller, ce qui coince.</p>
    <div class="ins">${DATA.insights.map(i=>`<div class="glass insc" style="--c:${col[i.type]}"><div class="t"><i>${ico[i.type]}</i>${i.title}</div><p>${i.text}</p></div>`).join('')}</div>`;
   h+=`<h2>Les chiffres de la semaine</h2><p class="sub">Chaque KPI est comparé à la semaine précédente (S-1) et à la moyenne des 4 dernières semaines. Vert = bonne évolution, rouge = mauvaise évolution.</p>`;
-  DATA.groups.forEach(g=>{h+=`<div class="gt" style="--c:${g.color}">${g.icon} ${g.title}</div><div class="grid">${g.items.map(k=>kpi(k,g.color)).join('')}</div>`});
+  DATA.groups.forEach(g=>{h+=`<div class="gt" style="--c:${g.color}">${g.icon} ${g.title}</div>`+`<div class="cartes">${g.items.map(carte).join('')}</div>`});
   h+=`<h2>Jour par jour</h2><p class="sub">Pour repérer le jour où ça a décroché.</p>
    <div class="two"><div class="glass panel"><h3>Leads et coût par call booké</h3><div class="hint">Barres : leads du jour · Courbe : coût par call booké (vert = sous la moyenne de la semaine)</div>${combo()}</div>
    <div class="glass panel"><h3>Calls réalisés et no-shows</h3><div class="hint">Le pourcentage affiché est le taux de show du jour</div>${calls()}<div class="legend"><span><i style="background:#6FD3A3"></i>Réalisés</span><span><i style="background:#FF5C7A"></i>No-shows</span></div></div></div>`;
-  h+=`<h2>Entonnoir et origine des leads</h2><p class="sub">Où perd-on le plus de monde entre la dépense et la vente ?</p>
-   <div class="two"><div class="glass panel funnel">${funnel()}</div><div class="glass panel"><h3>Répartition des leads par source</h3><div class="hint">Volume de la semaine</div>${donut()}</div></div>`;
+  h+=`<h2>Entonnoir et origine des calls</h2><p class="sub">Où perd-on le plus de monde entre la dépense et la vente ?</p>
+   <div class="two"><div class="glass panel funnel">${funnel()}${DATA.funnelNote?`<div class="note">${DATA.funnelNote}</div>`:''}</div><div class="glass panel"><h3>Répartition des calls bookés par source</h3><div class="hint">Calls Closing R1 pris dans la semaine</div>${donut()}</div></div>`;
   h+=`<h2>Tendance sur 5 semaines</h2><p class="sub">Les trois KPI que l'équipe suit le plus. La ligne pointillée est la moyenne des 4 semaines précédentes.</p>
    <div class="ins">${DATA.trend.map(trend).join('')}</div>`;
-  h+=`<h2>Performance par source</h2><p class="sub">La dépense pub est celle de Meta (Fb ads + Instagram). Les autres sources n'ont pas de dépense associée.</p><div class="glass panel" style="padding:14px 18px">${sources()}</div>`;
+  h+=`<h2>Performance par source</h2><p class="sub">La dépense pub est celle de Meta (Fb ads + Instagram). Les autres sources n'ont pas de dépense associée. Ventes et CA contracté = contrats signés dans la semaine, rangés au canal du call.</p><div class="glass panel" style="padding:14px 18px">${sources()}</div>`;
+  if(DATA.top){const C=DATA.top.cout;h+=`<h2>Top campagnes et top créas</h2><p class="sub">Classement par ventes (puis CA contracté). Campagne = UTM campaign, créa = UTM content.</p><div style="display:grid;grid-template-columns:1fr;gap:18px"><div class="glass panel" style="padding:14px 18px"><h3>Top campagnes</h3>${topTable(DATA.top.campagnes,"Campagne")}</div><div class="glass panel" style="padding:14px 18px"><h3>Top créas</h3>${topTable(DATA.top.creas,"Créa")}</div></div><p class="note">${C&&C.coutParVentePub!=null?`Coût par vente pub : <b>${eur(C.coutParVentePub)}</b> (${eur(C.depense)} dépensés ÷ ${C.ventesPub} vente${C.ventesPub>1?'s':''} sur source Ads, ${eur(C.signedPub)} contractés). `:''}${C?C.note+' ':''}${DATA.top.base}.</p>`}
   h+=`<h2>Points d'attention</h2><p class="sub">Alertes générées automatiquement quand un seuil est franchi.</p>${DATA.alerts.map(a=>`<div class="glass al" style="--c:${a.c}"><i>${a.i}</i><div><b>${a.t}</b><p>${a.x}</p></div></div>`).join('')}`;
   $('app').innerHTML=h;
-  $('foot').innerHTML=`Calls bookés = Closing + Rattrapage de rang R1, comptés au jour de prise du RDV · coûts = dépense Meta totale ÷ volume total, comme le dashboard<br>Cash collecté = échéances de la période · Semaine du lundi au dimanche, heure de Paris<br><b>PODMAX</b> · rapport généré automatiquement`;
+  $('foot').innerHTML=`Calls bookés = Closing de rang R1, comptés au jour de prise du RDV · coûts = dépense Meta totale ÷ volume total, comme le dashboard · CPM = dépense ÷ impressions × 1 000, CTR = clics ÷ impressions<br>Ventes et CA contracté = contrats signés dans la semaine · cash collecté = échéances de la semaine (toutes dates de signature) · Semaine du lundi au dimanche, heure de Paris<br><b>PODMAX</b> · rapport généré automatiquement`;
 }
 render();
 </script>

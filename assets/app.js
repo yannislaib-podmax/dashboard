@@ -40,6 +40,18 @@ const carte = (libelle, chiffre, note, ecart, refDate) => `
   </div>`;
 const REF = { prise: "à la prise de RDV", rdv: "au jour du RDV", signature: "à la signature", lead: "à la capture du lead" };
 
+// Carte du Funnel : même gabarit que carte(), mais avec TOUJOURS 5 emplacements (libellé, chiffre, écart, note, date de
+// référence), vides si besoin. Avec la classe .alignees du conteneur (sous-grille CSS), ça aligne à l'horizontale les
+// chiffres, les écarts et les notes d'une carte à l'autre, même quand un libellé passe sur 2 lignes.
+const carteGrille = (libelle, chiffre, note, ecart, refDate) => `
+  <div class="glass carte rv">
+    <div class="libelle">${libelle}</div>
+    <div class="chiffre">${chiffre}</div>
+    ${ecart ? `<div class="ecart ${ecart.classe}">${ecart.texte}</div>` : `<div class="ecart vide"></div>`}
+    ${note ? `<div class="note">${note}</div>` : `<div class="note vide"></div>`}
+    ${refDate ? `<div class="ref-date">${refDate}</div>` : `<div class="ref-date vide"></div>`}
+  </div>`;
+
 const somme = (lignes, champ) => lignes.reduce((s, l) => s + (l[champ] || 0), 0);
 
 // Decision 2026-11-10 : un call (ou un client) venu du travail d'un setter ou d'une campagne de relance "post-..."
@@ -456,7 +468,9 @@ const ETAPES = [
   { cle: "ventes", nom: "Ventes" },
 ];
 
-function vueConversion(lignes, precedentes) {
+// `parNature` (mode « Tous » uniquement) : [lignes Closing, lignes Rattrapage], pour détailler chaque carte par origine
+// comme l'onglet Sales Team > Closing (null dans les autres modes).
+function vueConversion(lignes, precedentes, parNature = null) {
   const ecart = (cle) => {
     const f = INDICATEURS[cle];
     return precedentes ? ecartDe(f(lignes), f(precedentes), cle) : null;
@@ -468,10 +482,29 @@ function vueConversion(lignes, precedentes) {
   // Meme jeu de cartes que l'onglet Tracking UTM : + CA encaisse (contracte en sous-chiffre).
   const caEnc = somme(lignes, "encaisse");
   const caEncPrec = precedentes ? somme(precedentes, "encaisse") : null;
+  // Mêmes sous-textes que l'onglet Closing : définition de la carte, ou — en mode « Tous » — la répartition
+  // Closing / Rattrapage (leads : pas de répartition, un lead ne dépend pas du type de call).
+  const modeTous = Array.isArray(parNature);
+  const NOMS_NATURE = ["Closing", "Rattrapage"];
+  const repart = (calcul, format = nombre) => parNature.map((ls, i) => `<b>${format(calcul(ls))}</b> ${NOMS_NATURE[i]}`).join("<br>");
+  const typeCall = enRattrapage() ? "Rattrapage" : "Closing";
+  const suffixe = suffixeDeRang(FUNNEL_RANG);
+  const notes = {
+    leads: null,
+    rendezVous: modeTous ? repart(INDICATEURS.rendezVous) : `calls ${typeCall} pris dans la période${suffixe}`,
+    rendezVousConclus: modeTous ? repart(INDICATEURS.rendezVousConclus) : "Honoré ou No-show (hors RDV encore à venir)",
+    honores: modeTous ? repart(INDICATEURS.honores) : `calls ${typeCall} réellement tenus`,
+    ventes: modeTous ? repart(INDICATEURS.ventes) : valeurs[3] ? `sur ${nombre(valeurs[3])} honoré${valeurs[3] > 1 ? "s" : ""}` : "aucun call honoré",
+  };
+  const ventesTotal = valeurs[4];
+  const noteCA = [
+    sousChiffre("Contracté", euros(somme(lignes, "contracte"))),
+    modeTous ? repart((ls) => somme(ls, "encaisse"), euros) : ventesTotal ? `${nombre(ventesTotal)} vente${ventesTotal > 1 ? "s" : ""}` : "aucune vente",
+  ].join("<br>");
   document.getElementById("conv").innerHTML = ETAPES.map((e, i) =>
-    carte(e.nom, nombre(valeurs[i]), null, ecart(e.cle), e.cle === "leads" ? REF.lead : e.cle === "ventes" ? REF.signature : REF.prise)
+    carteGrille(e.nom, nombre(valeurs[i]), notes[e.cle], ecart(e.cle), e.cle === "leads" ? REF.lead : e.cle === "ventes" ? REF.signature : REF.prise)
   ).join("") +
-    carte("CA encaissé", euros(caEnc), sousChiffre("Contracté", euros(somme(lignes, "contracte"))), precedentes ? ecartDe(caEnc, caEncPrec, "contracte") : null, REF.signature);
+    carteGrille("CA encaissé", euros(caEnc), noteCA, precedentes ? ecartDe(caEnc, caEncPrec, "contracte") : null, REF.signature);
 
   const presence = INDICATEURS.tauxPresence(lignes);
   const presencePrec = precedentes ? INDICATEURS.tauxPresence(precedentes) : null;
@@ -2885,7 +2918,9 @@ function rendre() {
   // l'acquisition (même périmètre que Tracking UTM).
   const lignesPartAds = appliquerClientsToggle(appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), ACQ_MODE), PAID_RANG));
   vueEnsemble(lignesPaid, precedentesPaid, lignesPartAds);
-  vueConversion(lignesFunnel, precedentesFunnel);
+  // Mode « Tous » : même périmètre que le Funnel, mais une fois en Closing seul et une fois en Rattrapage seul.
+  const natureFunnel = enTous() ? ["closing", "rattrapage"].map((m) => ventesDuCall(appliquerRangFunnel(appliquerModeAcq(lignesFiltrees(), m)))) : null;
+  vueConversion(lignesFunnel, precedentesFunnel, natureFunnel);
   // Le simulateur vit dans Paid Ads : mêmes lignes et mêmes filtres que la page.
   simulateur(lignesPaid);
   vueJour(lignes);

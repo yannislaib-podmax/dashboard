@@ -1950,3 +1950,17 @@ tr.total td {
 
 /* Date de reference d'un chiffre (decision 2026-11-24) */
 .carte .ref-date { margin-top: 6px; font-size: 11px; letter-spacing: .02em; text-transform: none; color: var(--txt3, var(--txt2)); opacity: .75; }
+
+/* ---------- Cartes alignées (Funnel) ----------
+   Chaque carte occupe 5 lignes de la grille parente et les partage en sous-grille : libellé, chiffre, écart, note et
+   date de référence sont donc à la même hauteur d'une carte à l'autre, même si un libellé passe sur 2 lignes. */
+.cartes.alignees { row-gap: 0; column-gap: 16px; }
+.cartes.alignees > .carte {
+  display: grid;
+  grid-row: span 5;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  align-content: start;
+  margin-bottom: 16px;
+}
+.cartes.alignees > .carte .vide { margin: 0; min-height: 0; }
