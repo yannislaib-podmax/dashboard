@@ -601,10 +601,11 @@ export default async function handler(req, res) {
       code: semaine.code,
     };
 
+    const aere = (l) => l.flatMap((x, i) => (i && String(x).startsWith("•") && String(l[i - 1]).startsWith("•") ? ["", x] : [x])); // ligne vide entre chaque puce (Slack)
     const slack = {
-      titre: `Bilan Sales Team · ${semaine.court} (${jolie(semaine.debut)} – ${jolie(semaine.fin)})`,
+      titre: `:busts_in_silhouette: *Bilan hebdo Sales Team · ${semaine.court}* (${jolie(semaine.debut)} – ${jolie(semaine.fin)})`,
       // "" = ligne vide (Make joint avec \n) : une section par rôle, lisible en un coup d'œil.
-      lignes: [
+      lignes: aere([
         "━━━━━━━━━━━━━━━━━━━━━━",
         "",
         `🎯 *CLOSER*`,
@@ -628,7 +629,7 @@ export default async function handler(req, res) {
           : [`• 📞 Appels : *${fmtNb(totCC.appeles)}*  ·  Réponse : *${fmtPct(totCC.tauxRep)}*`, `• 📥 Calls bookés déclarés : *${fmtNb(totCC.callBook)}*`]),
         "",
         "━━━━━━━━━━━━━━━━━━━━━━",
-      ],
+      ]),
     };
 
     // Le bilan d'une semaine passee ne bouge pas : 5 min au CDN, ancienne reponse servie 10 min pendant le rafraichissement.

@@ -480,10 +480,11 @@ function construire(packs, lundi, maintenant, urgence) {
     SEP
   );
 
+  const aere = (l) => l.flatMap((x, i) => (i && String(x).startsWith("•") && String(l[i - 1]).startsWith("•") ? ["", x] : [x])); // ligne vide entre chaque puce (Slack)
   return {
     semaine: etiquette,
     data,
-    slack: { titre: `:bar_chart: *Bilan hebdo Delivery · ${etiquette}* (${libelleSemaine(lundi)})`, lignes },
+    slack: { titre: `:bar_chart: *Bilan hebdo Delivery · ${etiquette}* (${libelleSemaine(lundi)})`, lignes: aere(lignes) },
     meta: {
       debut: lundi,
       fin: ajouterJours(lundi, 6),

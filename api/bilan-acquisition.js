@@ -669,8 +669,9 @@ export function construireBilan({ lignes, paiements, contrats = [], track = { le
   // Message Slack (mrkdwn)
   const fl = (d, better, t) => (d === 0 ? "=" : `${d > 0 ? "▲" : "▼"} ${Math.abs(d)}${t === "pts" ? " pts" : t === "abs" ? "" : " %"}`) + (d === 0 ? "" : favorable(d, better) ? " ✅" : " ⚠️");
   const { num: numSem } = semaineISODe(lundi);
+  const aere = (l) => l.flatMap((x, i) => (i && String(x).startsWith("•") && String(l[i - 1]).startsWith("•") ? ["", x] : [x])); // ligne vide entre chaque puce (Slack)
   const slack = {
-    titre: `📣 Bilan hebdo Acquisition · S${numSem} (${libellePlage(lundi).replace(/^du lundi /, "").replace(" au dimanche ", " → ")})`,
+    titre: `📣 *Bilan hebdo Acquisition · S${numSem}* (${libellePlage(lundi).replace(/^du lundi /, "").replace(" au dimanche ", " → ")})`,
     // Chaque entrée = une ligne ; "" = ligne vide (Make joint avec \n). Sections séparées pour une lecture en un coup d'œil.
     lignes: [
       "━━━━━━━━━━━━━━━━━━━━━━",
@@ -739,7 +740,7 @@ export function construireBilan({ lignes, paiements, contrats = [], track = { le
     trend,
     weeks,
     alerts,
-    slack: { ...slack, texte: [slack.titre, ...slack.lignes].join("\n") },
+    slack: { ...slack, lignes: aere(slack.lignes), texte: [slack.titre, ...aere(slack.lignes)].join("\n") },
     meta: {
       perimetre: "Calls : Closing R1 (vue par défaut du dashboard), RDV au jour de prise, calls tenus au jour du RDV · Ventes et CA : contrats signés dans la semaine (jour de signature, comme la page Sales Team)",
       ventes: "Ventes = clients ayant signé dans la semaine ; nouveaux clients = au moins un contrat de type NOUVEAU ; CA contracté = montant total des contrats ; encaissé = CA net des contrats signés dans la semaine",
