@@ -671,16 +671,52 @@ export function construireBilan({ lignes, paiements, contrats = [], track = { le
   const { num: numSem } = semaineISODe(lundi);
   const slack = {
     titre: `📣 Bilan hebdo Acquisition · S${numSem} (${libellePlage(lundi).replace(/^du lundi /, "").replace(" au dimanche ", " → ")})`,
+    // Chaque entrée = une ligne ; "" = ligne vide (Make joint avec \n). Sections séparées pour une lecture en un coup d'œil.
     lignes: [
-      `Dépense pub : *${eur(T.spend)}* (${fl(d1("spend", "%"), "down", "%")} vs S-1)`,
-      `Leads : *${nb(T.leads)}* (${fl(d1("leads", "%"), "up", "%")}) · coût par lead *${eur(T.cpl)}*`,
-      `Calls bookés : *${nb(T.booked)}* (${fl(d1("booked", "%"), "up", "%")}) · coût par call booké *${eur(T.cpc)}* (${fl(d1("cpc", "%"), "down", "%")})`,
-      `Calls réalisés : *${nb(T.done)}* sur ${nb(T.planned)} prévus · taux de show *${pct(T.show)}* (${fl(d1("show", "pts"), "up", "pts")})`,
-      `Média : CPM *${eur(T.cpm)}* (${fl(d1("cpm", "%"), "down", "%")}) · CTR *${T.ctr == null ? "—" : fm(T.ctr, 2) + " %"}* (${fl(d1("ctr", "%"), "up", "%")})`,
-      `Ventes : *${nb(T.sales)} client${T.sales > 1 ? "s" : ""}* (${nb(T.contrats)} contrat${T.contrats > 1 ? "s" : ""}, dont *${nb(T.clients)}* nouveau${T.clients > 1 ? "x" : ""} client${T.clients > 1 ? "s" : ""}) · CA contracté *${eur(T.signed)}* (${fl(d1("signed", "%"), "up", "%")}) · encaissé sur ces signatures *${eur(T.encSign)}*`,
-      `Cash collecté : *${eur(T.coll)}*${T.collAnterieur > 0 ? ` (dont ${eur(T.collAnterieur)} d'échéances de contrats antérieurs)` : ""} · taux de collecte *${pct(T.taux)}* · reste à collecter *${eur(T.reste)}*`,
-      ...(top.campagnes.lignes[0] && top.campagnes.lignes[0].sales ? [`Top campagne : *${top.campagnes.lignes[0].n}* (${nb(top.campagnes.lignes[0].sales)} vente${top.campagnes.lignes[0].sales > 1 ? "s" : ""}, ${eur(top.campagnes.lignes[0].signed)}) · top créa : *${top.creas.lignes[0].n}* (${nb(top.creas.lignes[0].sales)} vente${top.creas.lignes[0].sales > 1 ? "s" : ""}, ${eur(top.creas.lignes[0].signed)})`] : []),
-      ...alerts.map((a) => `${a.i} *${a.t}* — ${a.x}`),
+      "━━━━━━━━━━━━━━━━━━━━━━",
+      "",
+      `:mega: *ACQUISITION*`,
+      `• :money_with_wings: Dépense pub : *${eur(T.spend)}*  (${fl(d1("spend", "%"), "down", "%")} vs S-1)`,
+      `• :busts_in_silhouette: Leads : *${nb(T.leads)}*  (${fl(d1("leads", "%"), "up", "%")})`,
+      `• :moneybag: Coût par lead : *${eur(T.cpl)}*`,
+      `• :inbox_tray: Calls bookés : *${nb(T.booked)}*  (${fl(d1("booked", "%"), "up", "%")})`,
+      `• :dart: Coût par call booké : *${eur(T.cpc)}*  (${fl(d1("cpc", "%"), "down", "%")})`,
+      `• :film_projector: CPM : *${eur(T.cpm)}*  (${fl(d1("cpm", "%"), "down", "%")})  ·  CTR : *${T.ctr == null ? "—" : fm(T.ctr, 2) + " %"}*  (${fl(d1("ctr", "%"), "up", "%")})`,
+      "",
+      "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+      "",
+      `:telephone_receiver: *CALLS*`,
+      `• :white_check_mark: Réalisés : *${nb(T.done)}* sur ${nb(T.planned)} prévus`,
+      `• :bust_in_silhouette: Taux de show : *${pct(T.show)}*  (${fl(d1("show", "pts"), "up", "pts")})`,
+      "",
+      "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+      "",
+      `:trophy: *VENTES*`,
+      `• :handshake: Clients : *${nb(T.sales)}*  (${nb(T.contrats)} contrat${T.contrats > 1 ? "s" : ""}, dont *${nb(T.clients)}* nouveau${T.clients > 1 ? "x" : ""} client${T.clients > 1 ? "s" : ""})`,
+      `• :pencil2: CA contracté : *${eur(T.signed)}*  (${fl(d1("signed", "%"), "up", "%")})`,
+      `• :euro: Encaissé sur ces signatures : *${eur(T.encSign)}*`,
+      "",
+      "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+      "",
+      `:dollar: *CASH*`,
+      `• :moneybag: Collecté : *${eur(T.coll)}*${T.collAnterieur > 0 ? `  (dont ${eur(T.collAnterieur)} d'échéances antérieures)` : ""}`,
+      `• :chart_with_upwards_trend: Taux de collecte : *${pct(T.taux)}*`,
+      `• :hourglass_flowing_sand: Reste à collecter : *${eur(T.reste)}*`,
+      ...(top.campagnes.lignes[0] && top.campagnes.lignes[0].sales
+        ? [
+            "",
+            "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+            "",
+            `:first_place_medal: *TOP DE LA SEMAINE*`,
+            `• Campagne : *${top.campagnes.lignes[0].n}*  (${nb(top.campagnes.lignes[0].sales)} vente${top.campagnes.lignes[0].sales > 1 ? "s" : ""}, ${eur(top.campagnes.lignes[0].signed)})`,
+            `• Créa : *${top.creas.lignes[0].n}*  (${nb(top.creas.lignes[0].sales)} vente${top.creas.lignes[0].sales > 1 ? "s" : ""}, ${eur(top.creas.lignes[0].signed)})`,
+          ]
+        : []),
+      ...(alerts.length
+        ? ["", "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈", "", `:rotating_light: *ALERTES*`, "", ...alerts.flatMap((a, i) => (i ? ["", `${a.i} *${a.t}* — ${a.x}`] : [`${a.i} *${a.t}* — ${a.x}`]))]
+        : ["", "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈", "", `:white_check_mark: *Aucune alerte*`]),
+      "",
+      "━━━━━━━━━━━━━━━━━━━━━━",
     ],
   };
 

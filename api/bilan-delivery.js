@@ -439,17 +439,46 @@ function construire(packs, lundi, maintenant, urgence) {
   };
 
   const etiquette = `${iso.annee}-S${String(iso.num).padStart(2, "0")}`;
+  const SEP = "━━━━━━━━━━━━━━━━━━━━━━";
+  const DIV = "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈";
   const lignes = [
-    `:package: *${cur.livres}* ${pluriel(cur.livres, "pack livré", "packs livrés")} (S-1 : ${prec.livres})   ·   :new: *${cur.crees}* ${pluriel(cur.crees, "nouveau pack", "nouveaux packs")} (S-1 : ${prec.crees})`,
-    `:clapper: *${enProd.length}* en production   ·   :white_circle: *${aDemarrer.length}* à démarrer   ·   :bust_in_silhouette: *${sansCp.length}* sans CP`,
-    bloques.length
-      ? `:rotating_light: *${bloques.length}* ${pluriel(bloques.length, "pack bloqué", "packs bloqués")} depuis ${SEUIL_BLOQUE_JOURS} j ou plus (le plus ancien : ${Math.max(...bloques.map((p) => p.age))} j)`
-      : `:white_check_mark: Aucun pack bloqué depuis ${SEUIL_BLOQUE_JOURS} j ou plus`,
+    SEP,
+    "",
+    `:package: *LIVRAISONS*`,
+    `• :white_check_mark: Packs livrés : *${cur.livres}*  (S-1 : ${prec.livres})`,
+    `• :new: Nouveaux packs : *${cur.crees}*  (S-1 : ${prec.crees})`,
   ];
-  if (cur.delai != null) lignes.push(`:stopwatch: Délai moyen de livraison : *${fmtJ(cur.delai)}*`);
+  if (cur.delai != null) lignes.push(`• :stopwatch: Délai moyen de livraison : *${fmtJ(cur.delai)}*`);
+  lignes.push(
+    "",
+    DIV,
+    "",
+    `:clapper: *PRODUCTION*`,
+    `• :clapper: En production : *${enProd.length}*`,
+    `• :white_circle: À démarrer : *${aDemarrer.length}*`,
+    `• :bust_in_silhouette: Sans CP : *${sansCp.length}*`
+  );
   if (urgence && urgence.disponible) {
-    lignes.push(`:dart: Urgence Notion : :large_purple_circle: *${urgence.retard}* en retard · :red_circle: *${urgence.urgents}* urgents · :large_orange_circle: *${urgence.moderes}* modérés`);
+    lignes.push(
+      "",
+      DIV,
+      "",
+      `:dart: *URGENCE NOTION*`,
+      `• :large_purple_circle: En retard : *${urgence.retard}*`,
+      `• :red_circle: Urgents : *${urgence.urgents}*`,
+      `• :large_orange_circle: Modérés : *${urgence.moderes}*`
+    );
   }
+  lignes.push(
+    "",
+    DIV,
+    "",
+    bloques.length
+      ? `:rotating_light: *${bloques.length}* ${pluriel(bloques.length, "pack bloqué", "packs bloqués")} depuis ${SEUIL_BLOQUE_JOURS} j ou plus (le plus ancien : *${Math.max(...bloques.map((p) => p.age))} j*)`
+      : `:white_check_mark: Aucun pack bloqué depuis ${SEUIL_BLOQUE_JOURS} j ou plus`,
+    "",
+    SEP
+  );
 
   return {
     semaine: etiquette,

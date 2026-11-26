@@ -603,10 +603,31 @@ export default async function handler(req, res) {
 
     const slack = {
       titre: `Bilan Sales Team · ${semaine.court} (${jolie(semaine.debut)} – ${jolie(semaine.fin)})`,
+      // "" = ligne vide (Make joint avec \n) : une section par rôle, lisible en un coup d'œil.
       lignes: [
-        `🎯 Closer : ${fmtNb(T.rdv)} RDV, show ${fmtPct(T.show)}, ${fmtNb(T.ventes)} vente(s), closing ${fmtPct(T.closing)}, ${fmtEur(T.ca)} contractés, ${fmtEur(T.encaisse)} encaissés (${kv(closer, "CA contracté").d1 >= 0 ? "+" : ""}${kv(closer, "CA contracté").d1} % vs S-1)`,
-        `📞 Setter : ${fmtNb(ST.assignes)} leads assignés, ${fmtPct(rapport(ST.contactes, ST.assignes))} contactés, ${fmtNb(ST.callsBookes)} call(s) de closing bookés, ${fmtNb(ST.ventes)} vente(s)`,
-        cc.erreur ? `☎️ Cold call : données indisponibles (${cc.erreur})` : `☎️ Cold call : ${fmtNb(totCC.appeles)} appels, ${fmtPct(totCC.tauxRep)} de réponse, ${fmtNb(totCC.callBook)} call(s) bookés déclarés`,
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        `🎯 *CLOSER*`,
+        `• 📅 RDV : *${fmtNb(T.rdv)}*  ·  Show : *${fmtPct(T.show)}*`,
+        `• 🤝 Ventes : *${fmtNb(T.ventes)}*  ·  Closing : *${fmtPct(T.closing)}*`,
+        `• ✏️ CA contracté : *${fmtEur(T.ca)}*  (${kv(closer, "CA contracté").d1 >= 0 ? "+" : ""}${kv(closer, "CA contracté").d1} % vs S-1)`,
+        `• 💶 Encaissé : *${fmtEur(T.encaisse)}*`,
+        "",
+        "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+        "",
+        `📞 *SETTER*`,
+        `• 👥 Leads assignés : *${fmtNb(ST.assignes)}*  ·  Contactés : *${fmtPct(rapport(ST.contactes, ST.assignes))}*`,
+        `• 📥 Calls de closing bookés : *${fmtNb(ST.callsBookes)}*`,
+        `• 🤝 Ventes : *${fmtNb(ST.ventes)}*`,
+        "",
+        "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈",
+        "",
+        `☎️ *COLD CALL*`,
+        ...(cc.erreur
+          ? [`• ⚠️ Données indisponibles (${cc.erreur})`]
+          : [`• 📞 Appels : *${fmtNb(totCC.appeles)}*  ·  Réponse : *${fmtPct(totCC.tauxRep)}*`, `• 📥 Calls bookés déclarés : *${fmtNb(totCC.callBook)}*`]),
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━",
       ],
     };
 
