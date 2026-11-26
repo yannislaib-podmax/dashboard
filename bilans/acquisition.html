@@ -129,12 +129,12 @@ svg text{font-family:var(--sans)}
 .carte .rf{margin-top:8px;font-size:11px;color:var(--txt2);opacity:.75}
 @media (max-width:900px){.cartes{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(10,auto);row-gap:16px}.carte:nth-child(-n+2){grid-row:1 / span 5}.carte:nth-child(n+3){grid-row:6 / span 5}.carte .chf{font-size:1.6rem}}
 /* ===== IMPRESSION / PDF (Cloudflare Browser Rendering : format A4, printBackground:true) ===== */
-@page{size:A4;margin:8mm}
+@page{size:A4;margin:0;background:#0B0714}
 @media print{
   html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:var(--nuit)}
-  body{padding:0;min-height:0}
+  body{padding:8mm 0;min-height:0;box-decoration-break:clone;-webkit-box-decoration-break:clone}
   body::before{position:absolute;height:100%}
-  .wrap{max-width:none;width:1180px;zoom:.61;padding:0 20px}
+  .wrap{max-width:none;width:1180px;zoom:.61;padding:0 20px;margin:0 auto}
   .glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(255,255,255,.07)}
   /* A4 est etroit : on garde les mises en page "bureau" (les media queries mobiles ne s'appliquent pas au PDF) */
   .hero{grid-template-columns:1.25fr 1fr}
@@ -1059,6 +1059,15 @@ function render(){
   $('foot').innerHTML=`Calls bookés = Closing de rang R1, comptés au jour de prise du RDV · coûts = dépense Meta totale ÷ volume total, comme le dashboard · CPM = dépense ÷ impressions × 1 000, CTR = clics ÷ impressions<br>Ventes et CA contracté = contrats signés dans la semaine · cash collecté = échéances de la semaine (toutes dates de signature) · Semaine du lundi au dimanche, heure de Paris<br><b>PODMAX</b> · rapport généré automatiquement`;
 }
 render();
+// Mode live (lien Slack) : /bilans/acquisition.html?semaine=2026-S47 (ou ?live=1) charge /api/bilan-acquisition puis rend.
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(!q.has('semaine')&&!q.has('live')){window.__ready=true;return}
+  fetch('/api/bilan-acquisition'+(q.get('semaine')?'?semaine='+encodeURIComponent(q.get('semaine')):''))
+    .then(r=>r.json()).then(d=>{if(d.erreur)throw new Error(d.erreur);Object.assign(DATA,d);DATA.sample=false;render()})
+    .catch(e=>{document.getElementById('app').innerHTML='<div style="padding:40px;color:#FF5C7A">Impossible de charger le bilan : '+String(e.message||e)+'</div>'})
+    .finally(()=>{window.__ready=true});
+})();
 </script>
 </body>
 </html>
